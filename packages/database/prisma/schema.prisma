@@ -1,0 +1,505 @@
+// =============================================================================
+// Scout OS — Prisma schema
+// The AI employee that discovers business opportunities before you do.
+//
+// Design principles:
+//   - Multi-tenant: everything is scoped to a Workspace.
+//   - Extensible: creators are polymorphic (influencer / brand / seller / ...)
+//     and can hold accounts across multiple platforms.
+//   - AI-first: discovery runs, analyses, and outreach drafts are first-class.
+// =============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [pgcrypto, pg_trgm]
+}
+
+// -----------------------------------------------------------------------------
+// Identity & tenancy
+// -----------------------------------------------------------------------------
+
+/// Mirrors a Supabase `auth.users` row. `id` equals the Supabase auth UID.
+model User {
+  id        String   @id @db.Uuid
+  email     String   @unique
+  fullName  String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships     Membership[]
+  ownedWorkspaces Workspace[]      @relation("WorkspaceOwner")
+  assignedDeals   Deal[]           @relation("DealOwner")
+  authoredNotes   Note[]
+  activities      Activity[]
+  outreachDrafts  OutreachMessage[] @relation("OutreachAuthor")
+
+  @@map("users")
+}
+
+/// A tenant. All business data hangs off a workspace.
+model Workspace {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  ownerId   String   @db.Uuid
+  plan      Plan     @default(FREE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner         User            @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+  members       Membership[]
+  creators      Creator[]
+  savedSearches SavedSearch[]
+  segments      Segment[]
+  discoveryRuns DiscoveryRun[]
+  campaigns     Campaign[]
+  deals         Deal[]
+  tags          Tag[]
+
+  @@index([ownerId])
+  @@map("workspaces")
+}
+
+model Membership {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  workspaceId String   @db.Uuid
+  role        Role     @default(MEMBER)
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([workspaceId])
+  @@map("memberships")
+}
+
+// -----------------------------------------------------------------------------
+// Discovery — creators, brands, sellers
+// -----------------------------------------------------------------------------
+
+/// A discovered entity: influencer, micro-creator, brand, brand-owning creator,
+/// or shopping-mall / group-buy seller. Kept polymorphic via `type`.
+model Creator {
+  id          String       @id @default(uuid()) @db.Uuid
+  workspaceId String       @db.Uuid
+  type        CreatorType  @default(INFLUENCER)
+  status      CreatorStatus @default(DISCOVERED)
+
+  displayName String
+  handle      String?
+  bio         String?
+  avatarUrl   String?
+  websiteUrl  String?
+  email       String?
+  location    String?
+  language    String?
+
+  /// Primary category (e.g. "beauty", "fitness", "parenting").
+  category    String?
+  /// Free-form niche keywords used for search & AI matching.
+  niches      String[]     @default([])
+
+  /// Denormalised roll-up metrics for fast sorting/filtering.
+  totalFollowers  Int?
+  avgEngagement   Float?
+  /// AI-assigned 0–100 opportunity/fit score, denormalised from latest analysis.
+  opportunityScore Int?
+
+  /// Where this creator came from (e.g. "discovery_run", "manual", "import").
+  source      String?
+  metadata    Json?        @default("{}")
+
+  discoveredAt DateTime    @default(now())
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  socialAccounts SocialAccount[]
+  analyses       AiAnalysis[]
+  deals          Deal[]
+  notes          Note[]
+  tags           CreatorTag[]
+  discoveryRunId String?          @db.Uuid
+  discoveryRun   DiscoveryRun?    @relation(fields: [discoveryRunId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, handle])
+  @@index([workspaceId, type])
+  @@index([workspaceId, status])
+  @@index([workspaceId, opportunityScore])
+  @@map("creators")
+}
+
+/// One social account belonging to a creator on a specific platform.
+model SocialAccount {
+  id          String   @id @default(uuid()) @db.Uuid
+  creatorId   String   @db.Uuid
+  platform    Platform
+  handle      String
+  url         String?
+  followers   Int?
+  following   Int?
+  postCount   Int?
+  engagementRate Float?
+  isVerified  Boolean  @default(false)
+  /// Platform-specific raw snapshot (schema differs per platform).
+  raw         Json?    @default("{}")
+  lastSyncedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([platform, handle])
+  @@index([creatorId])
+  @@map("social_accounts")
+}
+
+/// A reusable, filterable search definition ("marketing agency at scale").
+model SavedSearch {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  name        String
+  description String?
+  /// Structured, validated (Zod) filter payload.
+  filters     Json     @default("{}")
+  isPinned    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  discoveryRuns DiscoveryRun[]
+
+  @@index([workspaceId])
+  @@map("saved_searches")
+}
+
+/// A named, materialised group of creators (a "segment" / audience list).
+model Segment {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  name        String
+  description String?
+  color       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("segments")
+}
+
+/// An execution of an AI discovery job. Produces creators.
+model DiscoveryRun {
+  id            String        @id @default(uuid()) @db.Uuid
+  workspaceId   String        @db.Uuid
+  savedSearchId String?       @db.Uuid
+  status        RunStatus     @default(QUEUED)
+  /// The natural-language prompt / brief driving discovery.
+  prompt        String?
+  platforms     Platform[]    @default([])
+  params        Json          @default("{}")
+  resultCount   Int           @default(0)
+  error         String?
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime      @default(now())
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  savedSearch SavedSearch? @relation(fields: [savedSearchId], references: [id], onDelete: SetNull)
+  creators    Creator[]
+
+  @@index([workspaceId, status])
+  @@map("discovery_runs")
+}
+
+// -----------------------------------------------------------------------------
+// AI analysis
+// -----------------------------------------------------------------------------
+
+/// A structured AI assessment of a creator (fit, risks, angle, suggested offer).
+model AiAnalysis {
+  id         String       @id @default(uuid()) @db.Uuid
+  creatorId  String       @db.Uuid
+  kind       AnalysisKind @default(FIT)
+  model      String?
+  /// 0–100 score for the analysed dimension.
+  score      Int?
+  summary    String?
+  /// Structured output (strengths, risks, suggested angle, audience fit, ...).
+  result     Json         @default("{}")
+  createdAt  DateTime     @default(now())
+
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId, kind])
+  @@map("ai_analyses")
+}
+
+// -----------------------------------------------------------------------------
+// CRM — campaigns, deals, outreach
+// -----------------------------------------------------------------------------
+
+/// A collaboration campaign (e.g. "Q3 Summer Launch — beauty micro-creators").
+model Campaign {
+  id          String        @id @default(uuid()) @db.Uuid
+  workspaceId String        @db.Uuid
+  name        String
+  description String?
+  goal        String?
+  status      CampaignStatus @default(DRAFT)
+  budget      Int?
+  currency    String        @default("KRW")
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deals     Deal[]
+
+  @@index([workspaceId, status])
+  @@map("campaigns")
+}
+
+/// A single creator moving through the collaboration pipeline within a campaign.
+/// This is the CRM "card".
+model Deal {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String     @db.Uuid
+  campaignId  String?    @db.Uuid
+  creatorId   String     @db.Uuid
+  ownerId     String?    @db.Uuid
+
+  stage       DealStage  @default(PROSPECT)
+  /// Manual ordering within a pipeline column.
+  position    Int        @default(0)
+  value       Int?
+  currency    String     @default("KRW")
+  priority    Priority   @default(MEDIUM)
+  nextActionAt DateTime?
+  closedAt    DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign  Campaign?         @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  creator   Creator           @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  owner     User?             @relation("DealOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  messages  OutreachMessage[]
+  notes     Note[]
+  activities Activity[]
+
+  @@index([workspaceId, stage])
+  @@index([campaignId])
+  @@index([creatorId])
+  @@map("deals")
+}
+
+/// An outreach message: an AI-generated (or edited) DM or follow-up.
+model OutreachMessage {
+  id         String        @id @default(uuid()) @db.Uuid
+  dealId     String        @db.Uuid
+  authorId   String?       @db.Uuid
+  channel    Platform?
+  kind       MessageKind   @default(DM)
+  status     MessageStatus @default(DRAFT)
+  subject    String?
+  body       String
+  /// If AI-generated: model, prompt, tone, and other generation context.
+  aiMeta     Json?         @default("{}")
+  scheduledAt DateTime?
+  sentAt     DateTime?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  deal   Deal  @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  author User? @relation("OutreachAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([dealId, status])
+  @@map("outreach_messages")
+}
+
+/// Free-form note attached to a creator or a deal.
+model Note {
+  id        String   @id @default(uuid()) @db.Uuid
+  authorId  String?  @db.Uuid
+  creatorId String?  @db.Uuid
+  dealId    String?  @db.Uuid
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  author  User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  creator Creator? @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  deal    Deal?    @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId])
+  @@index([dealId])
+  @@map("notes")
+}
+
+/// Immutable activity-log entry for the CRM timeline.
+model Activity {
+  id        String       @id @default(uuid()) @db.Uuid
+  dealId    String?      @db.Uuid
+  actorId   String?      @db.Uuid
+  type      ActivityType
+  message   String?
+  metadata  Json?        @default("{}")
+  createdAt DateTime     @default(now())
+
+  deal  Deal? @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([dealId])
+  @@map("activities")
+}
+
+// -----------------------------------------------------------------------------
+// Tagging (many-to-many)
+// -----------------------------------------------------------------------------
+
+model Tag {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  name        String
+  color       String?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creators  CreatorTag[]
+
+  @@unique([workspaceId, name])
+  @@map("tags")
+}
+
+model CreatorTag {
+  creatorId String @db.Uuid
+  tagId     String @db.Uuid
+
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([creatorId, tagId])
+  @@map("creator_tags")
+}
+
+// -----------------------------------------------------------------------------
+// Enums
+// -----------------------------------------------------------------------------
+
+enum Plan {
+  FREE
+  PRO
+  SCALE
+  ENTERPRISE
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum Platform {
+  INSTAGRAM
+  YOUTUBE
+  TIKTOK
+  BLOG
+  X
+  THREADS
+  OTHER
+}
+
+enum CreatorType {
+  INFLUENCER
+  MICRO_CREATOR
+  BRAND
+  BRAND_OWNER // influencer who runs their own brand
+  SELLER // group-buy / shopping-mall seller
+}
+
+enum CreatorStatus {
+  DISCOVERED
+  SHORTLISTED
+  CONTACTED
+  ENGAGED
+  ARCHIVED
+}
+
+enum RunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum AnalysisKind {
+  FIT
+  AUDIENCE
+  RISK
+  BRAND_SAFETY
+  OPPORTUNITY
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum DealStage {
+  PROSPECT
+  CONTACTED
+  REPLIED
+  NEGOTIATING
+  AGREED
+  IN_PROGRESS
+  COMPLETED
+  DECLINED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum MessageKind {
+  DM
+  EMAIL
+  FOLLOW_UP
+}
+
+enum MessageStatus {
+  DRAFT
+  SCHEDULED
+  SENT
+  REPLIED
+  FAILED
+}
+
+enum ActivityType {
+  STAGE_CHANGED
+  MESSAGE_SENT
+  MESSAGE_REPLIED
+  NOTE_ADDED
+  ANALYSIS_ADDED
+  DEAL_CREATED
+  DEAL_CLOSED
+}
