@@ -3,11 +3,15 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 
+import { isSupabaseConfigured } from '@/lib/env';
 import { createClient } from '@/lib/supabase/client';
 
 import { type LoginInput, type SignupInput } from '../schemas';
 
 type AuthState = { loading: boolean; error: string | null };
+
+/** Shown when auth is used before Supabase is connected (MVP mock mode). */
+const AUTH_NOT_READY = '인증 기능은 아직 준비 중입니다.';
 
 /**
  * Thin client-side wrapper around Supabase email/password auth. Errors are
@@ -21,6 +25,10 @@ export function useAuth() {
 
   const signIn = useCallback(
     async (input: LoginInput, redirectTo = '/discover') => {
+      if (!isSupabaseConfigured()) {
+        setState({ loading: false, error: AUTH_NOT_READY });
+        return false;
+      }
       setState({ loading: true, error: null });
       try {
         const supabase = createClient();
@@ -45,6 +53,10 @@ export function useAuth() {
 
   const signUp = useCallback(
     async (input: SignupInput, redirectTo = '/discover') => {
+      if (!isSupabaseConfigured()) {
+        setState({ loading: false, error: AUTH_NOT_READY });
+        return false;
+      }
       setState({ loading: true, error: null });
       try {
         const supabase = createClient();

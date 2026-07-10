@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { env } from '@/lib/env';
+import { env, isSupabaseConfigured } from '@/lib/env';
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
@@ -19,11 +19,17 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Mock mode: without Supabase we skip auth entirely and never touch a client,
+  // so every page (including /discover, /search, /saved, /outreach) renders.
+  if (!isSupabaseConfigured()) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
-    env.NEXT_PUBLIC_SUPABASE_URL,
-    env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    env.NEXT_PUBLIC_SUPABASE_URL!,
+    env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         getAll() {

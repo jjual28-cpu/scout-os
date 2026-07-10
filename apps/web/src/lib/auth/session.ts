@@ -3,6 +3,7 @@ import 'server-only';
 import { prisma } from '@scout-os/database';
 
 import { AppError } from '@/lib/api/response';
+import { isDatabaseConfigured, isSupabaseConfigured } from '@/lib/env';
 import { createClient } from '@/lib/supabase/server';
 import { type SessionContext } from '@/types/common';
 
@@ -15,6 +16,11 @@ import { type SessionContext } from '@/types/common';
  * app would read a selected workspace from a cookie or the URL.
  */
 export async function requireSession(): Promise<SessionContext> {
+  // Validate the services this feature needs at the point of use, not at boot.
+  if (!isSupabaseConfigured() || !isDatabaseConfigured()) {
+    throw new AppError('MOCK_MODE', 'Auth/database are not configured (mock mode).', 503);
+  }
+
   const supabase = createClient();
   const {
     data: { user },

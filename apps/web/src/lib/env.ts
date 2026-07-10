@@ -1,69 +1,64 @@
 import { z } from 'zod';
 
 /**
- * Runtime-validated environment variables.
+ * Lenient environment access — NEVER throws at import/boot/build.
  *
- * Server-only secrets live in `server`; browser-exposed values (prefixed with
- * NEXT_PUBLIC_) live in `client`. Importing this module throws at boot if a
- * required variable is missing or malformed — failing fast instead of at the
- * first request.
+ * The MVP runs on mock data + localStorage, so external services (Supabase, the
+ * database) are optional. Missing or malformed values simply become `undefined`,
+ * which puts the corresponding feature into "mock mode". Each feature validates
+ * what IT needs at the point of use via the `is*Configured()` helpers below —
+ * we never gate the whole app on env at startup.
  */
 
-const serverSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  DATABASE_URL: z.string().url(),
-  DIRECT_URL: z.string().url().optional(),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
-  ANTHROPIC_API_KEY: z.string().optional(),
-  OPENAI_API_KEY: z.string().optional(),
-  AI_DEFAULT_PROVIDER: z.enum(['anthropic', 'openai']).default('anthropic'),
-  AI_DEFAULT_MODEL: z.string().default('claude-sonnet-5'),
-  CRON_SECRET: z.string().optional(),
-});
+const urlSchema = z.string().url();
+const nonEmpty = z.string().min(1);
 
-const clientSchema = z.object({
-  NEXT_PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),
-  NEXT_PUBLIC_APP_NAME: z.string().default('Scout OS'),
-  NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
-});
-
-/**
- * NEXT_PUBLIC_* vars must be referenced statically for Next.js to inline them
- * into the client bundle, so we build the object explicitly rather than passing
- * `process.env` wholesale.
- */
-const clientEnv = {
-  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
-  NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME,
-  NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-};
-
-function formatErrors(error: z.ZodError): string {
-  return error.errors.map((e) => `  - ${e.path.join('.')}: ${e.message}`).join('\n');
+/** Return the parsed value if it satisfies the schema, otherwise `undefined`. */
+function optional<T>(schema: z.ZodType<T>, value: unknown): T | undefined {
+  const result = schema.safeParse(value);
+  return result.success ? result.data : undefined;
 }
 
-const isServer = typeof window === 'undefined';
-
-// Only validate server vars on the server; the client bundle never sees them.
-const parsedServer = isServer
-  ? serverSchema.safeParse(process.env)
-  : ({ success: true, data: {} } as const);
-
-const parsedClient = clientSchema.safeParse(clientEnv);
-
-if (!parsedServer.success) {
-  throw new Error(`❌ Invalid server environment variables:\n${formatErrors(parsedServer.error)}`);
-}
-
-if (!parsedClient.success) {
-  throw new Error(`❌ Invalid client environment variables:\n${formatErrors(parsedClient.error)}`);
-}
-
+// NEXT_PUBLIC_* vars must be referenced statically so Next.js can inline them
+// into the client bundle. Non-public vars are `undefined` in the browser.
 export const env = {
-  ...(parsedServer.data as z.infer<typeof serverSchema>),
-  ...parsedClient.data,
-};
+  NODE_ENV: process.env.NODE_ENV ?? 'development',
+
+  // App (public, with safe defaults)
+  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
+  NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME ?? 'Scout OS',
+
+  // Supabase (optional — undefined ⇒ auth runs in mock mode)
+  NEXT_PUBLIC_SUPABASE_URL: optional(urlSchema, process.env.NEXT_PUBLIC_SUPABASE_URL),
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: optional(nonEmpty, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+  SUPABASE_SERVICE_ROLE_KEY: optional(nonEmpty, process.env.SUPABASE_SERVICE_ROLE_KEY),
+
+  // Database (optional — undefined ⇒ DB-backed APIs are unavailable)
+  DATABASE_URL: optional(urlSchema, process.env.DATABASE_URL),
+  DIRECT_URL: optional(urlSchema, process.env.DIRECT_URL),
+
+  // AI (optional — undefined ⇒ AI features unavailable; MVP uses local templates)
+  ANTHROPIC_API_KEY: optional(nonEmpty, process.env.ANTHROPIC_API_KEY),
+  OPENAI_API_KEY: optional(nonEmpty, process.env.OPENAI_API_KEY),
+  AI_DEFAULT_PROVIDER: (process.env.AI_DEFAULT_PROVIDER as 'anthropic' | 'openai') ?? 'anthropic',
+  AI_DEFAULT_MODEL: process.env.AI_DEFAULT_MODEL ?? 'claude-sonnet-5',
+
+  CRON_SECRET: optional(nonEmpty, process.env.CRON_SECRET),
+} as const;
 
 export type Env = typeof env;
+
+/** True when Supabase auth is configured (public URL + anon key present). */
+export function isSupabaseConfigured(): boolean {
+  return Boolean(env.NEXT_PUBLIC_SUPABASE_URL && env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+}
+
+/** True when a database connection string is configured. */
+export function isDatabaseConfigured(): boolean {
+  return Boolean(env.DATABASE_URL);
+}
+
+/** True when at least one AI provider key is configured. */
+export function isAiConfigured(): boolean {
+  return Boolean(env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY);
+}
