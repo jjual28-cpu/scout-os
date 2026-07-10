@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "db:generate": "pnpm --filter @scout-os/database db:generate",
+    "db:generate": "node -e \"0\"",
     "clean": "rm -rf .next .turbo node_modules"
   },
   "dependencies": {

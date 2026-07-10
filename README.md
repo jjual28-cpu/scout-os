@@ -221,8 +221,10 @@ Open **http://localhost:3000/discover** and walk the MVP flow above.
 
 ## 🚀 Deployment (GitHub → Vercel)
 
-The MVP flow runs on mock data + localStorage, so it deploys without any real
-backend — but env vars must be **present and well-formed** (validated at boot).
+The MVP flow runs on mock data + localStorage, so it deploys with **zero env
+vars** (mock mode). Adding the Supabase vars turns on real auth and per-account
+data sync — env is validated per-feature at the point of use, never at boot, so
+missing/invalid values simply keep the app in mock mode instead of failing.
 
 ### 1. Push to GitHub
 
@@ -264,37 +266,42 @@ Create a new Vercel project from the GitHub repo, then set:
 Add these in **Project → Settings → Environment Variables** (Production +
 Preview). See `.env.example` for the full annotated list.
 
-| Variable                                   | Required? | Notes                                                |
-| ------------------------------------------ | --------- | ---------------------------------------------------- |
-| `NEXT_PUBLIC_SUPABASE_URL`                 | ✅ yes    | Must be a valid URL. Real value enables auth.        |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY`            | ✅ yes    | Non-empty.                                           |
-| `SUPABASE_SERVICE_ROLE_KEY`                | ✅ yes    | Non-empty, server-only. **Never** `NEXT_PUBLIC`.     |
-| `DATABASE_URL`                             | ✅ yes    | Must be a valid `postgresql://` URL.                 |
-| `NEXT_PUBLIC_APP_URL`                      | ✅ yes    | Your Vercel URL, e.g. `https://scout-os.vercel.app`. |
-| `NEXT_PUBLIC_APP_NAME`                     | optional  | Defaults to "Scout OS".                              |
-| `DIRECT_URL`                               | optional  | For Prisma migrations.                               |
-| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`     | optional  | Only for future real-AI features.                    |
-| `AI_DEFAULT_PROVIDER` / `AI_DEFAULT_MODEL` | optional  | Have defaults.                                       |
-| `CRON_SECRET`                              | optional  | For future cron endpoints.                           |
+All variables are **optional** — with none set, the app runs in mock mode.
 
-> **MVP-only deploy:** the flow works with placeholder-but-valid values for the
-> Supabase/DB vars (a valid URL + any non-empty string). **Real auth** requires a
-> real Supabase project (next step).
+| Variable                                   | Needed for                                                      |
+| ------------------------------------------ | --------------------------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`                 | **Auth + data sync** (valid URL)                                |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`            | **Auth + data sync** (non-empty)                                |
+| `SUPABASE_SERVICE_ROLE_KEY`                | DB-backed scaffolds only. Server-only — **never** `NEXT_PUBLIC` |
+| `DATABASE_URL`                             | DB-backed scaffolds only (valid `postgresql://` URL)            |
+| `NEXT_PUBLIC_APP_URL`                      | Correct links/redirects (your Vercel URL)                       |
+| `NEXT_PUBLIC_APP_NAME`                     | Defaults to "Scout OS"                                          |
+| `DIRECT_URL`                               | Prisma migrations                                               |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`     | Future real-AI features                                         |
+| `AI_DEFAULT_PROVIDER` / `AI_DEFAULT_MODEL` | Have defaults                                                   |
+| `CRON_SECRET`                              | Future cron endpoints                                           |
 
-### 4. Connect Supabase (when you want real auth / persistence)
+> **Just the URL + anon key** enable real login/signup and cross-device sync of
+> saved opportunities, status, memo, and DM drafts (the browser talks to Supabase
+> through Row Level Security). The service-role key and `DATABASE_URL` are only
+> for the deeper Prisma scaffolds.
+
+### 4. Connect Supabase (real auth + cross-device data sync)
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. **Settings → API** → copy the Project URL, `anon` key, and `service_role` key
-   into the matching Vercel env vars.
-3. **Settings → Database** → copy the pooled + direct connection strings into
-   `DATABASE_URL` / `DIRECT_URL`.
-4. **Auth → URL Configuration** → set Site URL to your Vercel domain and add
+2. **SQL Editor** → run **`supabase/migrations/0001_mvp_user_data.sql`**. This
+   creates `profiles`, `saved_opportunities`, `dm_drafts`, all RLS-protected so
+   each user sees only their own rows, plus the signup → profile trigger.
+3. **Settings → API** → copy the Project URL + `anon` key into
+   `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Vercel + local).
+4. **Auth → Providers → Email**: enable email signup. For instant login in
+   testing, turn **"Confirm email" off** (otherwise users must confirm via email).
+5. **Auth → URL Configuration** → set Site URL to your domain and add
    `https://<your-domain>/auth/callback` as a redirect URL.
-5. (Optional, for the DB scaffolds) push the schema and RLS:
-   ```bash
-   pnpm db:push
-   # then apply supabase/migrations/*.sql  (see supabase/README.md)
-   ```
+
+Now signing in with the same account on any computer shows the same saved
+opportunities, statuses, memos, and DM drafts. Existing localStorage data is
+migrated into Supabase once, on first login.
 
 ---
 

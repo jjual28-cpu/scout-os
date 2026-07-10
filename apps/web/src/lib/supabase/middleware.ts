@@ -52,7 +52,13 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/signup');
+  // When Supabase is configured, the app requires login. (In mock mode we return
+  // early above, so these routes stay public and run on localStorage.)
   const isProtected =
+    pathname.startsWith('/discover') ||
+    pathname.startsWith('/search') ||
+    pathname.startsWith('/saved') ||
+    pathname.startsWith('/outreach') ||
     pathname.startsWith('/dashboard') ||
     pathname.startsWith('/discovery') ||
     pathname.startsWith('/crm') ||

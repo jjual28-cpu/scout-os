@@ -88,7 +88,19 @@ export function useAuth() {
     [router],
   );
 
-  return { ...state, signIn, signUp };
+  const signOut = useCallback(async () => {
+    if (isSupabaseConfigured()) {
+      try {
+        await createClient().auth.signOut();
+      } catch {
+        // ignore — we redirect regardless
+      }
+    }
+    router.push('/login');
+    router.refresh();
+  }, [router]);
+
+  return { ...state, signIn, signUp, signOut };
 }
 
 function translateAuthError(message: string): string {

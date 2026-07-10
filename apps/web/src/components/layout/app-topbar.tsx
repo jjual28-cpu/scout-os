@@ -1,10 +1,13 @@
 'use client';
 
+import { LogOut } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import { ThemeToggle } from '@/components/layout/theme-toggle';
+import { useAuth } from '@/features/auth';
 import { useSavedOpportunities } from '@/features/search';
+import { isSupabaseConfigured } from '@/lib/env';
 import { cn } from '@/lib/utils';
 
 const NAV = [
@@ -21,6 +24,7 @@ const NAV = [
 export function AppTopbar() {
   const pathname = usePathname();
   const { saved, count, hydrated } = useSavedOpportunities();
+  const { signOut } = useAuth();
   const contactCount = saved.filter((s) => s.status === '연락예정').length;
 
   const badgeFor = (href: string): number | null => {
@@ -67,7 +71,19 @@ export function AppTopbar() {
         </nav>
       </div>
 
-      <ThemeToggle />
+      <div className="flex items-center gap-1">
+        {isSupabaseConfigured() ? (
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors"
+          >
+            <LogOut className="size-4" />
+            로그아웃
+          </button>
+        ) : null}
+        <ThemeToggle />
+      </div>
     </header>
   );
 }
