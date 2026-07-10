@@ -19,6 +19,25 @@ function optional<T>(schema: z.ZodType<T>, value: unknown): T | undefined {
   return result.success ? result.data : undefined;
 }
 
+/**
+ * Normalize a Supabase project URL to its ORIGIN only (scheme://host[:port]).
+ *
+ * supabase-js builds every endpoint by resolving a relative path against this
+ * value (`new URL("auth/v1", base)`), so any trailing path leaks in — e.g. a
+ * value of `https://ref.supabase.co/rest/v1` makes auth calls hit
+ * `.../rest/v1/auth/v1/signup` → "Invalid path specified in request URL".
+ * Stripping to the origin makes the client robust to a misconfigured URL.
+ */
+function toSupabaseOrigin(value: string | undefined): string | undefined {
+  const parsed = optional(urlSchema, value);
+  if (!parsed) return undefined;
+  try {
+    return new URL(parsed).origin;
+  } catch {
+    return undefined;
+  }
+}
+
 // NEXT_PUBLIC_* vars must be referenced statically so Next.js can inline them
 // into the client bundle. Non-public vars are `undefined` in the browser.
 export const env = {
@@ -28,8 +47,10 @@ export const env = {
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
   NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME ?? 'Scout OS',
 
-  // Supabase (optional — undefined ⇒ auth runs in mock mode)
-  NEXT_PUBLIC_SUPABASE_URL: optional(urlSchema, process.env.NEXT_PUBLIC_SUPABASE_URL),
+  // Supabase (optional — undefined ⇒ auth runs in mock mode).
+  // Normalized to the origin so a stray path like /rest/v1 can't corrupt the
+  // auth/storage endpoints supabase-js derives from it.
+  NEXT_PUBLIC_SUPABASE_URL: toSupabaseOrigin(process.env.NEXT_PUBLIC_SUPABASE_URL),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: optional(nonEmpty, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
   SUPABASE_SERVICE_ROLE_KEY: optional(nonEmpty, process.env.SUPABASE_SERVICE_ROLE_KEY),
 
