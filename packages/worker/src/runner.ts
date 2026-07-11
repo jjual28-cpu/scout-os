@@ -6,6 +6,8 @@ import { claimNextJob, completeJob, failJob, upsertCreators } from './supabase.j
 import { BlockedError, type DiscoveryJob, type SearchContext } from './types.js';
 
 let stopping = false;
+/** Resolves the in-flight idle sleep early so SIGINT shuts down promptly. */
+let wake: (() => void) | null = null;
 
 /** Run a single claimed job end to end. */
 async function processJob(job: DiscoveryJob): Promise<void> {
@@ -76,11 +78,24 @@ export function requestStop(): void {
     stopping = true;
     log('stop requested — finishing current job then exiting');
   }
+  wake?.(); // interrupt an idle sleep so the loop exits now, not after the interval
 }
 
+/**
+ * Idle wait between polls. The timer is intentionally NOT unref'd — an unref'd
+ * timer lets Node exit the moment the loop goes idle, which would kill the whole
+ * poll loop right after start. `requestStop()` calls `wake` to end it early.
+ */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
-    const t = setTimeout(resolve, ms);
-    if (typeof t === 'object' && 'unref' in t) t.unref();
+    const t = setTimeout(() => {
+      wake = null;
+      resolve();
+    }, ms);
+    wake = () => {
+      clearTimeout(t);
+      wake = null;
+      resolve();
+    };
   });
 }
