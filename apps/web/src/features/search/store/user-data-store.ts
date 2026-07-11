@@ -134,6 +134,52 @@ function rowToSaved(row: SavedRow): SavedOpportunity {
   return { ...row.raw_data, status: row.status, note: row.note ?? '' };
 }
 
+/** The minimal shape of the signed-in Supabase user this store needs. */
+type AuthUser = {
+  id: string;
+  email?: string | null;
+  user_metadata?: { full_name?: string | null } | null;
+};
+
+/**
+ * Execute a Supabase query builder and surface any error.
+ *
+ * IMPORTANT: postgrest builders are lazy — the HTTP request only fires when
+ * `.then()` is called. `void builder` would build the query but never send it,
+ * so mutations must go through here (which awaits) to actually persist.
+ */
+function run(query: PromiseLike<{ error: unknown }>): void {
+  Promise.resolve(query).then(
+    (res) => {
+      if (res.error) console.error('[scout] Supabase write failed:', res.error);
+    },
+    (err) => console.error('[scout] Supabase write threw:', err),
+  );
+}
+
+/**
+ * Ensure a `profiles` row exists for the signed-in user (idempotent upsert).
+ * Guarantees Authentication user ↔ profiles are linked even if the DB signup
+ * trigger wasn't applied. RLS allows this because auth.uid() === id.
+ */
+async function ensureProfile(user: AuthUser) {
+  try {
+    const { error } = await sbClient()
+      .from('profiles')
+      .upsert(
+        {
+          id: user.id,
+          email: user.email ?? null,
+          full_name: user.user_metadata?.full_name ?? null,
+        },
+        { onConflict: 'id' },
+      );
+    if (error) console.error('[scout] ensureProfile failed:', error);
+  } catch (err) {
+    console.error('[scout] ensureProfile threw:', err);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Startup + backend selection
 // ---------------------------------------------------------------------------
@@ -155,10 +201,10 @@ async function start() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    await applyUser(user?.id ?? null);
+    await applyUser(user ?? null);
 
     supabase.auth.onAuthStateChange((_event, session) => {
-      void applyUser(session?.user?.id ?? null);
+      void applyUser(session?.user ?? null);
     });
   } catch {
     // Any auth failure ⇒ fall back to local so the app still works.
@@ -167,16 +213,17 @@ async function start() {
   }
 }
 
-async function applyUser(uid: string | null) {
-  userId = uid;
-  if (!uid) {
+async function applyUser(user: AuthUser | null) {
+  userId = user?.id ?? null;
+  if (!user) {
     // Configured but signed out (protected routes redirect to /login anyway).
     mode = 'local';
     setSnapshot({ saved: readLocalSaved(), drafts: readLocalDrafts(), hydrated: true });
     return;
   }
   mode = 'supabase';
-  await migrateLocalToSupabase(uid);
+  await ensureProfile(user);
+  await migrateLocalToSupabase(user.id);
   await loadFromSupabase();
 }
 
@@ -262,10 +309,12 @@ export function saveOpportunity(item: SearchResult) {
   setSnapshot({ saved: [saved, ...snapshot.saved] });
   persistSaved();
   if (mode === 'supabase' && userId) {
-    void sbClient().from('saved_opportunities').upsert(savedToRow(saved, userId), {
-      onConflict: 'user_id,opportunity_id',
-      ignoreDuplicates: true,
-    });
+    run(
+      sbClient().from('saved_opportunities').upsert(savedToRow(saved, userId), {
+        onConflict: 'user_id,opportunity_id',
+        ignoreDuplicates: true,
+      }),
+    );
   }
 }
 
@@ -273,7 +322,7 @@ export function removeOpportunity(id: string) {
   setSnapshot({ saved: snapshot.saved.filter((s) => s.id !== id) });
   persistSaved();
   if (mode === 'supabase' && userId) {
-    void sbClient().from('saved_opportunities').delete().eq('opportunity_id', id);
+    run(sbClient().from('saved_opportunities').delete().eq('opportunity_id', id));
   }
 }
 
@@ -286,7 +335,7 @@ export function setStatus(id: string, status: OpportunityStatus) {
   setSnapshot({ saved: snapshot.saved.map((s) => (s.id === id ? { ...s, status } : s)) });
   persistSaved();
   if (mode === 'supabase' && userId) {
-    void sbClient().from('saved_opportunities').update({ status }).eq('opportunity_id', id);
+    run(sbClient().from('saved_opportunities').update({ status }).eq('opportunity_id', id));
   }
 }
 
@@ -294,7 +343,7 @@ export function setNote(id: string, note: string) {
   setSnapshot({ saved: snapshot.saved.map((s) => (s.id === id ? { ...s, note } : s)) });
   persistSaved();
   if (mode === 'supabase' && userId) {
-    void sbClient().from('saved_opportunities').update({ note }).eq('opportunity_id', id);
+    run(sbClient().from('saved_opportunities').update({ note }).eq('opportunity_id', id));
   }
 }
 
@@ -303,7 +352,7 @@ export function clearSaved() {
   setSnapshot({ saved: [] });
   persistSaved();
   if (mode === 'supabase' && userId && ids.length > 0) {
-    void sbClient().from('saved_opportunities').delete().in('opportunity_id', ids);
+    run(sbClient().from('saved_opportunities').delete().in('opportunity_id', ids));
   }
 }
 
@@ -311,12 +360,14 @@ export function setDraft(id: string, content: string) {
   setSnapshot({ drafts: { ...snapshot.drafts, [id]: content } });
   persistDrafts();
   if (mode === 'supabase' && userId) {
-    void sbClient()
-      .from('dm_drafts')
-      .upsert(
-        { user_id: userId, opportunity_id: id, content },
-        { onConflict: 'user_id,opportunity_id' },
-      );
+    run(
+      sbClient()
+        .from('dm_drafts')
+        .upsert(
+          { user_id: userId, opportunity_id: id, content },
+          { onConflict: 'user_id,opportunity_id' },
+        ),
+    );
   }
 }
 
@@ -326,6 +377,6 @@ export function removeDraft(id: string) {
   setSnapshot({ drafts: next });
   persistDrafts();
   if (mode === 'supabase' && userId) {
-    void sbClient().from('dm_drafts').delete().eq('opportunity_id', id);
+    run(sbClient().from('dm_drafts').delete().eq('opportunity_id', id));
   }
 }
