@@ -1,6 +1,6 @@
 'use client';
 
-import { Bookmark, BookmarkCheck, CalendarDays } from 'lucide-react';
+import { Bookmark, BookmarkCheck, CalendarDays, Instagram } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -28,10 +28,23 @@ export function DiscoverCard({ item }: { item: DiscoverOpportunity }) {
 
       <OpportunityBody result={item} />
 
-      {/* 발견일 */}
-      <div className="text-muted-foreground mt-4 flex items-center gap-1.5 text-xs">
-        <CalendarDays className="size-3.5" />
-        발견일 · {item.discoveredAt}
+      {/* 발견일 + 실제 프로필 링크 */}
+      <div className="text-muted-foreground mt-4 flex items-center justify-between gap-2 text-xs">
+        <span className="flex items-center gap-1.5">
+          <CalendarDays className="size-3.5" />
+          발견일 · {item.discoveredAt}
+        </span>
+        {item.profileUrl ? (
+          <a
+            href={item.profileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-foreground inline-flex items-center gap-1 underline-offset-2 hover:underline"
+          >
+            <Instagram className="size-3.5" />
+            프로필 열기
+          </a>
+        ) : null}
       </div>
 
       {/* 저장 */}

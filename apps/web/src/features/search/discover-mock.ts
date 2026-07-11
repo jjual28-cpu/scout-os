@@ -4,6 +4,8 @@ import { type SearchResult, type SearchResultType } from './types';
 export type DiscoverOpportunity = SearchResult & {
   /** 발견일 — display-ready label (e.g. "오늘", "어제"). */
   discoveredAt: string;
+  /** Public profile URL (real Instagram creators only; mock items omit it). */
+  profileUrl?: string;
 };
 
 export type DiscoverCategory = {

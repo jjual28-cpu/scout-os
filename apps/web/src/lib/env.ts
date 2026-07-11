@@ -69,6 +69,11 @@ export const env = {
   AI_DEFAULT_MODEL: process.env.AI_DEFAULT_MODEL ?? 'claude-sonnet-5',
 
   CRON_SECRET: optional(nonEmpty, process.env.CRON_SECRET),
+
+  // Apify (server-only — NEVER prefix with NEXT_PUBLIC). Powers real Instagram
+  // creator discovery. Undefined ⇒ /discover falls back to mock data.
+  APIFY_API_TOKEN: optional(nonEmpty, process.env.APIFY_API_TOKEN),
+  APIFY_INSTAGRAM_ACTOR: process.env.APIFY_INSTAGRAM_ACTOR ?? 'apify~instagram-scraper',
 } as const;
 
 export type Env = typeof env;
@@ -86,6 +91,11 @@ export function isDatabaseConfigured(): boolean {
 /** True when at least one AI provider key is configured. */
 export function isAiConfigured(): boolean {
   return Boolean(env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY);
+}
+
+/** True when Apify is configured (server-only token present). */
+export function isApifyConfigured(): boolean {
+  return Boolean(env.APIFY_API_TOKEN);
 }
 
 /**
