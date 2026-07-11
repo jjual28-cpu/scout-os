@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 
-import { isSupabaseConfigured } from '@/lib/env';
+import { getAuthCallbackUrl, isSupabaseConfigured } from '@/lib/env';
 import { createClient } from '@/lib/supabase/client';
 
 import { type LoginInput, type SignupInput } from '../schemas';
@@ -63,7 +63,12 @@ export function useAuth() {
         const { data, error } = await supabase.auth.signUp({
           email: input.email,
           password: input.password,
-          options: { data: { full_name: input.fullName } },
+          options: {
+            data: { full_name: input.fullName },
+            // Email-confirmation link returns here; the /auth/callback route
+            // exchanges the code for a session and forwards to /discover.
+            emailRedirectTo: getAuthCallbackUrl(),
+          },
         });
         if (error) {
           setState({ loading: false, error: translateAuthError(error.message) });

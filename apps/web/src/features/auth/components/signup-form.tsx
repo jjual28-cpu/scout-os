@@ -36,9 +36,9 @@ export function SignupForm({ redirectTo }: { redirectTo?: string }) {
       <div className="flex flex-col items-center gap-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-6 text-center">
         <CheckCircle2 className="size-8 text-emerald-600 dark:text-emerald-400" />
         <div>
-          <p className="font-medium">인증 메일을 보냈습니다</p>
+          <p className="font-medium">인증 메일을 보냈습니다.</p>
           <p className="text-muted-foreground mt-1 text-sm">
-            메일함에서 링크를 눌러 가입을 완료하세요.
+            메일의 인증 버튼을 누르면 가입이 완료됩니다.
           </p>
         </div>
       </div>

@@ -43,8 +43,12 @@ function toSupabaseOrigin(value: string | undefined): string | undefined {
 export const env = {
   NODE_ENV: process.env.NODE_ENV ?? 'development',
 
-  // App (public, with safe defaults)
-  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
+  // App (public, with safe defaults). Trailing slashes stripped so that
+  // `${NEXT_PUBLIC_APP_URL}/auth/callback` never produces a double slash.
+  NEXT_PUBLIC_APP_URL: (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(
+    /\/+$/,
+    '',
+  ),
   NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME ?? 'Scout OS',
 
   // Supabase (optional — undefined ⇒ auth runs in mock mode).
@@ -82,4 +86,19 @@ export function isDatabaseConfigured(): boolean {
 /** True when at least one AI provider key is configured. */
 export function isAiConfigured(): boolean {
   return Boolean(env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY);
+}
+
+/**
+ * Absolute URL Supabase should send email-confirmation / OAuth links back to.
+ *
+ * The production URL is read ONLY from `NEXT_PUBLIC_APP_URL` (never hardcoded);
+ * locally that resolves to `http://localhost:3000`. If the env var isn't set at
+ * all, we fall back to the live browser origin so the link still returns to the
+ * exact deployment the user signed up on — never a stale/other host.
+ */
+export function getAuthCallbackUrl(): string {
+  const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, '');
+  const base =
+    explicit || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+  return `${base}/auth/callback`;
 }
