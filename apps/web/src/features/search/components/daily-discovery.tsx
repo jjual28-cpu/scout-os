@@ -10,7 +10,7 @@ import { toDiscoverOpportunity, type InstagramCreator } from '../instagram';
 import { DiscoverCard } from './discover-card';
 
 /** Default seed for the daily feed when real discovery is enabled. */
-const DEFAULT_HASHTAG = 'kbeauty';
+const DEFAULT_HASHTAG = '뷰티';
 
 type State =
   | { kind: 'loading' }
