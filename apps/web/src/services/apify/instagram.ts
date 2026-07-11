@@ -4,6 +4,16 @@ import { type InstagramCreator } from '@/features/search/instagram';
 import { AppError } from '@/lib/api/response';
 import { env } from '@/lib/env';
 
+/**
+ * INACTIVE PROVIDER — kept intentionally.
+ *
+ * Instagram discovery now defaults to the local Playwright worker
+ * (`packages/worker`), selected via `DISCOVERY_PROVIDER`. This Apify-based
+ * provider remains available as an alternate: set `DISCOVERY_PROVIDER=apify`
+ * (with `APIFY_API_TOKEN`) and the route will call `runInstagramDiscovery`
+ * inline again. Do not delete — it is a supported, swappable provider.
+ */
+
 const APIFY_BASE = 'https://api.apify.com/v2';
 
 type RunInput = { query?: string; hashtag?: string; limit?: number };

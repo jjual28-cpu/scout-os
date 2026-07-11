@@ -1,0 +1,23 @@
+{
+  "name": "@scout-os/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Scout Worker — local Playwright job runner for public creator discovery (multi-platform).",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "install:browser": "playwright install chromium"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "dotenv": "^16.4.5",
+    "playwright": "^1.48.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.11",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  }
+}

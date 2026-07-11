@@ -74,6 +74,12 @@ export const env = {
   // creator discovery. Undefined ⇒ /discover falls back to mock data.
   APIFY_API_TOKEN: optional(nonEmpty, process.env.APIFY_API_TOKEN),
   APIFY_INSTAGRAM_ACTOR: process.env.APIFY_INSTAGRAM_ACTOR ?? 'apify~instagram-scraper',
+
+  // Discovery provider (server-only). Selects how /discover sources creators:
+  //   'worker' — enqueue a job for the local Playwright worker (packages/worker)
+  //   'apify'  — call the Apify actor inline (requires APIFY_API_TOKEN)
+  // Undefined/other ⇒ auto: use Apify if a token is present, else mock data.
+  DISCOVERY_PROVIDER: optional(nonEmpty, process.env.DISCOVERY_PROVIDER),
 } as const;
 
 export type Env = typeof env;
@@ -96,6 +102,20 @@ export function isAiConfigured(): boolean {
 /** True when Apify is configured (server-only token present). */
 export function isApifyConfigured(): boolean {
   return Boolean(env.APIFY_API_TOKEN);
+}
+
+/**
+ * Which discovery provider /discover should use.
+ *  - 'worker': enqueue a job for the local Playwright worker (packages/worker)
+ *  - 'apify':  run the Apify actor inline
+ *  - 'mock':   always serve mock data
+ * Defaults to 'worker' when explicitly set; otherwise auto — Apify if a token
+ * exists, else mock.
+ */
+export function getDiscoveryProvider(): 'worker' | 'apify' | 'mock' {
+  const explicit = env.DISCOVERY_PROVIDER?.toLowerCase();
+  if (explicit === 'worker' || explicit === 'apify' || explicit === 'mock') return explicit;
+  return isApifyConfigured() ? 'apify' : 'mock';
 }
 
 /**

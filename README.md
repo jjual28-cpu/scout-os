@@ -140,8 +140,9 @@ scout-os/
 │           └── types/              # Shared TypeScript types
 ├── packages/
 │   ├── database/                   # Prisma schema, client singleton, seed
+│   ├── worker/                     # Local Playwright discovery worker (multi-platform)
 │   └── config/                     # Shared ESLint / TS / Tailwind presets
-├── supabase/                       # Supabase config + RLS policies
+├── supabase/                       # Supabase config + RLS policies + migrations
 ├── .env.example
 ├── turbo.json
 └── pnpm-workspace.yaml
@@ -201,6 +202,72 @@ pnpm dev              # http://localhost:3000  → redirects to /discover
 ```
 
 Open **http://localhost:3000/discover** and walk the MVP flow above.
+
+---
+
+## 🔎 Real discovery — the local Scout Worker (`packages/worker`)
+
+`/discover` can show **real Instagram creators** instead of mock data. Discovery
+runs on **your own laptop** via a Playwright worker that opens Chrome, collects
+**public** account info screen-side, and writes it to Supabase — no private APIs,
+no login bypass. It's built as a multi-platform base (Instagram today; Threads /
+TikTok / YouTube / Naver plug in as new providers under `src/providers/`).
+
+**How it fits together**
+
+1. In the app, visiting `/discover` (signed in, `DISCOVERY_PROVIDER=worker`)
+   enqueues a row in the `discovery_jobs` table.
+2. The worker polls that table, runs the search, and upserts results into
+   `discovered_creators`.
+3. The app reads `discovered_creators` — the next `/discover` visit shows real
+   accounts, each with a working **Instagram** link to the real profile.
+
+Search order per job: **Instagram web search is the primary path** — the worker
+drives Instagram's real search UI to the end. **Google `site:instagram.com` is a
+last-resort fallback**, used _only_ when Instagram itself can't be searched (login
+wall or the search box is unavailable); Google never becomes the default flow. If
+a page shows a login wall or captcha, the worker **does not bypass it** — the job
+is marked `failed` with the cause recorded in `discovery_jobs.error`.
+
+To make Instagram search actually work, the worker reuses **your own Chrome
+profile** (`WORKER_USE_PROFILE=true`, on by default), so its cookies and login
+session persist. Log in to Instagram once in that Chrome profile, then **fully
+close Chrome** before starting the worker (Chrome locks the profile while open).
+
+**Prerequisites**
+
+- Apply the migrations in `supabase/migrations/` (at least `0002_discovered_creators.sql`
+  and `0003_discovery_jobs.sql`) in the Supabase SQL editor.
+- Set `DISCOVERY_PROVIDER="worker"` and the Supabase vars in `apps/web`.
+
+**Install & run the worker**
+
+```bash
+# 1. Install workspace deps (from the repo root)
+pnpm install
+
+# 2. Install the browser Playwright drives (uses your installed Chrome by default;
+#    this pulls the bundled Chromium fallback)
+pnpm --filter @scout-os/worker install:browser
+
+# 3. Configure the worker
+cp packages/worker/.env.example packages/worker/.env
+#   → set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (service role — server-only)
+
+# 4. Start it (a Chrome window opens; keep it running while you use /discover)
+pnpm --filter @scout-os/worker start
+```
+
+Useful worker env (`packages/worker/.env`): `WORKER_RESULT_LIMIT` (default 20),
+`WORKER_HEADLESS` (default `false` so you can watch it), `WORKER_USE_PROFILE`
+(default `true` — reuse your Chrome login), `WORKER_USER_DATA_DIR` (Chrome "User
+Data" root; defaults to the OS location), `WORKER_CHROME_PROFILE` (default
+`Default`), `WORKER_BROWSER_CHANNEL` (default `chrome`; set empty to use bundled
+Chromium), `WORKER_POLL_INTERVAL_MS`, `WORKER_MAX_ATTEMPTS`. Stop with `Ctrl+C` —
+it finishes the current job first.
+
+> Prefer a hosted option? Set `DISCOVERY_PROVIDER="apify"` with `APIFY_API_TOKEN`
+> to use the Apify provider instead (kept as a swappable alternate).
 
 ---
 
