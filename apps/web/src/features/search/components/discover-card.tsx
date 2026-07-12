@@ -10,9 +10,10 @@ import { cn } from '@/lib/utils';
 import { type DiscoverOpportunity } from '../discover-mock';
 import { useOutreach } from '../hooks/use-outreach';
 import { useSavedOpportunities } from '../hooks/use-saved-opportunities';
+import { keywordEmoji } from '../keyword';
 import { OpportunityBody } from './opportunity-body';
 
-export function DiscoverCard({ item }: { item: DiscoverOpportunity }) {
+export function DiscoverCard({ item, keyword }: { item: DiscoverOpportunity; keyword?: string }) {
   const { isSaved, toggle } = useSavedOpportunities();
   const outreach = useOutreach();
   const router = useRouter();
@@ -40,6 +41,12 @@ export function DiscoverCard({ item }: { item: DiscoverOpportunity }) {
         aria-hidden
         className="via-primary/50 pointer-events-none absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
       />
+
+      {keyword ? (
+        <span className="bg-primary/10 text-primary mb-3 inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium">
+          {keywordEmoji(keyword)} {keyword}
+        </span>
+      ) : null}
 
       <OpportunityBody result={item} />
 

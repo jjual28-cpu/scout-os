@@ -85,46 +85,64 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     userId = data.user?.id ?? null;
   }
 
-  // Serve already-discovered creators (skip re-running) unless a refresh is asked.
-  const existing =
-    supabase && userId && !body.refresh ? await fetchDiscovered(supabase, userId) : [];
-  if (existing.length > 0) {
-    return ok({ configured: true, creators: existing });
-  }
-
   // ── Worker mode ──────────────────────────────────────────────────────────
-  // Enqueue a job for the local Playwright worker and return whatever we have
-  // now (often empty on first run). No new UI: the client shows mock until the
-  // worker populates `discovered_creators`.
+  // Serve already-discovered creators (DB-first), else enqueue a job the local
+  // Playwright worker picks up to fill `discovered_creators` asynchronously.
   if (provider === 'worker') {
+    const existing =
+      supabase && userId && !body.refresh ? await fetchDiscovered(supabase, userId) : [];
+    if (existing.length > 0) {
+      return ok({ configured: true, creators: existing });
+    }
     if (!supabase || !userId) {
-      // A job needs an owning user (RLS). Without one, stay in mock mode.
       return ok({ configured: false, creators: [] as InstagramCreator[] });
     }
-    const query = (body.query ?? body.hashtag ?? '').trim();
-    await enqueueDiscoveryJob(supabase, userId, query);
+    const q = (body.query ?? body.hashtag ?? '').trim();
+    await enqueueDiscoveryJob(supabase, userId, q);
     const current = await fetchDiscovered(supabase, userId);
     return ok({ configured: true, queued: true, creators: current });
   }
 
-  // ── Apify mode ─────────────────────────────────────────────────────────
-  // Run the Apify actor inline (server-only token). The seed term (query, or the
-  // hashtag the client sends) is passed as a USER search so we collect public
-  // accounts — with full profile fields — rather than hashtag posts.
-  const creators = await runInstagramDiscovery({
-    query: body.query ?? body.hashtag,
-    limit: body.limit,
-  });
+  // ── Apify mode (keyword search) ──────────────────────────────────────────
+  // Each search runs the Apify actor for the exact keyword (USER search → public
+  // accounts with full profile fields). Results are upserted into
+  // `discovered_creators`, and the query is logged to `searches` for
+  // recent/popular/analytics.
+  const query = (body.query ?? body.hashtag ?? '').trim();
+  if (!query) {
+    return ok({ configured: true, creators: [] as InstagramCreator[] });
+  }
 
-  if (supabase && userId && creators.length > 0) {
-    await supabase.from('discovered_creators').upsert(
-      creators.map((c) => creatorToRow(c, userId as string)),
-      { onConflict: 'user_id,platform,external_id' },
-    );
+  const creators = await runInstagramDiscovery({ query, limit: body.limit ?? 24 });
+
+  if (supabase && userId) {
+    if (creators.length > 0) {
+      await supabase.from('discovered_creators').upsert(
+        creators.map((c) => creatorToRow(c, userId as string)),
+        { onConflict: 'user_id,platform,external_id' },
+      );
+    }
+    await logSearch(supabase, userId, query, creators.length);
   }
 
   return ok({ configured: true, creators });
 });
+
+/** Log a search to `searches` (best-effort — never blocks or fails the response). */
+async function logSearch(
+  supabase: Awaited<ReturnType<typeof getSupabase>>,
+  userId: string,
+  query: string,
+  resultCount: number,
+): Promise<void> {
+  try {
+    await supabase
+      .from('searches')
+      .insert({ user_id: userId, query, platform: 'instagram', result_count: resultCount });
+  } catch {
+    /* table may not exist yet / transient — don't fail the search */
+  }
+}
 
 /** Read a user's previously discovered Instagram creators (newest first). */
 async function fetchDiscovered(

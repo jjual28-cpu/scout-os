@@ -1,15 +1,16 @@
-import { DailyDiscovery } from '@/features/search';
+import { CreatorSearch } from '@/features/search';
 
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: "Today's Opportunities",
-  description: '오늘 Scout OS가 발견한 새로운 기회.',
+  title: 'Creator Discovery',
+  description: '원하는 주제나 키워드로 인스타그램 크리에이터를 검색하세요.',
 };
 
 /**
- * The main entry point of Scout OS — the daily discovery feed. Not a dashboard.
+ * The main entry point of Scout OS — a search-centric Creator Discovery product.
+ * Search any keyword (뷰티, 골프, 반려동물 …) to find real Instagram creators.
  */
 export default function DiscoverPage() {
-  return <DailyDiscovery />;
+  return <CreatorSearch />;
 }

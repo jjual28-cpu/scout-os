@@ -1,6 +1,6 @@
 /** Public API of the Search feature (mock-only — no engine connected). */
 export { SearchExperience } from './components/search-experience';
-export { DailyDiscovery } from './components/daily-discovery';
+export { CreatorSearch } from './components/creator-search';
 export { SavedList } from './components/saved-list';
 export { OutreachList } from './components/outreach-list';
 export { FollowUpToday } from './components/follow-up-today';

@@ -11,8 +11,7 @@ import { isSupabaseConfigured } from '@/lib/env';
 import { cn } from '@/lib/utils';
 
 const NAV = [
-  { href: '/discover', label: '오늘의 발견' },
-  { href: '/search', label: '검색' },
+  { href: '/discover', label: '검색' },
   { href: '/saved', label: '저장한 기회' },
   { href: '/outreach', label: '연락 준비' },
 ] as const;
