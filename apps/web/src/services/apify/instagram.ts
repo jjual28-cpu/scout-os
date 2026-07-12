@@ -100,16 +100,17 @@ export async function runInstagramDiscovery(input: RunInput): Promise<InstagramC
         resultsLimit: limit,
       };
 
+  // Apify's API path uses the `username~actor` form; accept the store
+  // `username/actor` value (e.g. "apify/instagram-scraper") too.
+  const actorId = env.APIFY_INSTAGRAM_ACTOR.replace('/', '~');
+
   let res: Response;
   try {
-    res = await fetch(
-      `${APIFY_BASE}/acts/${encodeURIComponent(env.APIFY_INSTAGRAM_ACTOR)}/run-sync-get-dataset-items?token=${token}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(actorInput),
-      },
-    );
+    res = await fetch(`${APIFY_BASE}/acts/${actorId}/run-sync-get-dataset-items?token=${token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(actorInput),
+    });
   } catch {
     throw new AppError(
       'APIFY_NETWORK',

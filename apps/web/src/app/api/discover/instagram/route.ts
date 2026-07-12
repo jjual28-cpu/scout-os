@@ -107,10 +107,12 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     return ok({ configured: true, queued: true, creators: current });
   }
 
-  // ── Apify mode (inactive by default; kept as an alternate provider) ────────
+  // ── Apify mode ─────────────────────────────────────────────────────────
+  // Run the Apify actor inline (server-only token). The seed term (query, or the
+  // hashtag the client sends) is passed as a USER search so we collect public
+  // accounts — with full profile fields — rather than hashtag posts.
   const creators = await runInstagramDiscovery({
-    query: body.query,
-    hashtag: body.hashtag,
+    query: body.query ?? body.hashtag,
     limit: body.limit,
   });
 
