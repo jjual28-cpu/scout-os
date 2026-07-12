@@ -23,10 +23,21 @@ export type SearchResult = {
   opportunityScore: number;
   /** 추천 액션 — the next best move. */
   recommendedAction: string;
+  /** Real profile image (Instagram creators only; mock items omit it). */
+  profileImageUrl?: string | null;
+  /** Follower count (real creators only). */
+  followersCount?: number | null;
 };
 
 /** A user's judgement on a saved opportunity. */
 export type OpportunityStatus = '미검토' | '관심' | '보류' | '제외' | '연락예정';
+
+/**
+ * Contact lifecycle status for a creator in the outreach flow (outreach_activities).
+ * A superset of OpportunityStatus that adds the post-contact states.
+ */
+export type ContactStatus =
+  '미검토' | '관심' | '보류' | '제외' | '연락예정' | '연락완료' | '답변옴';
 
 /** A saved opportunity: the result plus the user's own classification. */
 export type SavedOpportunity = SearchResult & {

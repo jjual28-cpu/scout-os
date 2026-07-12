@@ -1,17 +1,32 @@
 'use client';
 
-import { Bookmark, BookmarkCheck, CalendarDays, Instagram } from 'lucide-react';
+import { Bookmark, BookmarkCheck, CalendarDays, Instagram, MessageSquarePlus } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 import { type DiscoverOpportunity } from '../discover-mock';
+import { useOutreach } from '../hooks/use-outreach';
 import { useSavedOpportunities } from '../hooks/use-saved-opportunities';
 import { OpportunityBody } from './opportunity-body';
 
 export function DiscoverCard({ item }: { item: DiscoverOpportunity }) {
   const { isSaved, toggle } = useSavedOpportunities();
+  const outreach = useOutreach();
+  const router = useRouter();
   const saved = isSaved(item.id);
+
+  // Real creators carry a profileUrl → the detail/outreach flow applies to them.
+  const isReal = Boolean(item.profileUrl);
+  const detailHref = `/creators/${encodeURIComponent(item.id)}`;
+
+  const prepareContact = () => {
+    if (!saved) toggle(item); // keep it in the saved list too
+    outreach.setStatus(item.id, '연락예정');
+    router.push(detailHref);
+  };
 
   return (
     <article
@@ -67,6 +82,19 @@ export function DiscoverCard({ item }: { item: DiscoverOpportunity }) {
           </>
         )}
       </Button>
+
+      {/* 자세히 보기 / 연락 준비 — 실제 크리에이터에만 */}
+      {isReal ? (
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <Button asChild type="button" variant="ghost">
+            <Link href={detailHref}>자세히 보기</Link>
+          </Button>
+          <Button type="button" variant="ghost" onClick={prepareContact}>
+            <MessageSquarePlus className="size-4" />
+            연락 준비
+          </Button>
+        </div>
+      ) : null}
     </article>
   );
 }

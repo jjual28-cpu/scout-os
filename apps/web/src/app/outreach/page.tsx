@@ -1,4 +1,4 @@
-import { OutreachList } from '@/features/search';
+import { FollowUpToday, OutreachList } from '@/features/search';
 
 import type { Metadata } from 'next';
 
@@ -8,5 +8,10 @@ export const metadata: Metadata = {
 };
 
 export default function OutreachPage() {
-  return <OutreachList />;
+  return (
+    <>
+      <FollowUpToday />
+      <OutreachList />
+    </>
+  );
 }

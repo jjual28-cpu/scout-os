@@ -1,4 +1,4 @@
-import { type OpportunityStatus } from './types';
+import { type ContactStatus, type OpportunityStatus } from './types';
 
 /** Canonical status order used for pills and filters. */
 export const STATUS_ORDER: OpportunityStatus[] = ['미검토', '관심', '보류', '제외', '연락예정'];
@@ -37,5 +37,28 @@ export const STATUS_META: Record<OpportunityStatus, StatusStyle> = {
   연락예정: {
     active: 'border-transparent bg-sky-500/15 text-sky-600 dark:text-sky-400',
     dot: 'bg-sky-500',
+  },
+};
+
+/** Contact lifecycle statuses (outreach flow) — order used for the detail selector. */
+export const CONTACT_STATUS_ORDER: ContactStatus[] = [
+  '미검토',
+  '관심',
+  '보류',
+  '제외',
+  '연락예정',
+  '연락완료',
+  '답변옴',
+];
+
+export const CONTACT_STATUS_META: Record<ContactStatus, StatusStyle> = {
+  ...STATUS_META,
+  연락완료: {
+    active: 'border-transparent bg-indigo-500/15 text-indigo-600 dark:text-indigo-400',
+    dot: 'bg-indigo-500',
+  },
+  답변옴: {
+    active: 'border-transparent bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-400',
+    dot: 'bg-fuchsia-500',
   },
 };

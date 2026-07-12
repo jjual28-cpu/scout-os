@@ -12,7 +12,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-import { cn } from '@/lib/utils';
+import { cn, formatCompactNumber } from '@/lib/utils';
 
 import { type SearchPlatform, type SearchResult, type SearchResultType } from '../types';
 
@@ -61,18 +61,32 @@ export function OpportunityBody({ result }: { result: SearchResult }) {
       {/* Header: identity + opportunity score */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div
-            className={cn(
-              'flex size-11 shrink-0 items-center justify-center rounded-xl',
-              typeMeta.chip,
-            )}
-          >
-            <TypeIcon className="size-5" />
-          </div>
+          {result.profileImageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- external IG CDN, unoptimized is fine
+            <img
+              src={result.profileImageUrl}
+              alt={result.name}
+              className="size-11 shrink-0 rounded-xl object-cover"
+            />
+          ) : (
+            <div
+              className={cn(
+                'flex size-11 shrink-0 items-center justify-center rounded-xl',
+                typeMeta.chip,
+              )}
+            >
+              <TypeIcon className="size-5" />
+            </div>
+          )}
           <div className="min-w-0">
             <h3 className="truncate text-base font-semibold tracking-tight">{result.name}</h3>
             {result.handle ? (
               <p className="text-muted-foreground truncate text-sm">@{result.handle}</p>
+            ) : null}
+            {result.followersCount != null ? (
+              <p className="text-muted-foreground truncate text-xs">
+                팔로워 {formatCompactNumber(result.followersCount)}
+              </p>
             ) : null}
           </div>
         </div>

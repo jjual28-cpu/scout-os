@@ -57,5 +57,7 @@ export function toDiscoverOpportunity(creator: InstagramCreator): DiscoverOpport
     recommendedAction: '제품 시딩 후 협업 제안하기',
     discoveredAt: '오늘',
     profileUrl: creator.profileUrl,
+    profileImageUrl: creator.profileImageUrl,
+    followersCount: creator.followersCount,
   };
 }

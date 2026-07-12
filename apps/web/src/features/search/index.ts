@@ -3,6 +3,8 @@ export { SearchExperience } from './components/search-experience';
 export { DailyDiscovery } from './components/daily-discovery';
 export { SavedList } from './components/saved-list';
 export { OutreachList } from './components/outreach-list';
+export { FollowUpToday } from './components/follow-up-today';
+export { CreatorDetail } from './components/creator-detail';
 export { ResultCard } from './components/result-card';
 export { useSearch } from './hooks/use-search';
 export { useSavedOpportunities } from './hooks/use-saved-opportunities';
