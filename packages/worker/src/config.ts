@@ -22,15 +22,22 @@ function str(name: string): string | undefined {
   return v || undefined;
 }
 
-/** Windows default Chrome "User Data" root (holds the login/cookie profiles). */
-const defaultChromeUserDataDir =
+/**
+ * Dedicated Scout worker Chrome user-data-dir — a SEPARATE profile store from the
+ * user's everyday Chrome, so the two never collide (no profile-lock conflict).
+ * Playwright auto-creates it on first launch; log in to Instagram once there and
+ * the session/cookies persist across runs.
+ */
+const defaultUserDataDir =
   process.platform === 'win32' && process.env.LOCALAPPDATA
-    ? `${process.env.LOCALAPPDATA}\\Google\\Chrome\\User Data`
-    : undefined;
+    ? `${process.env.LOCALAPPDATA}\\ScoutWorker\\chrome-profile`
+    : process.env.HOME
+      ? `${process.env.HOME}/.scout-worker/chrome-profile`
+      : undefined;
 
-// Use the user's real Chrome profile by default so Instagram stays logged in
-// (session + cookies persist). Set WORKER_USE_PROFILE=false to run an ephemeral
-// browser instead.
+// Use the dedicated Scout Chrome profile by default so Instagram stays logged in
+// (session + cookies persist) without touching the user's own Chrome. Set
+// WORKER_USE_PROFILE=false to run an ephemeral browser instead.
 const useProfile = bool('WORKER_USE_PROFILE', true);
 
 export const config = {
@@ -43,11 +50,11 @@ export const config = {
   // Empty string ⇒ use Playwright's bundled chromium instead of installed Chrome.
   browserChannel: (process.env.WORKER_BROWSER_CHANNEL ?? 'chrome').trim() || undefined,
 
-  // Persistent Chrome profile (keeps the Instagram login session between runs).
+  // Dedicated Scout Chrome profile (keeps the Instagram login session between runs).
   //  - useProfile=false ⇒ ephemeral browser (no saved session).
-  //  - userDataDir: the "User Data" ROOT; defaults to the OS Chrome location.
-  //  - profileDirectory: which profile inside it (e.g. "Default", "Profile 1").
+  //  - userDataDir: dedicated Scout user-data-dir (NOT the user's real Chrome).
+  //  - profileDirectory: which profile inside it (default "Default").
   useProfile,
-  userDataDir: useProfile ? (str('WORKER_USER_DATA_DIR') ?? defaultChromeUserDataDir) : undefined,
+  userDataDir: useProfile ? (str('WORKER_USER_DATA_DIR') ?? defaultUserDataDir) : undefined,
   profileDirectory: str('WORKER_CHROME_PROFILE') ?? 'Default',
 } as const;

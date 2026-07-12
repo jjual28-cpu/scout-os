@@ -29,9 +29,9 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
 /**
  * A SINGLE long-lived context, reused across jobs so the Instagram login session
  * and cookies persist. Preference order:
- *   1. The user's real Chrome profile (launchPersistentContext on userDataDir) —
- *      keeps them logged in. Requires Chrome to be CLOSED (the profile is locked
- *      while Chrome runs).
+ *   1. The dedicated Scout Chrome profile (launchPersistentContext on the Scout
+ *      user-data-dir) — a SEPARATE profile store, so it never conflicts with the
+ *      user's everyday Chrome. Log in to Instagram once; the session is reused.
  *   2. Bundled chromium against that same profile if the Chrome channel is absent.
  *   3. An ephemeral browser (no saved session) as a last resort.
  */

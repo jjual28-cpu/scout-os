@@ -229,10 +229,14 @@ wall or the search box is unavailable); Google never becomes the default flow. I
 a page shows a login wall or captcha, the worker **does not bypass it** — the job
 is marked `failed` with the cause recorded in `discovery_jobs.error`.
 
-To make Instagram search actually work, the worker reuses **your own Chrome
-profile** (`WORKER_USE_PROFILE=true`, on by default), so its cookies and login
-session persist. Log in to Instagram once in that Chrome profile, then **fully
-close Chrome** before starting the worker (Chrome locks the profile while open).
+To make Instagram search actually work, the worker uses a **dedicated Scout Chrome
+profile** (`WORKER_USE_PROFILE=true`, on by default) — a separate `user-data-dir`
+(default `%LOCALAPPDATA%\ScoutWorker\chrome-profile`, auto-created) that **never
+conflicts with your everyday Chrome**, so you don't need to close it. Log in to
+Instagram **once** in that profile and the session is reused on every later run.
+Easiest one-time login: launch Chrome against that profile and sign in, e.g.
+`chrome.exe --user-data-dir="%LOCALAPPDATA%\ScoutWorker\chrome-profile" --profile-directory=Default`,
+then close that window.
 
 **Prerequisites**
 
