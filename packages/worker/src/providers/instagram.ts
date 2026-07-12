@@ -276,7 +276,8 @@ export const instagramProvider: SearchProvider = {
     } catch (err) {
       if (!(err instanceof BlockedError)) throw err;
       // 2) Google is used ONLY when Instagram itself is blocked/unavailable.
-      ctx.log(`instagram unavailable (${err.reason}) — falling back to Google`);
+      //    err.reason is exactly instagram_login_required | instagram_search_unavailable.
+      ctx.log(`INSTAGRAM FAILED: reason=${err.reason} → falling back to Google`);
       source = 'google';
       usernames = await searchViaGoogle(query, ctx);
       ctx.log(`google fallback found ${usernames.length} usernames`);

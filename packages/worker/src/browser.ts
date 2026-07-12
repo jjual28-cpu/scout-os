@@ -14,6 +14,18 @@ const contextOptions = {
   userAgent: USER_AGENT,
 };
 
+/** A locked Chrome profile can make launch HANG instead of throwing; cap it. */
+const LAUNCH_TIMEOUT_MS = 20000;
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms),
+    ),
+  ]);
+}
+
 /**
  * A SINGLE long-lived context, reused across jobs so the Instagram login session
  * and cookies persist. Preference order:
@@ -28,22 +40,33 @@ async function launchContext(): Promise<BrowserContext> {
     const args = config.profileDirectory ? [`--profile-directory=${config.profileDirectory}`] : [];
     for (const channel of [config.browserChannel, undefined]) {
       try {
-        log('opening Chrome profile', {
+        const ctx = await withTimeout(
+          chromium.launchPersistentContext(config.userDataDir, {
+            ...contextOptions,
+            headless: config.headless,
+            channel,
+            args,
+            timeout: LAUNCH_TIMEOUT_MS,
+          }),
+          LAUNCH_TIMEOUT_MS,
+          'launchPersistentContext',
+        );
+        log('BROWSER MODE: persistent Chrome profile ✓ (Instagram login/cookies preserved)', {
           userDataDir: config.userDataDir,
+          profile: config.profileDirectory,
           channel: channel ?? 'bundled',
         });
-        return await chromium.launchPersistentContext(config.userDataDir, {
-          ...contextOptions,
-          headless: config.headless,
-          channel,
-          args,
-        });
+        return ctx;
       } catch (err) {
         log('could not open Chrome profile (is Chrome fully closed?)', err);
         if (!config.browserChannel) break; // already tried bundled; don't loop
       }
     }
-    log('falling back to an ephemeral browser — Instagram will not be logged in');
+    log(
+      'BROWSER MODE: EPHEMERAL fallback ✗ (profile locked/unavailable — Instagram is NOT logged in)',
+    );
+  } else {
+    log('BROWSER MODE: EPHEMERAL (WORKER_USE_PROFILE disabled — Instagram is NOT logged in)');
   }
 
   const browser = await chromium
