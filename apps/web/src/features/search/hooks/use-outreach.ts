@@ -34,6 +34,7 @@ export function useOutreach() {
     get,
     followUpsDueToday,
     setStatus: store.setStatus,
+    setStageSafe: store.setStageSafe,
     setNote: store.setNote,
     setDmDraft: store.setDmDraft,
     setFollowUpAt: store.setFollowUpAt,

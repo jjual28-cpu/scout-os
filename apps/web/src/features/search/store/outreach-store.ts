@@ -3,8 +3,6 @@
 import { isSupabaseConfigured } from '@/lib/env';
 import { createClient } from '@/lib/supabase/client';
 
-import { type ContactStatus } from '../types';
-
 /**
  * Per-creator outreach activity (status, DM, contact + follow-up history).
  * Keyed by creatorId = discovered_creators.external_id (e.g. "instagram:username").
@@ -17,7 +15,8 @@ import { type ContactStatus } from '../types';
 
 export type OutreachRecord = {
   creatorId: string;
-  status: ContactStatus;
+  /** Free-text stage/status (ContactStatus or CRM Stage value). */
+  status: string;
   note: string;
   dmDraft: string;
   contactedAt: string | null;
@@ -108,7 +107,7 @@ function writeLocal(records: RecordMap) {
 function rowToRecord(r: any): OutreachRecord {
   return {
     creatorId: r.creator_id,
-    status: (r.status ?? '미검토') as ContactStatus,
+    status: r.status ?? '미검토',
     note: r.note ?? '',
     dmDraft: r.dm_draft ?? '',
     contactedAt: r.contacted_at ?? null,
@@ -218,8 +217,39 @@ export function updateRecord(creatorId: string, patch: Partial<OutreachRecord>) 
   persist(next);
 }
 
-export function setStatus(creatorId: string, status: ContactStatus) {
+export function setStatus(creatorId: string, status: string) {
   updateRecord(creatorId, { status });
+}
+
+/**
+ * Move a creator to a stage with OPTIMISTIC update + rollback. Returns false if
+ * the Supabase write failed (caller shows a Korean error and the UI reverts).
+ */
+export async function setStageSafe(creatorId: string, status: string): Promise<boolean> {
+  const prev = snapshot.records[creatorId];
+  const optimistic: OutreachRecord = { ...(prev ?? emptyRecord(creatorId)), status, creatorId };
+  setSnapshot({ records: { ...snapshot.records, [creatorId]: optimistic } });
+
+  if (mode === 'local') {
+    writeLocal(snapshot.records);
+    return true;
+  }
+  if (mode === 'supabase' && userId) {
+    try {
+      const { error } = await sbClient()
+        .from('outreach_activities')
+        .upsert(recordToRow(optimistic, userId), { onConflict: 'user_id,creator_id' });
+      if (error) throw error;
+      return true;
+    } catch {
+      const next = { ...snapshot.records };
+      if (prev) next[creatorId] = prev;
+      else delete next[creatorId];
+      setSnapshot({ records: next });
+      return false;
+    }
+  }
+  return true;
 }
 export function setNote(creatorId: string, note: string) {
   updateRecord(creatorId, { note });

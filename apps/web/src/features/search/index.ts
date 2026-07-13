@@ -2,6 +2,7 @@
 export { SearchExperience } from './components/search-experience';
 export { CreatorSearch } from './components/creator-search';
 export { DashboardHome } from './components/dashboard-home';
+export { CrmBoard } from './components/crm-board';
 export { SavedList } from './components/saved-list';
 export { OutreachList } from './components/outreach-list';
 export { FollowUpToday } from './components/follow-up-today';
