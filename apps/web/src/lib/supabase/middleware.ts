@@ -55,6 +55,7 @@ export async function updateSession(request: NextRequest) {
   // early above, so these routes stay public and run on localStorage.)
   const isProtected =
     pathname.startsWith('/home') ||
+    pathname.startsWith('/products') ||
     pathname.startsWith('/discover') ||
     pathname.startsWith('/search') ||
     pathname.startsWith('/saved') ||

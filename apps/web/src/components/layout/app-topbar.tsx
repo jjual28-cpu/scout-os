@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 const NAV = [
   { href: '/home', label: '홈' },
   { href: '/discover', label: '검색' },
+  { href: '/products', label: 'Products' },
   { href: '/crm', label: 'CRM' },
   { href: '/saved', label: '저장한 기회' },
   { href: '/outreach', label: '연락 준비' },
