@@ -11,6 +11,7 @@ import { isSupabaseConfigured } from '@/lib/env';
 import { cn } from '@/lib/utils';
 
 const NAV = [
+  { href: '/home', label: '홈' },
   { href: '/discover', label: '검색' },
   { href: '/saved', label: '저장한 기회' },
   { href: '/outreach', label: '연락 준비' },
@@ -36,7 +37,7 @@ export function AppTopbar() {
   return (
     <header className="bg-background/80 sticky top-0 z-10 flex h-14 items-center justify-between border-b px-6 backdrop-blur">
       <div className="flex items-center gap-6">
-        <Link href="/discover" className="flex items-center gap-2">
+        <Link href="/home" className="flex items-center gap-2">
           <div className="bg-primary text-primary-foreground flex h-7 w-7 items-center justify-center rounded-lg">
             <span className="text-xs font-bold">S</span>
           </div>

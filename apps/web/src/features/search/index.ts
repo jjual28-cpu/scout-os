@@ -1,6 +1,7 @@
 /** Public API of the Search feature (mock-only — no engine connected). */
 export { SearchExperience } from './components/search-experience';
 export { CreatorSearch } from './components/creator-search';
+export { DashboardHome } from './components/dashboard-home';
 export { SavedList } from './components/saved-list';
 export { OutreachList } from './components/outreach-list';
 export { FollowUpToday } from './components/follow-up-today';

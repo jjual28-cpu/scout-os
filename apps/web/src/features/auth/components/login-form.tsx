@@ -26,7 +26,7 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
     defaultValues: { email: '', password: '' },
   });
 
-  const onSubmit = handleSubmit((values) => signIn(values, redirectTo ?? '/discover'));
+  const onSubmit = handleSubmit((values) => signIn(values, redirectTo ?? '/home'));
 
   return (
     <form onSubmit={onSubmit} className="space-y-4" noValidate>

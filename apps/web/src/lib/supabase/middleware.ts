@@ -10,12 +10,11 @@ type CookieToSet = { name: string; value: string; options: CookieOptions };
  * routes. Called from the root `middleware.ts`.
  */
 export async function updateSession(request: NextRequest) {
-  // Discover — not a dashboard — is the main entry point of Scout OS. Any visit
-  // to /dashboard is redirected to /discover.
+  // The dashboard home is /home. The old Prisma scaffold /dashboard redirects there.
   const { pathname } = request.nextUrl;
   if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) {
     const url = request.nextUrl.clone();
-    url.pathname = '/discover';
+    url.pathname = '/home';
     return NextResponse.redirect(url);
   }
 
@@ -55,6 +54,7 @@ export async function updateSession(request: NextRequest) {
   // When Supabase is configured, the app requires login. (In mock mode we return
   // early above, so these routes stay public and run on localStorage.)
   const isProtected =
+    pathname.startsWith('/home') ||
     pathname.startsWith('/discover') ||
     pathname.startsWith('/search') ||
     pathname.startsWith('/saved') ||
@@ -75,7 +75,7 @@ export async function updateSession(request: NextRequest) {
 
   if (user && isAuthRoute) {
     const url = request.nextUrl.clone();
-    url.pathname = '/discover';
+    url.pathname = '/home';
     return NextResponse.redirect(url);
   }
 

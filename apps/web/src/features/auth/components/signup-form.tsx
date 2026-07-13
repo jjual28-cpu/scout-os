@@ -27,7 +27,7 @@ export function SignupForm({ redirectTo }: { redirectTo?: string }) {
   });
 
   const onSubmit = handleSubmit(async (values) => {
-    const result = await signUp(values, redirectTo ?? '/discover');
+    const result = await signUp(values, redirectTo ?? '/home');
     if (result === 'confirm') setConfirmSent(true);
   });
 

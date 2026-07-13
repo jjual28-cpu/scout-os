@@ -24,7 +24,7 @@ export function useAuth() {
   const [state, setState] = useState<AuthState>({ loading: false, error: null });
 
   const signIn = useCallback(
-    async (input: LoginInput, redirectTo = '/discover') => {
+    async (input: LoginInput, redirectTo = '/home') => {
       if (!isSupabaseConfigured()) {
         setState({ loading: false, error: AUTH_NOT_READY });
         return false;
@@ -52,7 +52,7 @@ export function useAuth() {
   );
 
   const signUp = useCallback(
-    async (input: SignupInput, redirectTo = '/discover') => {
+    async (input: SignupInput, redirectTo = '/home') => {
       if (!isSupabaseConfigured()) {
         setState({ loading: false, error: AUTH_NOT_READY });
         return false;

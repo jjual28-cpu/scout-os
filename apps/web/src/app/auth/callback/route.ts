@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   }
 
   const code = searchParams.get('code');
-  const redirectTo = searchParams.get('redirectTo') ?? '/discover';
+  const redirectTo = searchParams.get('redirectTo') ?? '/home';
 
   if (code) {
     // Import the server client lazily so this module never constructs it at build.
