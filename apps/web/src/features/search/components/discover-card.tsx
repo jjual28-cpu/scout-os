@@ -1,6 +1,13 @@
 'use client';
 
-import { Bookmark, BookmarkCheck, CalendarDays, Instagram, MessageSquarePlus } from 'lucide-react';
+import {
+  Bookmark,
+  BookmarkCheck,
+  CalendarDays,
+  Instagram,
+  MessageSquarePlus,
+  Send,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -13,7 +20,19 @@ import { useSavedOpportunities } from '../hooks/use-saved-opportunities';
 import { keywordEmoji } from '../keyword';
 import { OpportunityBody } from './opportunity-body';
 
-export function DiscoverCard({ item, keyword }: { item: DiscoverOpportunity; keyword?: string }) {
+export function DiscoverCard({
+  item,
+  keyword,
+  selectable,
+  selected,
+  onSelectChange,
+}: {
+  item: DiscoverOpportunity;
+  keyword?: string;
+  selectable?: boolean;
+  selected?: boolean;
+  onSelectChange?: (id: string, next: boolean) => void;
+}) {
   const { isSaved, toggle } = useSavedOpportunities();
   const outreach = useOutreach();
   const router = useRouter();
@@ -24,7 +43,7 @@ export function DiscoverCard({ item, keyword }: { item: DiscoverOpportunity; key
   const detailHref = `/creators/${encodeURIComponent(item.id)}`;
 
   const prepareContact = () => {
-    if (!saved) toggle(item); // keep it in the saved list too
+    if (!saved) toggle(item);
     outreach.setStatus(item.id, '연락예정');
     router.push(detailHref);
   };
@@ -35,12 +54,25 @@ export function DiscoverCard({ item, keyword }: { item: DiscoverOpportunity; key
         'bg-card group relative flex flex-col overflow-hidden rounded-2xl border p-5',
         'transition-all duration-200 ease-out',
         'hover:border-primary/30 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/[0.04]',
+        selected && 'ring-primary/50 border-primary/40 ring-2',
       )}
     >
       <div
         aria-hidden
         className="via-primary/50 pointer-events-none absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
       />
+
+      {selectable && isReal ? (
+        <label className="absolute right-3 top-3 z-[1] flex cursor-pointer items-center">
+          <input
+            type="checkbox"
+            checked={Boolean(selected)}
+            onChange={(e) => onSelectChange?.(item.id, e.target.checked)}
+            className="accent-primary size-4 cursor-pointer rounded"
+            aria-label={`${item.name} 선택`}
+          />
+        </label>
+      ) : null}
 
       {keyword ? (
         <span className="bg-primary/10 text-primary mb-3 inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium">
@@ -90,15 +122,21 @@ export function DiscoverCard({ item, keyword }: { item: DiscoverOpportunity; key
         )}
       </Button>
 
-      {/* 자세히 보기 / 연락 준비 — 실제 크리에이터에만 */}
+      {/* DM / 자세히 보기 / 연락 준비 — 실제 크리에이터에만 */}
       {isReal ? (
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <Button asChild type="button" variant="ghost">
-            <Link href={detailHref}>자세히 보기</Link>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          <Button asChild type="button" variant="ghost" size="sm">
+            <Link href={detailHref}>
+              <Send className="size-4" />
+              DM
+            </Link>
           </Button>
-          <Button type="button" variant="ghost" onClick={prepareContact}>
+          <Button asChild type="button" variant="ghost" size="sm">
+            <Link href={detailHref}>자세히</Link>
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={prepareContact}>
             <MessageSquarePlus className="size-4" />
-            연락 준비
+            연락
           </Button>
         </div>
       ) : null}

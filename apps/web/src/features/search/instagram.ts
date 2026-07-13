@@ -1,6 +1,7 @@
 import { formatCompactNumber } from '@/lib/utils';
 
 import { type DiscoverOpportunity } from './discover-mock';
+import { recommendReasons } from './recommend';
 import { type SearchResultType } from './types';
 
 /**
@@ -59,5 +60,10 @@ export function toDiscoverOpportunity(creator: InstagramCreator): DiscoverOpport
     profileUrl: creator.profileUrl,
     profileImageUrl: creator.profileImageUrl,
     followersCount: creator.followersCount,
+    reasons: recommendReasons(creator),
+    isVerified: creator.isVerified,
+    category: creator.category,
+    postsCount: creator.postsCount,
+    biography: creator.biography,
   };
 }

@@ -6,13 +6,14 @@ import {
   CalendarClock,
   Check,
   Copy,
+  History,
   Instagram,
   RefreshCw,
   Send,
   Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -46,9 +47,28 @@ export function CreatorDetail({ id }: { id: string }) {
   const [dmVariant, setDmVariant] = useState(0);
   const [copied, setCopied] = useState(false);
 
+  // Notes: controlled + debounced autosave.
+  const [noteDraft, setNoteDraft] = useState<string | null>(null);
+  const [noteSaved, setNoteSaved] = useState(false);
+  const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (draft === null && outreach.hydrated) setDraft(record.dmDraft ?? '');
   }, [draft, outreach.hydrated, record.dmDraft]);
+
+  useEffect(() => {
+    if (noteDraft === null && outreach.hydrated) setNoteDraft(record.note ?? '');
+  }, [noteDraft, outreach.hydrated, record.note]);
+
+  const onNoteChange = (v: string) => {
+    setNoteDraft(v);
+    setNoteSaved(false);
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+    noteTimer.current = setTimeout(() => {
+      outreach.setNote(id, v);
+      setNoteSaved(true);
+    }, 600);
+  };
 
   if (loadStatus === 'loading') {
     return <Shell>불러오는 중…</Shell>;
@@ -188,15 +208,32 @@ export function CreatorDetail({ id }: { id: string }) {
           })}
         </div>
 
-        <h2 className="mt-5 text-sm font-semibold">메모</h2>
+        <div className="mt-5 flex items-center gap-2">
+          <h2 className="text-sm font-semibold">메모</h2>
+          {noteSaved ? (
+            <span className="text-muted-foreground inline-flex items-center gap-1 text-xs">
+              <Check className="size-3" />
+              저장됨
+            </span>
+          ) : null}
+        </div>
         <textarea
-          defaultValue={record.note}
-          onBlur={(e) => outreach.setNote(id, e.target.value)}
-          placeholder="이 크리에이터에 대한 내부 메모…"
+          value={noteDraft ?? ''}
+          onChange={(e) => onNoteChange(e.target.value)}
+          placeholder="이 크리에이터에 대한 내부 메모… (자동 저장)"
           rows={2}
           className="border-input bg-background focus-visible:ring-ring mt-2 w-full resize-y rounded-lg border px-3 py-2 text-sm outline-none focus-visible:ring-2"
         />
       </section>
+
+      {/* ── Timeline ────────────────────────────────────────────── */}
+      <Timeline
+        discoveredAt={updatedAt}
+        contactedAt={record.contactedAt}
+        followUpAt={record.followUpAt}
+        replyStatus={record.replyStatus}
+        status={record.status}
+      />
 
       {/* ── DM ──────────────────────────────────────────────────── */}
       <section className="bg-card mt-6 rounded-2xl border p-6">
@@ -288,6 +325,50 @@ export function CreatorDetail({ id }: { id: string }) {
         </div>
       </section>
     </div>
+  );
+}
+
+function Timeline({
+  discoveredAt,
+  contactedAt,
+  followUpAt,
+  replyStatus,
+  status,
+}: {
+  discoveredAt: string | null;
+  contactedAt: string | null;
+  followUpAt: string | null;
+  replyStatus: string | null;
+  status: string;
+}) {
+  const events: { label: string; when: string }[] = [];
+  if (discoveredAt) events.push({ label: '검색·발견', when: formatDate(discoveredAt) });
+  if (contactedAt) events.push({ label: 'DM 전송', when: formatDate(contactedAt) });
+  if (replyStatus === '답변옴') events.push({ label: '답변 받음', when: '' });
+  if (followUpAt) events.push({ label: '후속 연락 예정', when: followUpAt });
+  events.push({ label: `현재 상태 · ${status}`, when: '' });
+
+  return (
+    <section className="bg-card mt-6 rounded-2xl border p-6">
+      <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+        <History className="size-4" />
+        타임라인
+      </h2>
+      <ol className="mt-4">
+        {events.map((e, i) => (
+          <li key={`${e.label}-${i}`} className="flex gap-3 pb-4 last:pb-0">
+            <div className="flex flex-col items-center">
+              <span className="bg-primary mt-1 size-2 shrink-0 rounded-full" />
+              {i < events.length - 1 ? <span className="bg-border w-px flex-1" /> : null}
+            </div>
+            <div className="-mt-0.5 flex-1">
+              <p className="text-sm font-medium">{e.label}</p>
+              {e.when ? <p className="text-muted-foreground text-xs">{e.when}</p> : null}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 

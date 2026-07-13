@@ -27,6 +27,8 @@ export type SearchResult = {
   profileImageUrl?: string | null;
   /** Follower count (real creators only). */
   followersCount?: number | null;
+  /** AI recommendation reasons (data-derived) — shown instead of the raw score. */
+  reasons?: string[];
 };
 
 /** A user's judgement on a saved opportunity. */

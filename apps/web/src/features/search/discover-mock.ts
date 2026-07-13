@@ -6,6 +6,11 @@ export type DiscoverOpportunity = SearchResult & {
   discoveredAt: string;
   /** Public profile URL (real Instagram creators only; mock items omit it). */
   profileUrl?: string;
+  /** Real-creator fields carried through for filters / sort / summary. */
+  isVerified?: boolean;
+  category?: string | null;
+  postsCount?: number | null;
+  biography?: string | null;
 };
 
 export type DiscoverCategory = {

@@ -1,5 +1,6 @@
 import {
   BookHeart,
+  Check,
   FileText,
   Instagram,
   Lightbulb,
@@ -38,12 +39,6 @@ const PLATFORM_META: Record<SearchPlatform, { icon: LucideIcon; label: string }>
   tiktok: { icon: Music2, label: 'TikTok' },
   blog: { icon: FileText, label: 'Blog' },
 };
-
-function scoreColor(score: number): string {
-  if (score >= 85) return 'text-emerald-600 dark:text-emerald-400';
-  if (score >= 75) return 'text-amber-600 dark:text-amber-400';
-  return 'text-muted-foreground';
-}
 
 /**
  * Shared, presentational rendering of an opportunity's content (identity, score,
@@ -90,19 +85,22 @@ export function OpportunityBody({ result }: { result: SearchResult }) {
             ) : null}
           </div>
         </div>
-
-        <div className="shrink-0 text-right">
-          <div
-            className={cn(
-              'text-2xl font-semibold leading-none',
-              scoreColor(result.opportunityScore),
-            )}
-          >
-            {result.opportunityScore}
-          </div>
-          <div className="text-muted-foreground mt-1 text-[11px]">기회 점수</div>
-        </div>
       </div>
+
+      {/* AI 추천 이유 (점수 대신) */}
+      {result.reasons && result.reasons.length > 0 ? (
+        <div className="mt-4 flex flex-wrap gap-1.5">
+          {result.reasons.map((reason) => (
+            <span
+              key={reason}
+              className="border-primary/20 bg-primary/5 text-primary inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium"
+            >
+              <Check className="size-3" />
+              {reason}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       {/* Type + platform badges */}
       <div className="mt-4 flex flex-wrap items-center gap-1.5">
