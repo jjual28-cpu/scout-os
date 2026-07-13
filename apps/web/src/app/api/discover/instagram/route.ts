@@ -8,8 +8,9 @@ import { runInstagramDiscovery } from '@/services/apify/instagram';
 
 // Env is read and Apify/Supabase clients are created only per request.
 export const dynamic = 'force-dynamic';
-// Apify sync runs can take a while; allow more than the default budget.
-export const maxDuration = 60;
+// A topic search may run up to 3 sequential Apify passes (user → posts → details),
+// so allow a larger budget (Vercel caps this to the plan's max at runtime).
+export const maxDuration = 300;
 
 const bodySchema = z.object({
   query: z.string().trim().max(100).optional(),

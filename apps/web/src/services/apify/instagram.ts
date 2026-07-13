@@ -5,16 +5,26 @@ import { AppError } from '@/lib/api/response';
 import { env } from '@/lib/env';
 
 /**
- * INACTIVE PROVIDER — kept intentionally.
+ * Topic-based Instagram creator discovery via the Apify `instagram-scraper` actor.
  *
- * Instagram discovery now defaults to the local Playwright worker
- * (`packages/worker`), selected via `DISCOVERY_PROVIDER`. This Apify-based
- * provider remains available as an alternate: set `DISCOVERY_PROVIDER=apify`
- * (with `APIFY_API_TOKEN`) and the route will call `runInstagramDiscovery`
- * inline again. Do not delete — it is a supported, swappable provider.
+ * A single user search only matches accounts whose NAME contains the keyword, so
+ * niche topics (e.g. "키링") return almost nothing. This runs a staged search:
+ *   1. user/profile search for the keyword                         (1 Apify call)
+ *   2. if that's sparse → hashtag/post search over rule-expanded    (1 Apify call)
+ *      keywords, extract the POST AUTHORS' usernames
+ *   3. dedupe usernames, then fetch profile DETAILS for the authors (1 Apify call)
+ * Common keywords stop at step 1 (1 call); only sparse ones pay for 2–3.
+ * Server-only — the APIFY_API_TOKEN never reaches the browser.
  */
 
 const APIFY_BASE = 'https://api.apify.com/v2';
+
+/** First-pass target (also the hard cap). Keeps Apify cost bounded. */
+const TARGET = 20;
+/** If user-search alone yields at least this many, skip the expansion calls. */
+const MIN_SUFFICIENT = 12;
+/** Posts to scrape across the expanded hashtags in the fallback pass. */
+const POSTS_LIMIT = 50;
 
 type RunInput = { query?: string; hashtag?: string; limit?: number };
 
@@ -37,14 +47,42 @@ function pickNum(o: Record<string, any>, keys: string[]): number | null {
   return null;
 }
 
-/** Defensively map a raw Apify item to our normalized creator (field names vary by actor). */
+function validUsername(u: string): boolean {
+  return /^[a-zA-Z0-9._]{1,30}$/.test(u);
+}
+
+/**
+ * Is this a real PROFILE object (not a post)? Profile-detail items carry
+ * follower/following/posts/biography; post items don't. Guards against post
+ * objects ever becoming creator cards.
+ */
+function isProfileLike(o: any): boolean {
+  if (!o || typeof o !== 'object') return false;
+  const r = o as Record<string, any>;
+  return (
+    typeof r.followersCount === 'number' ||
+    typeof r.followsCount === 'number' ||
+    typeof r.postsCount === 'number' ||
+    typeof r.biography === 'string'
+  );
+}
+
+/** Post author username (from a hashtag/post dataset item). */
+function postAuthorUsername(o: any): string | null {
+  const r = (o ?? {}) as Record<string, any>;
+  const u =
+    pickStr(r, ['ownerUsername']) ?? pickStr((r.owner as Record<string, any>) ?? {}, ['username']);
+  return u && validUsername(u) ? u : null;
+}
+
+/** Map a raw Apify PROFILE item to our normalized creator. */
 function normalize(raw: any): InstagramCreator | null {
   const o = (raw ?? {}) as Record<string, any>;
   const username =
-    pickStr(o, ['username', 'ownerUsername']) ??
+    pickStr(o, ['username']) ??
     pickStr((o.owner as Record<string, any>) ?? {}, ['username']) ??
     pickStr((o.user as Record<string, any>) ?? {}, ['username']);
-  if (!username) return null;
+  if (!username || !validUsername(username)) return null;
 
   const displayName = pickStr(o, ['fullName', 'full_name', 'displayName', 'name']) ?? username;
 
@@ -53,7 +91,6 @@ function normalize(raw: any): InstagramCreator | null {
     platform: 'instagram',
     username,
     displayName,
-    // Requirement: always this exact form.
     profileUrl: `https://www.instagram.com/${username}/`,
     profileImageUrl: pickStr(o, [
       'profilePicUrl',
@@ -74,36 +111,28 @@ function normalize(raw: any): InstagramCreator | null {
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 /**
- * Run the configured Apify Instagram actor for a search term / hashtag and return
- * normalized public-profile data. Server-only — the APIFY_API_TOKEN never reaches
- * the browser. Throws `AppError` with a Korean message on any failure.
+ * Rule-based keyword expansion (generic — NOT hardcoded per keyword). Produces
+ * the "content community" hashtags around a topic so we find creators who make
+ * content about it, not just accounts named after it. This is the single pluggable
+ * point — swap the body for an AI expander later without touching the search flow.
  */
-export async function runInstagramDiscovery(input: RunInput): Promise<InstagramCreator[]> {
-  const token = env.APIFY_API_TOKEN;
-  if (!token) {
-    throw new AppError('APIFY_NOT_CONFIGURED', 'Instagram 연동이 설정되지 않았습니다.', 503);
-  }
+export function expandKeyword(query: string): string[] {
+  const base = query.replace(/[#\s]+/g, '');
+  if (!base) return [];
+  const variants = [
+    base,
+    `${base}스타그램`,
+    `${base}그램`,
+    `${base}만들기`,
+    `${base}일상`,
+    `${base}추천`,
+  ];
+  return [...new Set(variants)].slice(0, 6);
+}
 
-  const search = (input.hashtag ?? input.query ?? '').trim();
-  if (!search) {
-    throw new AppError('INVALID_QUERY', '검색어 또는 해시태그를 입력해 주세요.', 400);
-  }
-  const limit = Math.min(Math.max(input.limit ?? 12, 1), 30);
-
-  const actorInput = input.hashtag
-    ? { search, searchType: 'hashtag', searchLimit: 1, resultsType: 'details', resultsLimit: limit }
-    : {
-        search,
-        searchType: 'user',
-        searchLimit: limit,
-        resultsType: 'details',
-        resultsLimit: limit,
-      };
-
-  // Apify's API path uses the `username~actor` form; accept the store
-  // `username/actor` value (e.g. "apify/instagram-scraper") too.
-  const actorId = env.APIFY_INSTAGRAM_ACTOR.replace('/', '~');
-
+/** Run the Apify actor once and return its dataset items. Throws AppError on failure. */
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+async function runActor(actorId: string, token: string, actorInput: unknown): Promise<any[]> {
   let res: Response;
   try {
     res = await fetch(`${APIFY_BASE}/acts/${actorId}/run-sync-get-dataset-items?token=${token}`, {
@@ -118,7 +147,6 @@ export async function runInstagramDiscovery(input: RunInput): Promise<InstagramC
       502,
     );
   }
-
   if (!res.ok) {
     throw new AppError(
       'APIFY_ERROR',
@@ -126,25 +154,86 @@ export async function runInstagramDiscovery(input: RunInput): Promise<InstagramC
       502,
     );
   }
-
-  let items: unknown;
   try {
-    items = await res.json();
+    const items = await res.json();
+    return Array.isArray(items) ? items : [];
   } catch {
     throw new AppError('APIFY_PARSE', 'Instagram 응답을 처리하지 못했습니다.', 502);
   }
-  if (!Array.isArray(items)) return [];
+}
 
-  const seen = new Set<string>();
-  const creators: InstagramCreator[] = [];
-  for (const raw of items) {
-    const creator = normalize(raw);
-    if (!creator) continue;
-    const key = creator.username.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    creators.push(creator);
-    if (creators.length >= limit) break;
+export async function runInstagramDiscovery(input: RunInput): Promise<InstagramCreator[]> {
+  const token = env.APIFY_API_TOKEN;
+  if (!token) {
+    throw new AppError('APIFY_NOT_CONFIGURED', 'Instagram 연동이 설정되지 않았습니다.', 503);
   }
-  return creators;
+
+  const query = (input.query ?? input.hashtag ?? '').trim();
+  if (!query) {
+    throw new AppError('INVALID_QUERY', '검색어를 입력해 주세요.', 400);
+  }
+  const target = Math.min(Math.max(input.limit ?? TARGET, 1), 24);
+  const actorId = env.APIFY_INSTAGRAM_ACTOR.replace('/', '~');
+
+  const creators = new Map<string, InstagramCreator>();
+  const addProfile = (raw: unknown) => {
+    if (!isProfileLike(raw)) return; // never let a post object become a card
+    const c = normalize(raw);
+    if (c) {
+      const k = c.username.toLowerCase();
+      if (!creators.has(k)) creators.set(k, c);
+    }
+  };
+
+  // ── Stage 1: user/profile search ──────────────────────────────────────────
+  const usersA = await runActor(actorId, token, {
+    search: query,
+    searchType: 'user',
+    searchLimit: target,
+    resultsType: 'details',
+    resultsLimit: target,
+  });
+  usersA.forEach(addProfile);
+
+  // Common keyword → enough real profiles already; stop at 1 Apify call.
+  if (creators.size >= Math.min(target, MIN_SUFFICIENT)) {
+    return [...creators.values()].slice(0, target);
+  }
+
+  // ── Stage 2: hashtag/post search over expanded keywords → author usernames ─
+  const tags = expandKeyword(query);
+  const directUrls = tags.map(
+    (t) => `https://www.instagram.com/explore/tags/${encodeURIComponent(t)}/`,
+  );
+  const posts = await runActor(actorId, token, {
+    directUrls,
+    resultsType: 'posts',
+    resultsLimit: POSTS_LIMIT,
+  });
+
+  const authors: string[] = [];
+  const seen = new Set<string>([...creators.keys()]);
+  for (const p of posts) {
+    const u = postAuthorUsername(p);
+    if (!u) continue;
+    const k = u.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    authors.push(u);
+  }
+
+  // ── Stage 3: enrich the author usernames into full profile details ────────
+  const need = Math.max(target - creators.size, 0);
+  const toEnrich = authors.slice(0, Math.min(need + 4, 24)); // small buffer, capped
+  if (toEnrich.length > 0) {
+    const profileUrls = toEnrich.map((u) => `https://www.instagram.com/${u}/`);
+    const details = await runActor(actorId, token, {
+      directUrls: profileUrls,
+      resultsType: 'details',
+      resultsLimit: toEnrich.length,
+    });
+    details.forEach(addProfile);
+  }
+
+  return [...creators.values()].slice(0, target);
 }
