@@ -8,8 +8,9 @@ import { createClient } from '@/lib/supabase/client';
 export type SearchRow = { query: string; resultCount: number; createdAt: string };
 
 /**
- * The signed-in user's recent searches (from the `searches` table), for the
- * dashboard's activity stats and Top Keywords. Empty in mock mode / signed out.
+ * The signed-in user's recent searches (from the `campaigns` table — each campaign
+ * is one keyword search), for the dashboard's activity stats and Top Keywords.
+ * Empty in mock mode / signed out.
  */
 export function useSearches() {
   const [rows, setRows] = useState<SearchRow[]>([]);
@@ -32,7 +33,7 @@ export function useSearches() {
           return;
         }
         const { data } = await sb
-          .from('searches')
+          .from('campaigns')
           .select('query,result_count,created_at')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })

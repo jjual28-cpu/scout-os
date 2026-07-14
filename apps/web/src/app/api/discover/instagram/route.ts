@@ -17,6 +17,15 @@ const bodySchema = z.object({
   hashtag: z.string().trim().max(100).optional(),
   limit: z.number().int().min(1).max(30).optional(),
   refresh: z.boolean().optional(),
+  /** Campaign metadata carried from 다시 검색 / 복제 / (future) AI Engine. All nullable. */
+  productId: z.string().uuid().optional(),
+  title: z.string().trim().max(120).optional(),
+  brand: z.string().trim().max(120).optional(),
+  season: z.string().trim().max(60).optional(),
+  goal: z.string().trim().max(120).optional(),
+  memo: z.string().trim().max(2000).optional(),
+  label: z.enum(['active', 'hold', 'done', 'failed']).optional(),
+  source: z.enum(['manual', 'ai']).optional(),
 });
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- DB rows are loosely typed here */
@@ -104,17 +113,43 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     return ok({ configured: true, queued: true, creators: current });
   }
 
-  // ── Apify mode (keyword search) ──────────────────────────────────────────
-  // Each search runs the Apify actor for the exact keyword (USER search → public
-  // accounts with full profile fields). Results are upserted into
-  // `discovered_creators`, and the query is logged to `searches` for
-  // recent/popular/analytics.
+  // ── Apify mode (keyword search → Campaign) ───────────────────────────────
+  // Each search is a CAMPAIGN: create it (status 'running'), run Apify, upsert
+  // `discovered_creators`, snapshot all results into `campaign_results`, then
+  // complete the campaign (or mark it failed). Returns the campaign's id.
   const query = (body.query ?? body.hashtag ?? '').trim();
   if (!query) {
     return ok({ configured: true, creators: [] as InstagramCreator[] });
   }
 
-  const creators = await runInstagramDiscovery({ query, limit: body.limit ?? 24 });
+  let campaignId: string | null = null;
+  if (supabase && userId) {
+    campaignId = await createCampaign(supabase, userId, query, {
+      title: body.title?.trim() || query,
+      productId: body.productId ?? null,
+      brand: body.brand ?? null,
+      season: body.season ?? null,
+      goal: body.goal ?? null,
+      memo: body.memo ?? null,
+      label: body.label ?? 'active',
+      source: body.source ?? 'manual',
+    });
+  }
+
+  let creators: InstagramCreator[];
+  try {
+    creators = await runInstagramDiscovery({ query, limit: body.limit ?? 24 });
+  } catch (err) {
+    if (supabase && userId && campaignId) {
+      const message = err instanceof Error ? err.message : 'search_failed';
+      await updateCampaign(supabase, campaignId, {
+        status: 'failed',
+        error: message,
+        result_count: 0,
+      });
+    }
+    throw err;
+  }
 
   if (supabase && userId) {
     if (creators.length > 0) {
@@ -123,25 +158,115 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
         { onConflict: 'user_id,platform,external_id' },
       );
     }
-    await logSearch(supabase, userId, query, creators.length);
+    if (campaignId) {
+      await saveResults(supabase, userId, campaignId, query, creators);
+      await updateCampaign(supabase, campaignId, {
+        status: 'succeeded',
+        result_count: creators.length,
+      });
+    }
   }
 
-  return ok({ configured: true, creators });
+  return ok({ configured: true, creators, campaignId });
 });
 
-/** Log a search to `searches` (best-effort — never blocks or fails the response). */
-async function logSearch(
+type CampaignMetaInput = {
+  title: string;
+  productId: string | null;
+  brand: string | null;
+  season: string | null;
+  goal: string | null;
+  memo: string | null;
+  label: string;
+  source: string;
+};
+
+/** Create a Campaign (status 'running'); returns its id or null on failure. */
+async function createCampaign(
   supabase: Awaited<ReturnType<typeof getSupabase>>,
   userId: string,
   query: string,
-  resultCount: number,
+  meta: CampaignMetaInput,
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from('campaigns')
+      .insert({
+        user_id: userId,
+        query,
+        title: meta.title,
+        platform: 'instagram',
+        status: 'running',
+        result_count: 0,
+        product_id: meta.productId,
+        brand: meta.brand,
+        season: meta.season,
+        goal: meta.goal,
+        memo: meta.memo,
+        label: meta.label,
+        source: meta.source,
+      })
+      .select('id')
+      .single();
+    if (error) return null;
+    return (data as { id: string }).id;
+  } catch {
+    return null;
+  }
+}
+
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+async function updateCampaign(
+  supabase: Awaited<ReturnType<typeof getSupabase>>,
+  campaignId: string,
+  patch: Record<string, any>,
 ): Promise<void> {
   try {
     await supabase
-      .from('searches')
-      .insert({ user_id: userId, query, platform: 'instagram', result_count: resultCount });
+      .from('campaigns')
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq('id', campaignId);
   } catch {
-    /* table may not exist yet / transient — don't fail the search */
+    /* best-effort */
+  }
+}
+
+/** Snapshot the campaign's results into `campaign_results` (dedup by unique key). */
+async function saveResults(
+  supabase: Awaited<ReturnType<typeof getSupabase>>,
+  userId: string,
+  campaignId: string,
+  query: string,
+  creators: InstagramCreator[],
+): Promise<void> {
+  if (creators.length === 0) return;
+  const rows = creators.map((c, i) => ({
+    user_id: userId,
+    campaign_id: campaignId,
+    creator_id: c.id,
+    platform: 'instagram',
+    rank: i + 1,
+    search_keyword: query,
+    creator_snapshot: {
+      externalId: c.id,
+      username: c.username,
+      displayName: c.displayName,
+      profileUrl: c.profileUrl,
+      profileImageUrl: c.profileImageUrl,
+      biography: c.biography,
+      followersCount: c.followersCount,
+      followingCount: c.followingCount,
+      postsCount: c.postsCount,
+      isVerified: c.isVerified,
+      category: c.category,
+    },
+  }));
+  try {
+    await supabase
+      .from('campaign_results')
+      .upsert(rows, { onConflict: 'user_id,campaign_id,creator_id', ignoreDuplicates: true });
+  } catch {
+    /* best-effort — don't fail the response */
   }
 }
 

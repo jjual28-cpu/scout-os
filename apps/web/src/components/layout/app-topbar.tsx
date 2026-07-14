@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 const NAV = [
   { href: '/home', label: '홈' },
   { href: '/discover', label: '검색' },
+  { href: '/campaigns', label: '캠페인' },
   { href: '/products', label: 'Products' },
   { href: '/crm', label: 'CRM' },
   { href: '/saved', label: '저장한 기회' },
@@ -48,7 +49,7 @@ export function AppTopbar() {
 
         <nav className="flex items-center gap-1">
           {NAV.map((item) => {
-            const active = pathname === item.href;
+            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
             const badge = badgeFor(item.href);
             return (
               <Link

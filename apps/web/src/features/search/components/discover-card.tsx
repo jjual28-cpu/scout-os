@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
+import { creatorBadge } from '../creator-status';
 import { type DiscoverOpportunity } from '../discover-mock';
 import { useOutreach } from '../hooks/use-outreach';
 import { useSavedOpportunities } from '../hooks/use-saved-opportunities';
@@ -41,6 +42,9 @@ export function DiscoverCard({
   // Real creators carry a profileUrl → the detail/outreach flow applies to them.
   const isReal = Boolean(item.profileUrl);
   const detailHref = `/creators/${encodeURIComponent(item.id)}`;
+
+  const rec = outreach.records[item.id];
+  const badge = creatorBadge(rec?.status, Boolean(rec?.dmDraft?.trim()));
 
   const prepareContact = () => {
     if (!saved) toggle(item);
@@ -74,10 +78,15 @@ export function DiscoverCard({
         </label>
       ) : null}
 
-      {keyword ? (
-        <span className="bg-primary/10 text-primary mb-3 inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium">
-          {keywordEmoji(keyword)} {keyword}
-        </span>
+      {keyword || badge ? (
+        <div className="mb-3 flex flex-wrap items-center gap-1.5">
+          {keyword ? (
+            <span className="bg-primary/10 text-primary inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium">
+              {keywordEmoji(keyword)} {keyword}
+            </span>
+          ) : null}
+          {badge ? <span className={badge.className}>{badge.label}</span> : null}
+        </div>
       ) : null}
 
       <OpportunityBody result={item} />

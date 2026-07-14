@@ -16,13 +16,20 @@ import {
   X,
   Youtube,
   ArrowRight,
+  History,
+  EyeOff,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
+import { consumeCampaignDraft } from '@/features/campaigns/draft';
+import { type CampaignDraft } from '@/features/campaigns/types';
+
+import { isDefaultHidden } from '../creator-status';
 import { DISCOVER_CATEGORIES, type DiscoverOpportunity } from '../discover-mock';
 import { useOutreach } from '../hooks/use-outreach';
 import { useSavedOpportunities } from '../hooks/use-saved-opportunities';
@@ -131,12 +138,26 @@ export function CreatorSearch() {
   const [toggles, setToggles] = useState<Set<Toggle>>(new Set());
   const [sort, setSort] = useState<SortKey>('recommended');
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [campaignId, setCampaignId] = useState<string | null>(null);
+  const [hideHandled, setHideHandled] = useState(true);
 
   const saved = useSavedOpportunities();
   const outreach = useOutreach();
 
+  // Metadata carried in from a Campaign (다시 검색 / 복제); applied to the next
+  // search then cleared so later manual searches aren't tagged with stale meta.
+  const draftMeta = useRef<CampaignDraft | null>(null);
+
   useEffect(() => {
     setRecent(readRecent());
+    const draft = consumeCampaignDraft();
+    if (draft) {
+      draftMeta.current = draft;
+      setInput(draft.query);
+      setKeyword(draft.query);
+      if (draft.autoRun) void runSearch(draft.query);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function runSearch(raw: string) {
@@ -148,23 +169,38 @@ export function CreatorSearch() {
     setError(null);
     setPhase('searching');
     setSelected(new Set());
+    setCampaignId(null);
     setRecent(pushRecent(q));
+
+    const meta = draftMeta.current;
+    draftMeta.current = null; // one-shot
+    const body: Record<string, unknown> = { query: q, limit: 24 };
+    if (meta) {
+      if (meta.title) body.title = meta.title;
+      if (meta.brand) body.brand = meta.brand;
+      if (meta.season) body.season = meta.season;
+      if (meta.goal) body.goal = meta.goal;
+      if (meta.memo) body.memo = meta.memo;
+      if (meta.label) body.label = meta.label;
+      if (meta.productId) body.productId = meta.productId;
+    }
 
     const my = ++reqId.current;
     try {
       const res = await fetch('/api/discover/instagram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q, limit: 24 }),
+        body: JSON.stringify(body),
       });
       const json = (await res.json().catch(() => null)) as {
-        data?: { configured: boolean; creators: InstagramCreator[] };
+        data?: { configured: boolean; creators: InstagramCreator[]; campaignId?: string | null };
       } | null;
       if (my !== reqId.current) return; // superseded by a newer search
 
       const data = json?.data;
       if (data?.configured && Array.isArray(data.creators)) {
         setItems(data.creators.map(toDiscoverOpportunity));
+        setCampaignId(data.campaignId ?? null);
       } else if (data && data.configured === false) {
         setItems(MOCK_ITEMS); // Apify unconfigured → mock only (never mixed)
       } else {
@@ -181,9 +217,17 @@ export function CreatorSearch() {
     }
   }
 
+  // Creators hidden ONLY because they're already handled (연락완료/답변/협업/제외).
+  // The DB keeps the full result set — this filter is screen-only.
+  const hiddenHandledCount = useMemo(
+    () => items.filter((it) => isDefaultHidden(outreach.records[it.id]?.status)).length,
+    [items, outreach.records],
+  );
+
   // Filter + sort (client-side, over the current result set)
   const visible = useMemo(() => {
     const filtered = items.filter((it) => {
+      if (hideHandled && isDefaultHidden(outreach.records[it.id]?.status)) return false;
       const f = it.followersCount ?? 0;
       if (buckets.size && ![...buckets].some((b) => inBucket(f, b))) return false;
       if (toggles.has('verified') && !it.isVerified) return false;
@@ -203,7 +247,7 @@ export function CreatorSearch() {
       );
     // 'recent' keeps the original discovery order
     return arr;
-  }, [items, buckets, toggles, sort]);
+  }, [items, buckets, toggles, sort, hideHandled, outreach.records]);
 
   const summary = useMemo(() => summarizeResults(items), [items]);
 
@@ -387,6 +431,22 @@ export function CreatorSearch() {
                 </p>
               </div>
 
+              {/* Saved-as-campaign note */}
+              {campaignId ? (
+                <div className="border-primary/20 bg-primary/[0.04] text-muted-foreground mb-6 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-2.5 text-sm">
+                  <span className="inline-flex items-center gap-1.5">
+                    <History className="text-primary size-4" />
+                    캠페인이 만들어졌습니다 · 진행 현황을 캠페인에서 관리하세요.
+                  </span>
+                  <Button asChild variant="ghost" size="sm">
+                    <Link href={`/campaigns/${campaignId}`}>
+                      캠페인 보기
+                      <ArrowRight className="size-4" />
+                    </Link>
+                  </Button>
+                </div>
+              ) : null}
+
               {/* AI Summary */}
               {summary.length > 0 ? (
                 <div className="border-primary/20 bg-primary/[0.04] mb-6 rounded-2xl border p-5">
@@ -426,6 +486,15 @@ export function CreatorSearch() {
                     {t.label}
                   </FilterChip>
                 ))}
+                {hiddenHandledCount > 0 ? (
+                  <>
+                    <span className="bg-border mx-1 h-5 w-px" />
+                    <FilterChip active={!hideHandled} onClick={() => setHideHandled((v) => !v)}>
+                      <EyeOff className="size-3.5" />
+                      이미 연락한 {hiddenHandledCount}명 {hideHandled ? '숨김' : '표시 중'}
+                    </FilterChip>
+                  </>
+                ) : null}
                 <div className="ml-auto flex items-center gap-1.5">
                   <ArrowUpDown className="text-muted-foreground size-3.5" />
                   <select
