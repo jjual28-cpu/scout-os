@@ -8,6 +8,7 @@ import {
   Copy,
   History,
   Instagram,
+  MoreHorizontal,
   RefreshCw,
   Send,
   Sparkles,
@@ -125,7 +126,7 @@ export function CreatorDetail({ id }: { id: string }) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-6 py-10">
+    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-8 sm:py-10">
       <Link
         href="/discover"
         className="text-muted-foreground hover:text-foreground mb-6 inline-flex items-center gap-1.5 text-sm"
@@ -135,7 +136,7 @@ export function CreatorDetail({ id }: { id: string }) {
       </Link>
 
       {/* ── Profile ─────────────────────────────────────────────── */}
-      <section className="bg-card rounded-2xl border p-6">
+      <section className="bg-card dark:border-border rounded-2xl border border-slate-200/60 p-6">
         <div className="flex items-start gap-4">
           <Avatar className="size-16">
             {creator.profileImageUrl ? (
@@ -184,7 +185,7 @@ export function CreatorDetail({ id }: { id: string }) {
       </section>
 
       {/* ── 상태 + 메모 ─────────────────────────────────────────── */}
-      <section className="bg-card mt-6 rounded-2xl border p-6">
+      <section className="bg-card dark:border-border mt-6 rounded-2xl border border-slate-200/60 p-6">
         <h2 className="text-sm font-semibold">상태</h2>
         <div className="mt-3 flex flex-wrap gap-1.5">
           {CONTACT_STATUS_ORDER.map((s) => {
@@ -226,17 +227,8 @@ export function CreatorDetail({ id }: { id: string }) {
         />
       </section>
 
-      {/* ── Timeline ────────────────────────────────────────────── */}
-      <Timeline
-        discoveredAt={updatedAt}
-        contactedAt={record.contactedAt}
-        followUpAt={record.followUpAt}
-        replyStatus={record.replyStatus}
-        status={record.status}
-      />
-
       {/* ── DM ──────────────────────────────────────────────────── */}
-      <section className="bg-card mt-6 rounded-2xl border p-6">
+      <section className="bg-card dark:border-border mt-6 rounded-2xl border border-slate-200/60 p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold">DM 초안</h2>
           <span className="text-muted-foreground text-xs">{(draft ?? '').length}/250</span>
@@ -249,27 +241,45 @@ export function CreatorDetail({ id }: { id: string }) {
           rows={6}
           className="border-input bg-background focus-visible:ring-ring mt-2 w-full resize-y rounded-lg border px-3 py-2 text-sm leading-relaxed outline-none focus-visible:ring-2"
         />
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {/* Primary */}
+          <Button type="button" variant="default" onClick={() => copy(true)}>
+            <Instagram className="size-4" />
+            Instagram에서 연락하기
+          </Button>
+          {/* Secondary */}
           <Button type="button" variant="outline" onClick={genDraft}>
             <Sparkles className="size-4" />
             초안 생성
-          </Button>
-          <Button type="button" variant="outline" onClick={regenDraft}>
-            <RefreshCw className="size-4" />
-            다시 생성
           </Button>
           <Button type="button" variant="outline" onClick={() => copy(false)}>
             {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
             {copied ? '복사됨' : '복사'}
           </Button>
-          <Button type="button" variant="default" onClick={() => copy(true)}>
-            <Instagram className="size-4" />
-            Instagram에서 연락하기
-          </Button>
-          <Button type="button" variant="secondary" onClick={() => outreach.markContacted(id)}>
-            <Send className="size-4" />
-            연락 완료
-          </Button>
+          {/* More */}
+          <details className="relative">
+            <summary className="border-input text-muted-foreground hover:text-foreground inline-flex h-9 cursor-pointer list-none items-center gap-1 rounded-md border px-3 text-sm transition-colors">
+              <MoreHorizontal className="size-4" />더 보기
+            </summary>
+            <div className="bg-card absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-lg border py-1 shadow-lg">
+              <button
+                type="button"
+                onClick={regenDraft}
+                className="hover:bg-muted flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
+              >
+                <RefreshCw className="size-4" />
+                다시 생성
+              </button>
+              <button
+                type="button"
+                onClick={() => outreach.markContacted(id)}
+                className="hover:bg-muted flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
+              >
+                <Send className="size-4" />
+                연락 완료로 기록
+              </button>
+            </div>
+          </details>
         </div>
         <p className="text-muted-foreground mt-2 text-xs">
           ‘Instagram에서 연락하기’는 DM을 복사하고 실제 프로필을 새 탭으로 엽니다. 전송은 직접 하신
@@ -278,7 +288,7 @@ export function CreatorDetail({ id }: { id: string }) {
       </section>
 
       {/* ── 후속관리 ────────────────────────────────────────────── */}
-      <section className="bg-card mt-6 rounded-2xl border p-6">
+      <section className="bg-card dark:border-border mt-6 rounded-2xl border border-slate-200/60 p-6">
         <h2 className="flex items-center gap-1.5 text-sm font-semibold">
           <CalendarClock className="size-4" />
           후속관리
@@ -324,6 +334,15 @@ export function CreatorDetail({ id }: { id: string }) {
           />
         </div>
       </section>
+
+      {/* ── Timeline (bottom) ───────────────────────────────────── */}
+      <Timeline
+        discoveredAt={updatedAt}
+        contactedAt={record.contactedAt}
+        followUpAt={record.followUpAt}
+        replyStatus={record.replyStatus}
+        status={record.status}
+      />
     </div>
   );
 }
@@ -349,7 +368,7 @@ function Timeline({
   events.push({ label: `현재 상태 · ${status}`, when: '' });
 
   return (
-    <section className="bg-card mt-6 rounded-2xl border p-6">
+    <section className="bg-card dark:border-border mt-6 rounded-2xl border border-slate-200/60 p-6">
       <h2 className="flex items-center gap-1.5 text-sm font-semibold">
         <History className="size-4" />
         타임라인

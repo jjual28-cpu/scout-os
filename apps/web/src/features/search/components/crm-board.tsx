@@ -1,8 +1,17 @@
 'use client';
 
-import { AlertCircle, CalendarClock, Instagram, MoreHorizontal, Search, X } from 'lucide-react';
+import {
+  AlertCircle,
+  CalendarClock,
+  Instagram,
+  MoreHorizontal,
+  Search,
+  Send,
+  X,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn, formatCompactNumber } from '@/lib/utils';
@@ -128,8 +137,12 @@ export function CrmBoard() {
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] flex-col">
+      <div className="px-4 pt-6 sm:px-8">
+        <PageHeader title="CRM" description="셀럽을 발견부터 협업까지 단계별로 관리합니다." />
+      </div>
+
       {/* Toolbar */}
-      <div className="border-b px-6 py-3">
+      <div className="dark:border-border border-b border-slate-200/60 px-4 py-3 sm:px-8">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
             <Search className="text-muted-foreground pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2" />
@@ -214,14 +227,27 @@ export function CrmBoard() {
                 overStage === stage && 'bg-primary/5 ring-primary/30 ring-2',
               )}
             >
-              <div className="flex items-center gap-2 px-1 pb-3">
-                <span className={cn('size-2 rounded-full', STAGE_META[stage].dot)} />
-                <h2 className="text-sm font-semibold">{stage}</h2>
-                <span className="text-muted-foreground text-xs">{byStage[stage].length}</span>
+              <div className="px-1 pb-3">
+                <div className="flex items-center gap-2">
+                  <span className={cn('size-2 rounded-full', STAGE_META[stage].dot)} />
+                  <h2 className="text-sm font-semibold">{stage}</h2>
+                  <span className="dark:bg-muted dark:text-muted-foreground ml-auto rounded-full bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">
+                    {byStage[stage].length}
+                  </span>
+                </div>
+                {stage === '연락 준비' && byStage[stage].filter((c) => c.followUpAt).length > 0 ? (
+                  <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+                    후속 예정 {byStage[stage].filter((c) => c.followUpAt).length}
+                  </p>
+                ) : stage === '답변' && byStage[stage].length > 0 ? (
+                  <p className="mt-1 text-[11px] text-fuchsia-600 dark:text-fuchsia-400">
+                    답변 대기 {byStage[stage].length}
+                  </p>
+                ) : null}
               </div>
               <div className="flex-1 space-y-2 overflow-y-auto pr-0.5">
                 {byStage[stage].length === 0 ? (
-                  <p className="text-muted-foreground/70 rounded-xl border border-dashed py-6 text-center text-xs">
+                  <p className="text-muted-foreground/70 dark:border-border rounded-xl border border-dashed border-slate-200/60 py-6 text-center text-xs">
                     비어 있음
                   </p>
                 ) : (
@@ -357,8 +383,8 @@ function CardView({
       onDragEnd={onDragEnd}
       onClick={onOpen}
       className={cn(
-        'bg-card group relative cursor-pointer rounded-2xl border p-3 transition-all',
-        'hover:border-primary/30 hover:shadow-md',
+        'bg-card dark:border-border group relative cursor-pointer rounded-xl border border-slate-200/60 p-3 transition-all duration-150',
+        'dark:hover:border-border hover:-translate-y-px hover:border-slate-300',
         selected && 'ring-primary/50 border-primary/40 ring-2',
       )}
     >
@@ -437,6 +463,12 @@ function CardView({
 
       {card.followUpAt || card.contactedAt || card.note ? (
         <div className="text-muted-foreground mt-2 space-y-0.5 text-xs">
+          {card.contactedAt ? (
+            <p className="flex items-center gap-1">
+              <Send className="size-3" />
+              최근 연락 {card.contactedAt.slice(0, 10)}
+            </p>
+          ) : null}
           {card.followUpAt ? (
             <p className="flex items-center gap-1">
               <CalendarClock className="size-3" />

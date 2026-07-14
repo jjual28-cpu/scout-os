@@ -3,6 +3,7 @@
 import { AlertCircle, Package, Plus, Search, Trash2, Upload, X } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -112,18 +113,16 @@ export function ProductsPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">상품</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            브랜드 상품을 등록하면 AI가 이 데이터로 키워드·크리에이터를 추천합니다.
-          </p>
-        </div>
-        <Button onClick={startNew}>
-          <Plus className="size-4" />새 상품
-        </Button>
-      </div>
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8 sm:py-10">
+      <PageHeader
+        title="Products"
+        description="브랜드 상품을 등록하면 AI가 이 데이터로 키워드·셀럽을 추천합니다."
+        actions={
+          <Button onClick={startNew}>
+            <Plus className="size-4" />새 상품
+          </Button>
+        }
+      />
 
       {error ? (
         <div className="border-destructive/30 bg-destructive/10 text-destructive mt-4 flex items-center gap-2 rounded-lg border p-3 text-sm">
@@ -169,7 +168,7 @@ export function ProductsPage() {
 
       <div className="mt-4 grid gap-6 lg:grid-cols-[320px_1fr]">
         {/* List */}
-        <aside className="space-y-2">
+        <aside className={cn('space-y-2', draft && 'hidden lg:block')}>
           {!hydrated ? (
             <>
               <Skeleton className="h-20 w-full rounded-xl" />
@@ -201,13 +200,20 @@ export function ProductsPage() {
         </aside>
 
         {/* Editor */}
-        <div>
+        <div className={cn(!draft && 'hidden lg:block')}>
           {!draft ? (
-            <div className="text-muted-foreground flex h-full min-h-[300px] items-center justify-center rounded-2xl border border-dashed text-center text-sm">
+            <div className="text-muted-foreground dark:border-border flex h-full min-h-[300px] items-center justify-center rounded-2xl border border-dashed border-slate-200/60 text-center text-sm">
               왼쪽에서 상품을 선택하거나 ‘새 상품’을 눌러 등록하세요.
             </div>
           ) : (
             <div className="space-y-6">
+              <button
+                type="button"
+                onClick={() => setDraft(null)}
+                className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm lg:hidden"
+              >
+                ← 목록으로
+              </button>
               {formError ? <p className="text-destructive text-sm">{formError}</p> : null}
 
               <Section title="기본 정보">
@@ -411,8 +417,8 @@ function ProductRow({
   return (
     <div
       className={cn(
-        'flex w-full items-start gap-3 rounded-xl border p-3 transition-colors',
-        active ? 'border-primary/40 bg-primary/5' : 'hover:bg-muted/50',
+        'dark:border-border flex w-full items-start gap-3 rounded-xl border border-slate-200/60 p-3 transition-colors',
+        active ? 'border-primary/40 bg-primary/5' : 'dark:hover:bg-muted/50 hover:bg-slate-50/70',
         !p.isActive && 'opacity-55',
       )}
     >
@@ -460,7 +466,7 @@ function ProductRow({
           onAiStart();
         }}
         title="AI 상품 분석 시작"
-        className="border-primary/30 text-primary hover:bg-primary/10 shrink-0 self-center rounded-lg border px-2 py-1 text-xs font-medium"
+        className="bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 self-center rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors"
       >
         🤖 AI 시작
       </button>
@@ -663,8 +669,10 @@ function ConfirmDialog({
 // ── Layout helpers ────────────────────────────────────────────────────────────
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="bg-card rounded-2xl border p-5">
-      <h2 className="mb-4 text-sm font-semibold">{title}</h2>
+    <section className="dark:border-border rounded-xl border border-slate-200/60 p-5">
+      <h2 className="dark:text-muted-foreground mb-4 text-xs font-semibold uppercase tracking-wide text-slate-400">
+        {title}
+      </h2>
       <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">{children}</div>
     </section>
   );

@@ -1,6 +1,15 @@
 'use client';
 
-import { ArrowLeft, ArrowUpDown, Copy, EyeOff, RefreshCw, Star, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowUpDown,
+  Copy,
+  EyeOff,
+  RefreshCw,
+  Sparkles,
+  Star,
+  Trash2,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
@@ -11,6 +20,7 @@ import { cn } from '@/lib/utils';
 
 import { DiscoverCard } from '@/features/search/components/discover-card';
 import { isDefaultHidden } from '@/features/search/creator-status';
+import { toStage } from '@/features/search/crm-stages';
 import { type DiscoverOpportunity } from '@/features/search/discover-mock';
 import { useOutreach } from '@/features/search/hooks/use-outreach';
 import { toDiscoverOpportunity, type InstagramCreator } from '@/features/search/instagram';
@@ -107,6 +117,23 @@ function Field({
   );
 }
 
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="dark:text-muted-foreground mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+      {children}
+    </h2>
+  );
+}
+
+function MetaChip({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="dark:border-border inline-flex items-center gap-1.5 rounded-full border border-slate-200/70 px-2.5 py-1">
+      <span className="dark:text-muted-foreground text-slate-400">{label}</span>
+      <span className="font-medium">{value}</span>
+    </span>
+  );
+}
+
 export function CampaignDetail({ id }: { id: string }) {
   const router = useRouter();
   const c = useCampaign(id);
@@ -115,6 +142,26 @@ export function CampaignDetail({ id }: { id: string }) {
   const [sort, setSort] = useState<SortKey>('rank');
   const [showHidden, setShowHidden] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // DM History — this campaign's creators that have any outreach activity, newest-contacted first.
+  const dmHistory = useMemo(() => {
+    return c.results
+      .map((r) => ({ r, rec: outreach.records[r.externalId] }))
+      .filter(({ rec }) => {
+        if (!rec) return false;
+        const stg = toStage(rec.status);
+        return Boolean(
+          rec.contactedAt ||
+          rec.dmDraft?.trim() ||
+          rec.replyStatus ||
+          stg === '연락 준비' ||
+          stg === '연락 완료' ||
+          stg === '답변' ||
+          stg === '협업',
+        );
+      })
+      .sort((a, b) => (b.rec?.contactedAt ?? '').localeCompare(a.rec?.contactedAt ?? ''));
+  }, [c.results, outreach.records]);
 
   const hiddenCount = useMemo(
     () => c.results.filter((r) => isDefaultHidden(outreach.records[r.externalId]?.status)).length,
@@ -199,7 +246,7 @@ export function CampaignDetail({ id }: { id: string }) {
   const campaign = c.campaign;
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-8">
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8 sm:py-10">
       <Link
         href="/campaigns"
         className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-sm"
@@ -246,76 +293,40 @@ export function CampaignDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      {campaign.status === 'failed' ? (
-        <div className="border-destructive/30 bg-destructive/10 text-destructive mt-5 rounded-xl border p-4 text-sm">
-          이 검색은 실패했어요: {campaign.error ?? '알 수 없는 오류'}
-        </div>
-      ) : (
-        <div className="mt-5 grid grid-cols-3 gap-3 sm:grid-cols-6">
-          <Kpi label="검색" value={c.summary.discovered} accent />
-          <Kpi label="저장" value={c.summary.saved} />
-          <Kpi label="DM" value={c.summary.dm} />
-          <Kpi label="답변" value={c.summary.reply} />
-          <Kpi label="협업" value={c.summary.collab} />
-          <Kpi label="전환율" value={`${c.summary.conversion}%`} />
-        </div>
-      )}
+      {/* Summary */}
+      <div className="mt-6">
+        <SectionLabel>Summary</SectionLabel>
+        {campaign.status === 'failed' ? (
+          <div className="border-destructive/30 bg-destructive/10 text-destructive rounded-xl border p-4 text-sm">
+            이 검색은 실패했어요: {campaign.error ?? '알 수 없는 오류'}
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+            <Kpi label="검색" value={c.summary.discovered} accent />
+            <Kpi label="저장" value={c.summary.saved} />
+            <Kpi label="DM" value={c.summary.dm} />
+            <Kpi label="답변" value={c.summary.reply} />
+            <Kpi label="협업" value={c.summary.collab} />
+            <Kpi label="전환율" value={`${c.summary.conversion}%`} />
+          </div>
+        )}
+        {c.productName || campaign.brand || campaign.season || campaign.goal ? (
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            {c.productName ? <MetaChip label="상품" value={c.productName} /> : null}
+            {campaign.brand ? <MetaChip label="브랜드" value={campaign.brand} /> : null}
+            {campaign.season ? <MetaChip label="시즌" value={campaign.season} /> : null}
+            {campaign.goal ? <MetaChip label="목표" value={campaign.goal} /> : null}
+          </div>
+        ) : null}
+      </div>
 
-      {/* Campaign 정보 */}
-      <div className="bg-card mt-6 grid gap-4 rounded-2xl border p-5 sm:grid-cols-2">
-        <Field
-          label="제목"
-          value={campaign.title}
-          placeholder="캠페인 제목"
-          onSave={(v) => void c.updateMeta({ title: v ?? campaign.query })}
-        />
-        <label className="block">
-          <span className="text-muted-foreground text-xs font-medium">상품</span>
-          <select
-            value={campaign.productId ?? ''}
-            onChange={(e) => void c.updateMeta({ productId: e.target.value || null })}
-            className={cn(FIELD, 'mt-1')}
-          >
-            <option value="">연결 안 함</option>
-            {c.products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Field
-          label="브랜드"
-          value={campaign.brand}
-          placeholder="예: FANDEAL"
-          onSave={(v) => void c.updateMeta({ brand: v })}
-        />
-        <Field
-          label="시즌"
-          value={campaign.season}
-          placeholder="예: 여름"
-          onSave={(v) => void c.updateMeta({ season: v })}
-        />
-        <Field
-          label="목표"
-          value={campaign.goal}
-          placeholder="예: 30명 연락"
-          onSave={(v) => void c.updateMeta({ goal: v })}
-        />
-        <div className="hidden sm:block" />
-        <div className="sm:col-span-2">
-          <Field
-            label="메모"
-            value={campaign.memo}
-            placeholder="예: 릴스 위주 공략"
-            onSave={(v) => void c.updateMeta({ memo: v })}
-            textarea
-          />
-        </div>
+      {/* Creators */}
+      <div className="mt-10">
+        <SectionLabel>셀럽 ({c.results.length})</SectionLabel>
       </div>
 
       {/* Controls */}
-      <div className="mb-5 mt-6 flex flex-wrap items-center gap-2 border-b pb-4">
+      <div className="dark:border-border mb-5 flex flex-wrap items-center gap-2 border-b border-slate-200/60 pb-4">
         <p className="text-muted-foreground text-sm">
           크리에이터 <span className="text-foreground font-medium">{visible.length}명</span>
           {visible.length !== c.results.length ? ` / ${c.results.length}명` : ''}
@@ -369,6 +380,122 @@ export function CampaignDetail({ id }: { id: string }) {
           ))}
         </div>
       )}
+
+      {/* DM History */}
+      <div className="mt-10">
+        <SectionLabel>DM 히스토리</SectionLabel>
+        {dmHistory.length === 0 ? (
+          <p className="dark:border-border dark:text-muted-foreground rounded-xl border border-slate-200/60 py-8 text-center text-sm text-slate-400">
+            아직 연락한 셀럽이 없어요. 셀럽 카드에서 DM을 준비해보세요.
+          </p>
+        ) : (
+          <div className="dark:border-border overflow-hidden rounded-xl border border-slate-200/60">
+            <ul className="dark:divide-border/60 divide-y divide-slate-100">
+              {dmHistory.map(({ r, rec }) => {
+                const stg = toStage(rec!.status);
+                return (
+                  <li key={r.externalId}>
+                    <Link
+                      href={`/creators/${encodeURIComponent(r.externalId)}`}
+                      className="dark:hover:bg-muted/40 flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-slate-50/70"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">@{r.username}</p>
+                        <p className="dark:text-muted-foreground truncate text-xs text-slate-500">
+                          {rec!.contactedAt
+                            ? `연락 ${new Date(rec!.contactedAt).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}`
+                            : 'DM 준비됨'}
+                          {rec!.replyNote ? ` · ${rec!.replyNote.slice(0, 30)}` : ''}
+                        </p>
+                      </div>
+                      <span className="dark:bg-muted dark:text-muted-foreground shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                        {stg}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* Memo & 정보 */}
+      <div className="mt-10">
+        <SectionLabel>메모 &amp; 정보</SectionLabel>
+        <div className="dark:border-border grid gap-4 rounded-xl border border-slate-200/60 p-5 sm:grid-cols-2">
+          <Field
+            label="제목"
+            value={campaign.title}
+            placeholder="캠페인 제목"
+            onSave={(v) => void c.updateMeta({ title: v ?? campaign.query })}
+          />
+          <label className="block">
+            <span className="text-muted-foreground text-xs font-medium">상품</span>
+            <select
+              value={campaign.productId ?? ''}
+              onChange={(e) => void c.updateMeta({ productId: e.target.value || null })}
+              className={cn(FIELD, 'mt-1')}
+            >
+              <option value="">연결 안 함</option>
+              {c.products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Field
+            label="브랜드"
+            value={campaign.brand}
+            placeholder="예: FANDEAL"
+            onSave={(v) => void c.updateMeta({ brand: v })}
+          />
+          <Field
+            label="시즌"
+            value={campaign.season}
+            placeholder="예: 여름"
+            onSave={(v) => void c.updateMeta({ season: v })}
+          />
+          <Field
+            label="목표"
+            value={campaign.goal}
+            placeholder="예: 30명 연락"
+            onSave={(v) => void c.updateMeta({ goal: v })}
+          />
+          <div className="hidden sm:block" />
+          <div className="sm:col-span-2">
+            <Field
+              label="메모"
+              value={campaign.memo}
+              placeholder="예: 릴스 위주 공략"
+              onSave={(v) => void c.updateMeta({ memo: v })}
+              textarea
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* AI Insight */}
+      <div className="mt-10">
+        <SectionLabel>AI Insight</SectionLabel>
+        <div className="dark:border-border flex items-start gap-3.5 rounded-xl border border-slate-200/60 p-5">
+          <span className="bg-primary text-primary-foreground flex size-9 shrink-0 items-center justify-center rounded-xl">
+            <Sparkles className="size-4" />
+          </span>
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold">캠페인 성과 AI 분석</p>
+              <span className="dark:bg-muted dark:text-muted-foreground rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                준비 중
+              </span>
+            </div>
+            <p className="dark:text-muted-foreground mt-1 text-sm text-slate-500">
+              AI가 이 캠페인의 셀럽 적합도와 다음 액션을 제안할 예정입니다.
+            </p>
+          </div>
+        </div>
+      </div>
 
       {confirmDelete ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6">

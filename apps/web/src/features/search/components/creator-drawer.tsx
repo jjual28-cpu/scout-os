@@ -112,9 +112,9 @@ export function CreatorDrawer({
   return (
     <>
       <div className="fixed inset-0 z-30 bg-black/30" onClick={onClose} aria-hidden />
-      <aside className="bg-background fixed inset-y-0 right-0 z-40 flex w-full max-w-md flex-col border-l shadow-2xl">
+      <aside className="bg-background dark:border-border fixed inset-y-0 right-0 z-40 flex w-full max-w-md flex-col border-l border-slate-200/60 shadow-2xl">
         {/* Header */}
-        <div className="flex items-start gap-3 border-b p-5">
+        <div className="dark:border-border flex items-start gap-3 border-b border-slate-200/60 p-5">
           <Avatar className="size-12">
             {card.profileImageUrl ? (
               <AvatarImage src={card.profileImageUrl} alt={card.name} />
@@ -254,7 +254,7 @@ export function CreatorDrawer({
           </div>
         </div>
 
-        <div className="border-t p-4">
+        <div className="dark:border-border border-t border-slate-200/60 p-4">
           <Button asChild variant="outline" className="w-full">
             <Link href={`/creators/${encodeURIComponent(card.id)}`}>자세히 보기</Link>
           </Button>

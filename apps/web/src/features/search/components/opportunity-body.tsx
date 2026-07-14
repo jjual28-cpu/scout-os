@@ -87,35 +87,35 @@ export function OpportunityBody({ result }: { result: SearchResult }) {
         </div>
       </div>
 
-      {/* AI 추천 이유 (점수 대신) */}
+      {/* Type + platform badges */}
+      <div className="mt-4 flex flex-wrap items-center gap-1.5">
+        <span className="dark:bg-muted dark:text-muted-foreground inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+          {result.type}
+        </span>
+        <span className="dark:text-muted-foreground dark:border-border inline-flex items-center gap-1 rounded-md border border-slate-200/70 px-2 py-0.5 text-xs font-medium text-slate-500">
+          <PlatformIcon className="size-3" />
+          {platformMeta.label}
+        </span>
+      </div>
+
+      {/* AI 추천 이유 chips */}
       {result.reasons && result.reasons.length > 0 ? (
         <div className="mt-4 flex flex-wrap gap-1.5">
           {result.reasons.map((reason) => (
             <span
               key={reason}
-              className="border-primary/20 bg-primary/5 text-primary inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium"
+              className="dark:border-border dark:text-muted-foreground inline-flex items-center gap-1 rounded-full border border-slate-200/70 px-2 py-0.5 text-xs font-medium text-slate-600"
             >
-              <Check className="size-3" />
+              <Check className="text-primary size-3" />
               {reason}
             </span>
           ))}
         </div>
       ) : null}
 
-      {/* Type + platform badges */}
-      <div className="mt-4 flex flex-wrap items-center gap-1.5">
-        <span className="bg-secondary text-secondary-foreground inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium">
-          {result.type}
-        </span>
-        <span className="text-muted-foreground inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium">
-          <PlatformIcon className="size-3" />
-          {platformMeta.label}
-        </span>
-      </div>
-
       {/* 발견 이유 */}
       <div className="mt-4">
-        <p className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+        <p className="dark:text-muted-foreground text-[11px] font-medium uppercase tracking-wide text-slate-400">
           발견 이유
         </p>
         <p className="text-foreground/90 mt-1 line-clamp-3 text-sm leading-relaxed">
@@ -124,10 +124,10 @@ export function OpportunityBody({ result }: { result: SearchResult }) {
       </div>
 
       {/* 추천 액션 */}
-      <div className="border-primary/15 bg-primary/5 mt-4 flex items-start gap-2 rounded-lg border p-3">
-        <Lightbulb className="text-primary mt-0.5 size-4 shrink-0" />
+      <div className="dark:border-border mt-4 flex items-start gap-2 rounded-lg border border-slate-200/60 p-3">
+        <Lightbulb className="dark:text-muted-foreground mt-0.5 size-4 shrink-0 text-slate-400" />
         <div>
-          <p className="text-primary/80 text-[11px] font-medium uppercase tracking-wide">
+          <p className="dark:text-muted-foreground text-[11px] font-medium uppercase tracking-wide text-slate-400">
             추천 액션
           </p>
           <p className="mt-0.5 text-sm font-medium">{result.recommendedAction}</p>

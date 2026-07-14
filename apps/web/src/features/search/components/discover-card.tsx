@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Instagram,
   MessageSquarePlus,
+  MoreHorizontal,
   Send,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -45,6 +46,11 @@ export function DiscoverCard({
 
   const rec = outreach.records[item.id];
   const badge = creatorBadge(rec?.status, Boolean(rec?.dmDraft?.trim()));
+  const contactLine = rec?.contactedAt
+    ? `최근 연락 ${rec.contactedAt.slice(0, 10)}`
+    : rec?.followUpAt
+      ? `후속 예정 ${rec.followUpAt}`
+      : null;
 
   const prepareContact = () => {
     if (!saved) toggle(item);
@@ -55,17 +61,11 @@ export function DiscoverCard({
   return (
     <article
       className={cn(
-        'bg-card group relative flex flex-col overflow-hidden rounded-2xl border p-5',
-        'transition-all duration-200 ease-out',
-        'hover:border-primary/30 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/[0.04]',
+        'bg-card dark:border-border group relative flex flex-col rounded-2xl border border-slate-200/60 p-5',
+        'dark:hover:border-border transition-all duration-150 ease-out hover:-translate-y-px hover:border-slate-300',
         selected && 'ring-primary/50 border-primary/40 ring-2',
       )}
     >
-      <div
-        aria-hidden
-        className="via-primary/50 pointer-events-none absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-      />
-
       {selectable && isReal ? (
         <label className="absolute right-3 top-3 z-[1] flex cursor-pointer items-center">
           <input
@@ -81,7 +81,7 @@ export function DiscoverCard({
       {keyword || badge ? (
         <div className="mb-3 flex flex-wrap items-center gap-1.5">
           {keyword ? (
-            <span className="bg-primary/10 text-primary inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium">
+            <span className="dark:bg-muted dark:text-muted-foreground inline-flex w-fit items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
               {keywordEmoji(keyword)} {keyword}
             </span>
           ) : null}
@@ -91,64 +91,81 @@ export function DiscoverCard({
 
       <OpportunityBody result={item} />
 
-      {/* 발견일 + 실제 프로필 링크 */}
+      {/* 발견일 + 최근 연락 상태 */}
       <div className="text-muted-foreground mt-4 flex items-center justify-between gap-2 text-xs">
         <span className="flex items-center gap-1.5">
           <CalendarDays className="size-3.5" />
           발견일 · {item.discoveredAt}
         </span>
-        {item.profileUrl ? (
-          <a
-            href={item.profileUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-foreground inline-flex items-center gap-1 underline-offset-2 hover:underline"
-          >
-            <Instagram className="size-3.5" />
-            프로필 열기
-          </a>
-        ) : null}
+        {contactLine ? <span className="truncate">{contactLine}</span> : null}
       </div>
 
-      {/* 저장 */}
-      <Button
-        type="button"
-        variant={saved ? 'secondary' : 'outline'}
-        className="mt-4 w-full"
-        aria-pressed={saved}
-        onClick={() => toggle(item)}
-      >
-        {saved ? (
-          <>
-            <BookmarkCheck className="size-4" />
-            저장됨
-          </>
-        ) : (
-          <>
-            <Bookmark className="size-4" />
-            저장
-          </>
-        )}
-      </Button>
+      {/* Actions: Primary (저장) + Secondary (DM/상세) + More menu */}
+      <div className="mt-4">
+        <Button
+          type="button"
+          variant={saved ? 'secondary' : 'default'}
+          className="w-full"
+          aria-pressed={saved}
+          onClick={() => toggle(item)}
+        >
+          {saved ? (
+            <>
+              <BookmarkCheck className="size-4" />
+              저장됨
+            </>
+          ) : (
+            <>
+              <Bookmark className="size-4" />
+              저장
+            </>
+          )}
+        </Button>
 
-      {/* DM / 자세히 보기 / 연락 준비 — 실제 크리에이터에만 */}
-      {isReal ? (
-        <div className="mt-2 grid grid-cols-3 gap-2">
-          <Button asChild type="button" variant="ghost" size="sm">
-            <Link href={detailHref}>
-              <Send className="size-4" />
-              DM
-            </Link>
-          </Button>
-          <Button asChild type="button" variant="ghost" size="sm">
-            <Link href={detailHref}>자세히</Link>
-          </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={prepareContact}>
-            <MessageSquarePlus className="size-4" />
-            연락
-          </Button>
-        </div>
-      ) : null}
+        {isReal ? (
+          <div className="mt-2 flex items-center gap-2">
+            <Button asChild type="button" variant="outline" size="sm" className="flex-1">
+              <Link href={detailHref}>
+                <Send className="size-4" />
+                DM
+              </Link>
+            </Button>
+            <Button asChild type="button" variant="outline" size="sm" className="flex-1">
+              <Link href={detailHref}>상세</Link>
+            </Button>
+
+            <details className="group/menu relative">
+              <summary
+                className="border-input text-muted-foreground hover:text-foreground inline-flex size-9 cursor-pointer list-none items-center justify-center rounded-md border transition-colors"
+                aria-label="더 보기"
+              >
+                <MoreHorizontal className="size-4" />
+              </summary>
+              <div className="bg-card absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-lg border py-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={prepareContact}
+                  className="hover:bg-muted flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
+                >
+                  <MessageSquarePlus className="size-4" />
+                  연락 준비
+                </button>
+                {item.profileUrl ? (
+                  <a
+                    href={item.profileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:bg-muted flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
+                  >
+                    <Instagram className="size-4" />
+                    프로필 열기
+                  </a>
+                ) : null}
+              </div>
+            </details>
+          </div>
+        ) : null}
+      </div>
     </article>
   );
 }

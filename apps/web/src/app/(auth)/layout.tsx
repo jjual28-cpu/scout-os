@@ -2,9 +2,9 @@ import Link from 'next/link';
 import { Radar, Sparkles, KanbanSquare } from 'lucide-react';
 
 const highlights = [
-  { icon: Radar, text: '매일 새로운 크리에이터·브랜드·셀러를 자동 발굴' },
-  { icon: Sparkles, text: 'AI가 적합도·성장성·리스크를 스코어링' },
-  { icon: KanbanSquare, text: 'DM 작성부터 협업 관리까지 한 곳에서' },
+  { icon: Radar, text: '브랜드에 딱 맞는 셀럽을 AI가 발견' },
+  { icon: Sparkles, text: '상품 분석 기반 맞춤 키워드 추천' },
+  { icon: KanbanSquare, text: 'DM 작성부터 협업·성과 관리까지 한 곳에서' },
 ];
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
@@ -33,10 +33,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
         <div className="relative z-10 max-w-md">
           <h2 className="text-balance text-3xl font-bold leading-tight">
-            사업 기회를 먼저 발견해주는 AI 직원
+            당신의 브랜드에 딱 맞는 셀럽을 찾다
           </h2>
           <p className="text-primary-foreground/80 mt-4 text-pretty">
-            잠든 사이에도 Scout OS가 기회를 찾아냅니다. 발굴부터 분석, 협업 관리까지.
+            AI가 브랜드와 상품에 맞는 셀럽을 발견합니다. 검색부터 DM, 협업 관리까지 한곳에서.
           </p>
 
           <ul className="mt-8 space-y-4">

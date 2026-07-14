@@ -4,13 +4,16 @@ import {
   ArrowUpDown,
   Bookmark,
   Check,
+  ChevronDown,
   Clock,
   Instagram,
   Loader2,
   MessageSquarePlus,
   Music2,
+  Package,
   Search,
   SearchX,
+  SlidersHorizontal,
   Sparkles,
   TrendingUp,
   X,
@@ -23,12 +26,16 @@ import {
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { EmptyState } from '@/components/layout/blocks';
+import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
+import { useCampaigns } from '@/features/campaigns/hooks/use-campaigns';
 import { consumeCampaignDraft } from '@/features/campaigns/draft';
 import { type CampaignDraft } from '@/features/campaigns/types';
+import { useProducts } from '@/features/products/hooks/use-products';
 
 import { isDefaultHidden } from '../creator-status';
 import { DISCOVER_CATEGORIES, type DiscoverOpportunity } from '../discover-mock';
@@ -123,6 +130,9 @@ function relativeTime(ts: number | null): string {
 /** Mock fallback used ONLY when Apify isn't configured (never mixed with real data). */
 const MOCK_ITEMS: DiscoverOpportunity[] = DISCOVER_CATEGORIES.flatMap((c) => c.items);
 
+const RAIL_FIELD =
+  'border-input bg-background focus-visible:ring-ring w-full rounded-lg border px-3 py-2 text-sm outline-none focus-visible:ring-2';
+
 export function CreatorSearch() {
   const [input, setInput] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');
@@ -143,8 +153,12 @@ export function CreatorSearch() {
   const [saveFailed, setSaveFailed] = useState(false);
   const [hideHandled, setHideHandled] = useState(true);
 
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+
   const saved = useSavedOpportunities();
   const outreach = useOutreach();
+  const products = useProducts();
+  const { campaigns } = useCampaigns();
 
   // Metadata carried in from a Campaign (다시 검색 / 복제); applied to the next
   // search then cleared so later manual searches aren't tagged with stale meta.
@@ -157,6 +171,7 @@ export function CreatorSearch() {
       draftMeta.current = draft;
       setInput(draft.query);
       setKeyword(draft.query);
+      if (draft.productId) setSelectedProductId(draft.productId);
       if (draft.autoRun) void runSearch(draft.query);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -187,6 +202,8 @@ export function CreatorSearch() {
       if (meta.label) body.label = meta.label;
       if (meta.productId) body.productId = meta.productId;
     }
+    // Product picked in the Search Rail (uses the route's existing productId param).
+    if (!body.productId && selectedProductId) body.productId = selectedProductId;
 
     const my = ++reqId.current;
     try {
@@ -297,273 +314,291 @@ export function CreatorSearch() {
     setSelected(new Set());
   };
 
-  const isHome = phase === 'idle';
+  const recentCampaigns = useMemo(
+    () => [...campaigns].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 4),
+    [campaigns],
+  );
 
-  return (
-    <div className="relative flex flex-1 flex-col overflow-hidden">
-      {isHome ? (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[420px] bg-[radial-gradient(60%_60%_at_50%_0%,hsl(var(--primary)/0.10),transparent)]"
+  // ── Search Rail body (product / keywords / filters / recent campaigns) ──────
+  const railBody = (
+    <div className="space-y-6">
+      {products.products.length > 0 ? (
+        <div>
+          <RailLabel icon={<Package className="size-3.5" />}>상품 선택</RailLabel>
+          <select
+            value={selectedProductId ?? ''}
+            onChange={(e) => setSelectedProductId(e.target.value || null)}
+            className={RAIL_FIELD}
+          >
+            <option value="">상품 없이 검색</option>
+            {products.products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+
+      <ChipRow
+        icon={<TrendingUp className="size-3.5" />}
+        label="추천 키워드"
+        chips={POPULAR}
+        onPick={(c) => void runSearch(c)}
+      />
+
+      {recent.length > 0 ? (
+        <ChipRow
+          icon={<Clock className="size-3.5" />}
+          label="최근 검색"
+          chips={recent}
+          variant="soft"
+          onPick={(c) => void runSearch(c)}
         />
       ) : null}
 
-      {isHome ? (
-        <section className="mx-auto flex w-full max-w-2xl flex-col items-center px-6 pb-20 pt-20 text-center sm:pt-28">
-          <div className="bg-background/70 text-muted-foreground mb-5 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium backdrop-blur">
-            <Sparkles className="text-primary size-3.5" />
-            Creator Partnership CRM
+      <div>
+        <RailLabel icon={<SlidersHorizontal className="size-3.5" />}>필터</RailLabel>
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-1.5">
+            {BUCKETS.map((b) => (
+              <FilterChip key={b.id} active={buckets.has(b.id)} onClick={() => toggleBucket(b.id)}>
+                {b.label}
+              </FilterChip>
+            ))}
           </div>
-          <h1 className="text-balance text-4xl font-semibold leading-[1.12] tracking-tight sm:text-5xl">
-            브랜드에 맞는 크리에이터를
-            <br className="hidden sm:block" /> 찾고, 연락하고, 관리하세요
-          </h1>
-          <p className="text-muted-foreground mt-4 max-w-xl text-base leading-relaxed sm:text-lg">
-            키워드 검색부터 저장·AI 추천·DM·답변·협업 관리까지 한 곳에서. 실제 인스타그램
-            크리에이터를 즉시 찾아드려요.
-          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {TOGGLES.map((t) => (
+              <FilterChip key={t.id} active={toggles.has(t.id)} onClick={() => toggleToggle(t.id)}>
+                {t.label}
+              </FilterChip>
+            ))}
+          </div>
+        </div>
+      </div>
 
-          <div className="mt-8">
-            <PlatformSelector platform={platform} onSelect={setPlatform} />
+      {recentCampaigns.length > 0 ? (
+        <div>
+          <RailLabel icon={<History className="size-3.5" />}>최근 캠페인</RailLabel>
+          <div className="space-y-0.5">
+            {recentCampaigns.map((c) => (
+              <Link
+                key={c.id}
+                href={`/campaigns/${c.id}`}
+                className="hover:text-foreground dark:text-muted-foreground dark:hover:bg-muted block truncate rounded-md px-2 py-1.5 text-sm text-slate-600 transition-colors hover:bg-slate-100"
+              >
+                {c.title}
+              </Link>
+            ))}
           </div>
-          <div className="mt-4 w-full">
-            <SearchField
-              value={input}
-              size="lg"
-              autoFocus
-              onChange={setInput}
-              onSubmit={() => void runSearch(input)}
-            />
-          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 
-          <ChipRow
-            icon={<TrendingUp className="size-3.5" />}
-            label="인기 검색"
-            chips={POPULAR}
-            onPick={(c) => void runSearch(c)}
-            className="mt-7"
-            center
+  // ── Results Workspace ───────────────────────────────────────────────────────
+  const skeletons = (
+    <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="dark:border-border rounded-2xl border border-slate-200/60 p-5">
+          <div className="flex items-center gap-3">
+            <Skeleton className="size-11 rounded-xl" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-2/3 rounded" />
+              <Skeleton className="h-3 w-1/3 rounded" />
+            </div>
+          </div>
+          <Skeleton className="mt-4 h-3 w-full rounded" />
+          <Skeleton className="mt-2 h-3 w-4/5 rounded" />
+          <Skeleton className="mt-5 h-9 w-full rounded-lg" />
+        </div>
+      ))}
+    </div>
+  );
+
+  const resultsWorkspace =
+    phase === 'idle' ? (
+      <EmptyState
+        className="min-h-[340px] justify-center"
+        icon={<Search className="size-5" />}
+        title="셀럽을 검색해보세요"
+        description="키워드를 입력하거나 추천 키워드를 눌러 검색을 시작하세요."
+      />
+    ) : phase === 'searching' ? (
+      <div>
+        <div className="text-muted-foreground flex items-center gap-2 text-sm">
+          <Loader2 className="text-primary size-4 animate-spin" />
+          <span>
+            <span className="text-foreground font-medium">‘{keyword}’</span> 셀럽을 찾는 중…
+          </span>
+        </div>
+        <div className="bg-muted mt-4 h-1.5 w-full overflow-hidden rounded-full">
+          <div className="bg-primary h-full w-2/5 animate-pulse rounded-full" />
+        </div>
+        <p className="text-muted-foreground mt-3 text-xs">
+          인스타그램 검색 → 프로필 수집 → 추천 이유 분석 · 예상 20~30초
+        </p>
+        {skeletons}
+      </div>
+    ) : (
+      <>
+        {error ? (
+          <div className="border-destructive/30 bg-destructive/10 text-destructive mb-6 rounded-xl border p-3 text-sm">
+            {error}
+          </div>
+        ) : null}
+
+        {items.length > 0 ? (
+          <>
+            {/* Results header */}
+            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl leading-none">{keywordEmoji(keyword)}</span>
+                  <h2 className="truncate text-xl font-semibold tracking-tight">{keyword}</h2>
+                </div>
+                <p className="text-muted-foreground mt-1 text-sm">
+                  Instagram · 셀럽{' '}
+                  <span className="text-foreground font-medium">{visible.length}명</span>
+                  {visible.length !== items.length ? ` / ${items.length}명` : ''} ·{' '}
+                  {relativeTime(searchedAt)}
+                </p>
+              </div>
+            </div>
+
+            {/* Save state */}
+            {saveFailed ? (
+              <div className="border-destructive/30 bg-destructive/10 text-destructive mb-5 flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm">
+                <AlertTriangle className="size-4 shrink-0" />
+                검색 결과 저장에 실패했어요. 결과가 캠페인에 저장되지 않았습니다 · 잠시 후 다시
+                시도해 주세요.
+              </div>
+            ) : campaignId ? (
+              <div className="border-primary/20 bg-primary/[0.04] text-muted-foreground mb-5 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-2.5 text-sm">
+                <span className="inline-flex items-center gap-1.5">
+                  <History className="text-primary size-4" />
+                  캠페인이 만들어졌습니다 · 진행 현황을 캠페인에서 관리하세요.
+                </span>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href={`/campaigns/${campaignId}`}>
+                    캠페인 보기
+                    <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+              </div>
+            ) : null}
+
+            {/* AI Summary */}
+            {summary.length > 0 ? (
+              <div className="border-primary/20 bg-primary/[0.04] mb-5 rounded-2xl border p-5">
+                <p className="text-primary flex items-center gap-1.5 text-sm font-semibold">
+                  <Sparkles className="size-4" />
+                  AI Summary
+                </p>
+                <ul className="text-foreground/90 mt-3 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+                  {summary.map((line) => (
+                    <li key={line} className="flex items-start gap-2">
+                      <span className="bg-primary mt-1.5 size-1.5 shrink-0 rounded-full" />
+                      {line}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {/* Sort + hidden toggle */}
+            <div className="mb-5 flex flex-wrap items-center gap-2">
+              {hiddenHandledCount > 0 ? (
+                <FilterChip active={!hideHandled} onClick={() => setHideHandled((v) => !v)}>
+                  <EyeOff className="size-3.5" />
+                  이미 연락한 {hiddenHandledCount}명 {hideHandled ? '숨김' : '표시 중'}
+                </FilterChip>
+              ) : null}
+              <div className="ml-auto flex items-center gap-1.5">
+                <ArrowUpDown className="text-muted-foreground size-3.5" />
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as SortKey)}
+                  className="border-input bg-background focus-visible:ring-ring rounded-lg border px-2.5 py-1.5 text-sm outline-none focus-visible:ring-2"
+                >
+                  {SORTS.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {visible.length > 0 ? (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {visible.map((item) => (
+                  <DiscoverCard
+                    key={item.id}
+                    item={item}
+                    keyword={keyword}
+                    selectable
+                    selected={selected.has(item.id)}
+                    onSelectChange={onSelectChange}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                className="min-h-[240px] justify-center"
+                icon={<SearchX className="size-5" />}
+                title="필터 조건에 맞는 셀럽이 없어요"
+                description="필터를 조정해 보세요."
+              />
+            )}
+          </>
+        ) : (
+          <EmptyState
+            className="min-h-[340px] justify-center"
+            icon={<SearchX className="size-5" />}
+            title={`‘${keyword}’ 결과가 없어요`}
+            description="다른 키워드로 다시 검색해보세요."
           />
-          {recent.length > 0 ? (
-            <ChipRow
-              icon={<Clock className="size-3.5" />}
-              label="최근 검색"
-              chips={recent}
-              variant="soft"
-              onPick={(c) => void runSearch(c)}
-              className="mt-5"
-              center
-            />
-          ) : null}
-        </section>
-      ) : (
-        <div className="bg-background/80 sticky top-14 z-[5] border-b backdrop-blur">
-          <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-6 py-3.5">
-            <div className="flex-1">
+        )}
+      </>
+    );
+
+  return (
+    <div className="relative">
+      <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8 sm:py-10">
+        <PageHeader
+          title="Discover"
+          description="브랜드에 맞는 셀럽을 검색하고, 결과를 캠페인으로 저장하세요."
+        />
+
+        <div className="gap-8 lg:grid lg:grid-cols-[300px_minmax(0,1fr)]">
+          {/* ── Search Rail ── */}
+          <aside className="lg:sticky lg:top-[76px] lg:self-start">
+            <div className="space-y-3">
               <SearchField
                 value={input}
                 size="md"
                 onChange={setInput}
                 onSubmit={() => void runSearch(input)}
               />
-            </div>
-            <div className="hidden sm:block">
               <PlatformSelector platform={platform} onSelect={setPlatform} compact />
             </div>
-          </div>
+
+            {/* Mobile: collapsible options; Desktop: always visible */}
+            <details className="dark:border-border group mt-4 rounded-xl border border-slate-200/60 lg:hidden">
+              <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-sm font-medium">
+                상품 · 키워드 · 필터
+                <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="dark:border-border border-t border-slate-200/60 p-4">{railBody}</div>
+            </details>
+            <div className="mt-6 hidden lg:block">{railBody}</div>
+          </aside>
+
+          {/* ── Results Workspace ── */}
+          <div className="mt-6 lg:mt-0">{resultsWorkspace}</div>
         </div>
-      )}
-
-      {/* ── Searching (progress UI) ───────────────────────────────── */}
-      {phase === 'searching' ? (
-        <section className="mx-auto w-full max-w-6xl px-6 py-10">
-          <div className="mx-auto max-w-md text-center">
-            <div className="text-muted-foreground flex items-center justify-center gap-2 text-sm">
-              <Loader2 className="text-primary size-4 animate-spin" />
-              <span>
-                <span className="text-foreground font-medium">‘{keyword}’</span> 크리에이터를 찾는
-                중…
-              </span>
-            </div>
-            <div className="bg-muted mt-4 h-1.5 w-full overflow-hidden rounded-full">
-              <div className="bg-primary h-full w-2/5 animate-pulse rounded-full" />
-            </div>
-            <p className="text-muted-foreground mt-3 text-xs">
-              인스타그램 검색 → 프로필 수집 → 추천 이유 분석 · 예상 20~30초
-            </p>
-          </div>
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="bg-card rounded-2xl border p-5">
-                <div className="flex items-center gap-3">
-                  <Skeleton className="size-11 rounded-xl" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-4 w-2/3 rounded" />
-                    <Skeleton className="h-3 w-1/3 rounded" />
-                  </div>
-                </div>
-                <Skeleton className="mt-4 h-3 w-full rounded" />
-                <Skeleton className="mt-2 h-3 w-4/5 rounded" />
-                <Skeleton className="mt-5 h-9 w-full rounded-lg" />
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {/* ── Results ───────────────────────────────────────────────── */}
-      {phase === 'done' ? (
-        <section className="mx-auto w-full max-w-6xl px-6 py-10">
-          {error ? (
-            <div className="border-destructive/30 bg-destructive/10 text-destructive mb-6 rounded-xl border p-3 text-sm">
-              {error}
-            </div>
-          ) : null}
-
-          {items.length > 0 ? (
-            <>
-              {/* Header */}
-              <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b pb-5">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl leading-none">{keywordEmoji(keyword)}</span>
-                    <h2 className="truncate text-2xl font-semibold tracking-tight">{keyword}</h2>
-                  </div>
-                  <p className="text-muted-foreground mt-1.5 text-sm">
-                    Instagram · 크리에이터{' '}
-                    <span className="text-foreground font-medium">{visible.length}명</span>
-                    {visible.length !== items.length ? ` / ${items.length}명` : ''}
-                  </p>
-                </div>
-                <p className="text-muted-foreground text-xs">
-                  마지막 검색 · {relativeTime(searchedAt)}
-                </p>
-              </div>
-
-              {/* Save-failed warning takes precedence over the success note */}
-              {saveFailed ? (
-                <div className="border-destructive/30 bg-destructive/10 text-destructive mb-6 flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm">
-                  <AlertTriangle className="size-4 shrink-0" />
-                  검색 결과 저장에 실패했어요. 결과가 캠페인에 저장되지 않았습니다 · 잠시 후 다시
-                  시도해 주세요.
-                </div>
-              ) : campaignId ? (
-                <div className="border-primary/20 bg-primary/[0.04] text-muted-foreground mb-6 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-2.5 text-sm">
-                  <span className="inline-flex items-center gap-1.5">
-                    <History className="text-primary size-4" />
-                    캠페인이 만들어졌습니다 · 진행 현황을 캠페인에서 관리하세요.
-                  </span>
-                  <Button asChild variant="ghost" size="sm">
-                    <Link href={`/campaigns/${campaignId}`}>
-                      캠페인 보기
-                      <ArrowRight className="size-4" />
-                    </Link>
-                  </Button>
-                </div>
-              ) : null}
-
-              {/* AI Summary */}
-              {summary.length > 0 ? (
-                <div className="border-primary/20 bg-primary/[0.04] mb-6 rounded-2xl border p-5">
-                  <p className="text-primary flex items-center gap-1.5 text-sm font-semibold">
-                    <Sparkles className="size-4" />
-                    AI Summary
-                  </p>
-                  <ul className="text-foreground/90 mt-3 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
-                    {summary.map((line) => (
-                      <li key={line} className="flex items-start gap-2">
-                        <span className="bg-primary mt-1.5 size-1.5 shrink-0 rounded-full" />
-                        {line}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              {/* Filters + sort */}
-              <div className="mb-6 flex flex-wrap items-center gap-2">
-                {BUCKETS.map((b) => (
-                  <FilterChip
-                    key={b.id}
-                    active={buckets.has(b.id)}
-                    onClick={() => toggleBucket(b.id)}
-                  >
-                    {b.label}
-                  </FilterChip>
-                ))}
-                <span className="bg-border mx-1 h-5 w-px" />
-                {TOGGLES.map((t) => (
-                  <FilterChip
-                    key={t.id}
-                    active={toggles.has(t.id)}
-                    onClick={() => toggleToggle(t.id)}
-                  >
-                    {t.label}
-                  </FilterChip>
-                ))}
-                {hiddenHandledCount > 0 ? (
-                  <>
-                    <span className="bg-border mx-1 h-5 w-px" />
-                    <FilterChip active={!hideHandled} onClick={() => setHideHandled((v) => !v)}>
-                      <EyeOff className="size-3.5" />
-                      이미 연락한 {hiddenHandledCount}명 {hideHandled ? '숨김' : '표시 중'}
-                    </FilterChip>
-                  </>
-                ) : null}
-                <div className="ml-auto flex items-center gap-1.5">
-                  <ArrowUpDown className="text-muted-foreground size-3.5" />
-                  <select
-                    value={sort}
-                    onChange={(e) => setSort(e.target.value as SortKey)}
-                    className="border-input bg-background focus-visible:ring-ring rounded-lg border px-2.5 py-1.5 text-sm outline-none focus-visible:ring-2"
-                  >
-                    {SORTS.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {visible.length > 0 ? (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {visible.map((item) => (
-                    <DiscoverCard
-                      key={item.id}
-                      item={item}
-                      keyword={keyword}
-                      selectable
-                      selected={selected.has(item.id)}
-                      onSelectChange={onSelectChange}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="text-muted-foreground py-16 text-center text-sm">
-                  필터 조건에 맞는 크리에이터가 없어요. 필터를 조정해 보세요.
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="mx-auto max-w-md py-20 text-center">
-              <div className="bg-muted/60 text-muted-foreground mx-auto flex size-16 items-center justify-center rounded-2xl">
-                <SearchX className="size-8" />
-              </div>
-              <h2 className="mt-5 text-lg font-semibold">‘{keyword}’ 결과가 없어요</h2>
-              <p className="text-muted-foreground mt-1.5 text-sm">
-                다른 키워드로 다시 검색해보세요.
-              </p>
-              <ChipRow
-                chips={POPULAR.slice(0, 6)}
-                onPick={(c) => void runSearch(c)}
-                className="mt-6"
-                center
-              />
-            </div>
-          )}
-        </section>
-      ) : null}
+      </div>
 
       {/* ── Bulk toolbar ──────────────────────────────────────────── */}
       {selected.size > 0 ? (
@@ -591,6 +626,15 @@ export function CreatorSearch() {
 }
 
 // ---------------------------------------------------------------------------
+function RailLabel({ icon, children }: { icon?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <p className="dark:text-muted-foreground mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+      {icon}
+      {children}
+    </p>
+  );
+}
+
 function FilterChip({
   active,
   onClick,
@@ -609,7 +653,7 @@ function FilterChip({
         'inline-flex items-center gap-1 rounded-full border px-3 py-1 text-sm transition-colors',
         active
           ? 'border-primary/40 bg-primary/10 text-primary font-medium'
-          : 'text-muted-foreground hover:text-foreground',
+          : 'hover:text-foreground dark:border-border dark:text-muted-foreground border-slate-200/70 text-slate-600',
       )}
     >
       {active ? <Check className="size-3" /> : null}
@@ -736,7 +780,7 @@ function ChipRow({
       {label ? (
         <p
           className={cn(
-            'text-muted-foreground flex items-center gap-1.5 text-xs font-medium',
+            'dark:text-muted-foreground mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-500',
             center && 'justify-center',
           )}
         >
@@ -744,7 +788,7 @@ function ChipRow({
           {label}
         </p>
       ) : null}
-      <div className={cn('mt-2.5 flex flex-wrap gap-1.5', center && 'justify-center')}>
+      <div className={cn('flex flex-wrap gap-1.5', center && 'justify-center')}>
         {chips.map((c) => (
           <button
             key={c}
@@ -753,7 +797,7 @@ function ChipRow({
             className={cn(
               'rounded-full px-3 py-1 text-sm transition-colors',
               variant === 'outline'
-                ? 'text-muted-foreground hover:border-primary/40 hover:text-foreground border'
+                ? 'hover:border-primary/40 hover:text-foreground dark:border-border dark:text-muted-foreground border border-slate-200/70 text-slate-600'
                 : 'bg-secondary text-secondary-foreground hover:bg-secondary/70',
             )}
           >

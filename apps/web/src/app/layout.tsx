@@ -11,7 +11,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
   title: {
-    default: `${siteConfig.name} — 기회를 먼저 발견하는 AI 직원`,
+    default: `${siteConfig.name} — AI 셀럽 디스커버리 플랫폼`,
     template: `%s · ${siteConfig.name}`,
   },
   description: siteConfig.description,
