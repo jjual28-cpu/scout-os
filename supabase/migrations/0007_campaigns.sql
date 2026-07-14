@@ -1,30 +1,49 @@
 -- =============================================================================
 -- Scout OS — Campaigns (Session system)
 --
--- A Campaign is the unit that ties one keyword search to its result snapshots and,
--- eventually, the whole AI-Engine flow (product → keywords → search → DM → CRM →
--- collab). We RENAME the existing `searches` table to `campaigns` (preserving every
--- row) and extend it, then add `campaign_results` for per-session creator snapshots.
+-- A Campaign ties one keyword search to its result snapshots and, eventually, the
+-- whole AI-Engine flow (product → keywords → search → DM → CRM → collab).
+--
+-- IMPORTANT — this migration is self-sufficient and does NOT require 0005_searches.
+-- On some databases `searches` (0005) was never applied, so we cannot rely on
+-- renaming it. This script:
+--   • renames `searches` → `campaigns` when `searches` exists (preserving its rows),
+--   • otherwise CREATES `campaigns` fresh,
+--   • leaves an existing `campaigns` untouched (only adds any missing columns),
+-- then extends it and adds `campaign_results`. Existing tables are never dropped.
 --
 -- The Campaign funnel (saved/DM/reply/collab/전환율) is DERIVED at read time by
 -- joining campaign_results with saved_opportunities + outreach_activities — never
 -- denormalized here. AI-Engine-ready via product_id + source.
 --
--- Idempotent + re-runnable. Apply in the Supabase SQL editor.
+-- Fully idempotent + re-runnable. Apply in the Supabase SQL editor.
 -- =============================================================================
 
--- ── Rename searches → campaigns (only once; safe to re-run) ───────────────────
+-- ── Ensure a `campaigns` base table exists (rename searches, or create fresh) ──
 do $$
 begin
   if exists (select 1 from pg_tables where schemaname = 'public' and tablename = 'searches')
      and not exists (select 1 from pg_tables where schemaname = 'public' and tablename = 'campaigns') then
+    -- 0005 was applied here → preserve its rows by renaming.
     alter table public.searches rename to campaigns;
+  elsif not exists (select 1 from pg_tables where schemaname = 'public' and tablename = 'campaigns') then
+    -- Fresh install (0005 never applied) → create the base table directly.
+    create table public.campaigns (
+      id           uuid primary key default gen_random_uuid(),
+      user_id      uuid not null default auth.uid() references auth.users (id) on delete cascade,
+      query        text not null,
+      platform     text not null default 'instagram',
+      result_count integer not null default 0,
+      created_at   timestamptz not null default now()
+    );
   end if;
 end $$;
 
--- Rename the 0005 indexes to match (no-op if already renamed / absent).
+-- Rename 0005's indexes if they came across from `searches`; ensure they exist either way.
 alter index if exists public.searches_user_idx  rename to campaigns_user_idx;
 alter index if exists public.searches_query_idx rename to campaigns_query_idx;
+create index if not exists campaigns_user_idx  on public.campaigns (user_id, created_at desc);
+create index if not exists campaigns_query_idx on public.campaigns (lower(query));
 
 -- ── Campaign columns (existing rows preserved; title backfilled from query) ───
 alter table public.campaigns add column if not exists title      text;
@@ -46,7 +65,9 @@ alter table public.campaigns add column if not exists updated_at timestamptz not
 create index if not exists campaigns_product_idx  on public.campaigns (product_id);
 create index if not exists campaigns_favorite_idx on public.campaigns (user_id, favorite, created_at desc);
 
--- ── RLS — replace 0005's searches_* policies with campaigns_* (select/insert/update/delete) ──
+-- ── RLS — enable + own-row policies (works for renamed or freshly-created) ────
+alter table public.campaigns enable row level security;
+
 drop policy if exists "searches_select_own"   on public.campaigns;
 drop policy if exists "searches_insert_own"   on public.campaigns;
 drop policy if exists "campaigns_select_own"  on public.campaigns;

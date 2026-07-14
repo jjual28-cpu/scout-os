@@ -151,23 +151,42 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     throw err;
   }
 
+  // `resultsSaved` tells the client whether the campaign_results snapshot persisted.
+  // A campaign is only marked 'succeeded' (with a result_count) when its snapshot saved.
+  let resultsSaved = true;
   if (supabase && userId) {
     if (creators.length > 0) {
-      await supabase.from('discovered_creators').upsert(
+      const { error: dcError } = await supabase.from('discovered_creators').upsert(
         creators.map((c) => creatorToRow(c, userId as string)),
         { onConflict: 'user_id,platform,external_id' },
       );
+      if (dcError) {
+        console.error(`[discover] discovered_creators upsert failed: ${formatDbError(dcError)}`);
+      }
     }
     if (campaignId) {
-      await saveResults(supabase, userId, campaignId, query, creators);
-      await updateCampaign(supabase, campaignId, {
-        status: 'succeeded',
-        result_count: creators.length,
-      });
+      const saveError = await saveResults(supabase, userId, campaignId, query, creators);
+      if (saveError) {
+        // Snapshot save FAILED → surface the real PostgREST error, keep the campaign
+        // out of 'succeeded', and do NOT record a result_count (only saved on success).
+        console.error(
+          `[discover] campaign_results insert failed (campaign ${campaignId}): ${formatDbError(saveError)}`,
+        );
+        await updateCampaign(supabase, campaignId, {
+          status: 'failed',
+          error: `검색 결과 저장 실패: ${saveError.message}`,
+        });
+        resultsSaved = false;
+      } else {
+        await updateCampaign(supabase, campaignId, {
+          status: 'succeeded',
+          result_count: creators.length,
+        });
+      }
     }
   }
 
-  return ok({ configured: true, creators, campaignId });
+  return ok({ configured: true, creators, campaignId, resultsSaved });
 });
 
 type CampaignMetaInput = {
@@ -231,15 +250,37 @@ async function updateCampaign(
   }
 }
 
-/** Snapshot the campaign's results into `campaign_results` (dedup by unique key). */
+/** A DB error shape (PostgREST/Supabase). */
+type DbError = {
+  message: string;
+  details?: string | null;
+  hint?: string | null;
+  code?: string | null;
+};
+
+/** Compact one-line rendering of a DB error for server logs. */
+function formatDbError(err: DbError): string {
+  return (
+    err.message +
+    (err.code ? ` [${err.code}]` : '') +
+    (err.details ? ` — ${err.details}` : '') +
+    (err.hint ? ` (hint: ${err.hint})` : '')
+  );
+}
+
+/**
+ * Snapshot the campaign's results into `campaign_results` (dedup by unique key).
+ * Returns the PostgREST error on failure (null on success). Zero creators is a
+ * success (nothing to save) — the caller then marks the campaign succeeded.
+ */
 async function saveResults(
   supabase: Awaited<ReturnType<typeof getSupabase>>,
   userId: string,
   campaignId: string,
   query: string,
   creators: InstagramCreator[],
-): Promise<void> {
-  if (creators.length === 0) return;
+): Promise<DbError | null> {
+  if (creators.length === 0) return null;
   const rows = creators.map((c, i) => ({
     user_id: userId,
     campaign_id: campaignId,
@@ -262,11 +303,13 @@ async function saveResults(
     },
   }));
   try {
-    await supabase
+    const { error } = await supabase
       .from('campaign_results')
       .upsert(rows, { onConflict: 'user_id,campaign_id,creator_id', ignoreDuplicates: true });
-  } catch {
-    /* best-effort — don't fail the response */
+    return error ?? null;
+  } catch (err) {
+    // Unexpected throw (network, etc.) — surface it like a DB error.
+    return { message: err instanceof Error ? err.message : 'unknown error saving results' };
   }
 }
 

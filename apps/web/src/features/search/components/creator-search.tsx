@@ -18,6 +18,7 @@ import {
   ArrowRight,
   History,
   EyeOff,
+  AlertTriangle,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -139,6 +140,7 @@ export function CreatorSearch() {
   const [sort, setSort] = useState<SortKey>('recommended');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [campaignId, setCampaignId] = useState<string | null>(null);
+  const [saveFailed, setSaveFailed] = useState(false);
   const [hideHandled, setHideHandled] = useState(true);
 
   const saved = useSavedOpportunities();
@@ -170,6 +172,7 @@ export function CreatorSearch() {
     setPhase('searching');
     setSelected(new Set());
     setCampaignId(null);
+    setSaveFailed(false);
     setRecent(pushRecent(q));
 
     const meta = draftMeta.current;
@@ -193,7 +196,12 @@ export function CreatorSearch() {
         body: JSON.stringify(body),
       });
       const json = (await res.json().catch(() => null)) as {
-        data?: { configured: boolean; creators: InstagramCreator[]; campaignId?: string | null };
+        data?: {
+          configured: boolean;
+          creators: InstagramCreator[];
+          campaignId?: string | null;
+          resultsSaved?: boolean;
+        };
       } | null;
       if (my !== reqId.current) return; // superseded by a newer search
 
@@ -201,6 +209,7 @@ export function CreatorSearch() {
       if (data?.configured && Array.isArray(data.creators)) {
         setItems(data.creators.map(toDiscoverOpportunity));
         setCampaignId(data.campaignId ?? null);
+        setSaveFailed(data.campaignId != null && data.resultsSaved === false);
       } else if (data && data.configured === false) {
         setItems(MOCK_ITEMS); // Apify unconfigured → mock only (never mixed)
       } else {
@@ -431,8 +440,14 @@ export function CreatorSearch() {
                 </p>
               </div>
 
-              {/* Saved-as-campaign note */}
-              {campaignId ? (
+              {/* Save-failed warning takes precedence over the success note */}
+              {saveFailed ? (
+                <div className="border-destructive/30 bg-destructive/10 text-destructive mb-6 flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm">
+                  <AlertTriangle className="size-4 shrink-0" />
+                  검색 결과 저장에 실패했어요. 결과가 캠페인에 저장되지 않았습니다 · 잠시 후 다시
+                  시도해 주세요.
+                </div>
+              ) : campaignId ? (
                 <div className="border-primary/20 bg-primary/[0.04] text-muted-foreground mb-6 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-2.5 text-sm">
                   <span className="inline-flex items-center gap-1.5">
                     <History className="text-primary size-4" />
