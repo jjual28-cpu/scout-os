@@ -112,6 +112,8 @@ type SavedRow = {
   opportunity_id: string;
   status: OpportunityStatus;
   note: string | null;
+  /** DB-authoritative save time. Mapped to `savedAt` — never written into raw_data. */
+  created_at: string | null;
   raw_data: SavedOpportunity;
 };
 
@@ -131,7 +133,12 @@ function savedToRow(item: SavedOpportunity, uid: string) {
   };
 }
 function rowToSaved(row: SavedRow): SavedOpportunity {
-  return { ...row.raw_data, status: row.status, note: row.note ?? '' };
+  // `savedAt` comes from the DB column, not from raw_data: created_at is server-set
+  // and always present, whereas raw_data.savedAt is a client clock that older rows
+  // may lack entirely. Fall back to raw_data only if the column is somehow null.
+  const createdMs = row.created_at ? new Date(row.created_at).getTime() : NaN;
+  const savedAt = Number.isFinite(createdMs) ? createdMs : (row.raw_data?.savedAt ?? 0);
+  return { ...row.raw_data, status: row.status, note: row.note ?? '', savedAt };
 }
 
 /** The minimal shape of the signed-in Supabase user this store needs. */
@@ -233,7 +240,7 @@ async function loadFromSupabase() {
     const [savedRes, draftRes] = await Promise.all([
       supabase
         .from('saved_opportunities')
-        .select('opportunity_id,status,note,raw_data')
+        .select('opportunity_id,status,note,created_at,raw_data')
         .order('created_at', { ascending: false }),
       supabase.from('dm_drafts').select('opportunity_id,content'),
     ]);

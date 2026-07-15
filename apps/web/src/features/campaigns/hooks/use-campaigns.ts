@@ -56,13 +56,19 @@ export function useCampaigns() {
     void reload();
   }, [reload]);
 
-  const campaigns: Campaign[] = useMemo(() => {
+  /** campaignId → creatorIds. Exposed so Reports can aggregate without re-querying. */
+  const creatorLinks = useMemo(() => {
     const byCampaign = new Map<string, string[]>();
     for (const r of links) {
       const arr = byCampaign.get(r.campaignId) ?? [];
       arr.push(r.creatorId);
       byCampaign.set(r.campaignId, arr);
     }
+    return byCampaign;
+  }, [links]);
+
+  const campaigns: Campaign[] = useMemo(() => {
+    const byCampaign = creatorLinks;
     const savedSet = new Set(saved.saved.map((s) => s.id));
     const productName = (id: string | null) =>
       id ? (products.products.find((p) => p.id === id)?.name ?? null) : null;
@@ -83,7 +89,7 @@ export function useCampaigns() {
       if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
       return b.createdAt.localeCompare(a.createdAt);
     });
-  }, [rows, links, saved.saved, outreach.records, products.products]);
+  }, [rows, creatorLinks, saved.saved, outreach.records, products.products]);
 
   const mutate = useCallback(
     async (id: string, patch: svc.CampaignPatch, optimistic: Partial<svc.RawCampaign>) => {
@@ -134,6 +140,7 @@ export function useCampaigns() {
 
   return {
     campaigns,
+    creatorLinks,
     hydrated: hydrated && saved.hydrated && outreach.hydrated,
     setLabel,
     toggleFavorite,

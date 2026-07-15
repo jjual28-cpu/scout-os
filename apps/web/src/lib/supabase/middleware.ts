@@ -65,6 +65,7 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith('/crm') ||
     pathname.startsWith('/creators') ||
     pathname.startsWith('/campaigns') ||
+    pathname.startsWith('/reports') ||
     pathname.startsWith('/settings');
 
   if (!user && isProtected) {

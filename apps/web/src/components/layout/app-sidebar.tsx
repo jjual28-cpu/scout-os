@@ -33,6 +33,7 @@ const NAV: NavItem[] = [
   { title: '캠페인', href: '/campaigns', icon: Megaphone },
   { title: '협업 관리', href: '/crm', icon: KanbanSquare },
   { title: '상품', href: '/products', icon: Package },
+  { title: '리포트', href: '/reports', icon: BarChart3 },
 ];
 
 /**
@@ -50,20 +51,9 @@ type SoonItem = {
 
 const SOON: SoonItem[] = [
   {
-    title: '리포트',
-    icon: BarChart3,
-    order: 1,
-    summary: '이미 쌓인 캠페인·DM 데이터를 기간별 성과로 보여줍니다.',
-    bullets: [
-      '기간별 검색 수 · 발견 셀럽 · 저장 · DM · 답변 · 협업',
-      '전환율과 Top 검색어 / Top 캠페인',
-      '상품별 · 캠페인별 성과 비교',
-    ],
-  },
-  {
     title: '설정',
     icon: Settings,
-    order: 2,
+    order: 1,
     summary: '검색 기본값과 브랜드 정보를 계정에 저장합니다.',
     bullets: [
       '기본 플랫폼 · 검색 결과 수 · 캐시 시간',
@@ -74,7 +64,7 @@ const SOON: SoonItem[] = [
   {
     title: 'AI 직원',
     icon: Sparkles,
-    order: 3,
+    order: 2,
     summary: '상품을 고르면 키워드 추천부터 DM 초안까지 이어서 만들어 줍니다.',
     bullets: [
       '상품 분석 → 추천 키워드 생성 → 캠페인 자동 생성',
