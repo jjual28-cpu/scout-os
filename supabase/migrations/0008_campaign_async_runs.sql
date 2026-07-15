@@ -1,7 +1,7 @@
 -- =============================================================================
 -- Scout OS — 0008: Campaign async Apify runs
 --
--- 동기(run-sync-get-dataset-items) → 비동기(Run Actor + 폴링 상태머신) 전환용
+-- 동기 실행 → 비동기(Run Actor + 폴링 상태머신) 전환용
 -- 최소 컬럼/인덱스. 새 테이블 없음. 행/campaign_results 삭제 없음.
 -- Apify 파이프라인이 3단계(user → posts → details) 조건부이므로 apify_stage 보존.
 -- query 는 사용자 입력 원문을 그대로 저장하고, 비교(캐시/running/중복)는 전부
