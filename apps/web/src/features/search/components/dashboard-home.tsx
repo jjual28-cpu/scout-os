@@ -18,6 +18,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { useCurrentUser } from '@/components/layout/use-current-user';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ACTIVE_FILTER, campaignsHref, countCampaigns } from '@/features/campaigns/filter';
 import { useCampaigns } from '@/features/campaigns/hooks/use-campaigns';
 import { LABEL_META } from '@/features/campaigns/label';
 import { cn } from '@/lib/utils';
@@ -56,7 +57,9 @@ export function DashboardHome() {
   const replies = useMemo(() => records.filter((r) => r.status === '답변옴'), [records]);
 
   const kpis = useMemo(() => {
-    const activeCampaigns = campaigns.filter((c) => c.label === 'active').length;
+    // Counted with the SAME helper the /campaigns list filters by, so this number
+    // always equals the row count behind the card's link.
+    const activeCampaigns = countCampaigns(campaigns, ACTIVE_FILTER);
     const discovered = campaigns.reduce((a, c) => a + (c.summary?.discovered ?? 0), 0);
     const dmSent = records.filter((r) => r.contactedAt).length;
     return { activeCampaigns, discovered, dmSent, replies: replies.length };
@@ -117,7 +120,7 @@ export function DashboardHome() {
           icon={<Megaphone className="size-4" />}
           label="진행 중 캠페인"
           value={kpis.activeCampaigns}
-          href="/campaigns?status=running"
+          href={campaignsHref(ACTIVE_FILTER)}
         />
         <StatCard
           icon={<Users className="size-4" />}

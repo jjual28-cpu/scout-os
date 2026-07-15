@@ -2,6 +2,7 @@
 
 import {
   BarChart3,
+  Check,
   Compass,
   KanbanSquare,
   LayoutDashboard,
@@ -34,11 +35,53 @@ const NAV: NavItem[] = [
   { title: '상품', href: '/products', icon: Package },
 ];
 
-// Not yet built — clickable, but they open a "개발 중" modal instead of routing.
-const SOON: { title: string; icon: LucideIcon }[] = [
-  { title: 'AI 직원', icon: Sparkles },
-  { title: '리포트', icon: BarChart3 },
-  { title: '설정', icon: Settings },
+/**
+ * Not yet built — clickable, but they explain the feature instead of routing.
+ * `order` is the shipping queue shown in the modal; keep it in sync with the
+ * roadmap so the badge and the copy never drift apart.
+ */
+type SoonItem = {
+  title: string;
+  icon: LucideIcon;
+  order: number;
+  summary: string;
+  bullets: string[];
+};
+
+const SOON: SoonItem[] = [
+  {
+    title: '리포트',
+    icon: BarChart3,
+    order: 1,
+    summary: '이미 쌓인 캠페인·DM 데이터를 기간별 성과로 보여줍니다.',
+    bullets: [
+      '기간별 검색 수 · 발견 셀럽 · 저장 · DM · 답변 · 협업',
+      '전환율과 Top 검색어 / Top 캠페인',
+      '상품별 · 캠페인별 성과 비교',
+    ],
+  },
+  {
+    title: '설정',
+    icon: Settings,
+    order: 2,
+    summary: '검색 기본값과 브랜드 정보를 계정에 저장합니다.',
+    bullets: [
+      '기본 플랫폼 · 검색 결과 수 · 캐시 시간',
+      '브랜드 기본 정보와 DM 기본 말투',
+      '프로필 · 알림 설정',
+    ],
+  },
+  {
+    title: 'AI 직원',
+    icon: Sparkles,
+    order: 3,
+    summary: '상품을 고르면 키워드 추천부터 DM 초안까지 이어서 만들어 줍니다.',
+    bullets: [
+      '상품 분석 → 추천 키워드 생성 → 캠페인 자동 생성',
+      '이미 연락·답변·협업한 셀럽은 자동 제외',
+      '상품에 맞춘 DM 초안 작성',
+    ],
+  },
 ];
 
 /** Sidebar content column — placed by AppShell into both the desktop rail and the
@@ -47,7 +90,7 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { signOut } = useAuth();
   const { email, name } = useCurrentUser();
-  const [soonOpen, setSoonOpen] = useState<string | null>(null);
+  const [soonOpen, setSoonOpen] = useState<SoonItem | null>(null);
 
   const initials = (name ?? email ?? 'SC').slice(0, 2).toUpperCase();
 
@@ -98,7 +141,7 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
               <button
                 key={item.title}
                 type="button"
-                onClick={() => setSoonOpen(item.title)}
+                onClick={() => setSoonOpen(item)}
                 className="dark:text-muted-foreground/60 dark:hover:bg-muted flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
               >
                 <Icon className="size-[18px] shrink-0" />
@@ -149,12 +192,44 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
             onClick={() => setSoonOpen(null)}
             aria-hidden
           />
-          <div className="bg-card relative w-full max-w-sm rounded-2xl border p-6 shadow-2xl">
-            <h2 className="text-base font-semibold">{soonOpen}</h2>
-            <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
-              개발 중입니다.
-              <br />곧 사용할 수 있습니다.
-            </p>
+          <div className="bg-card relative w-full max-w-md rounded-2xl border p-6 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <span className="bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-xl">
+                <soonOpen.icon className="size-[18px]" />
+              </span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-semibold">{soonOpen.title}</h2>
+                  <span className="dark:bg-muted dark:text-muted-foreground rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                    준비 중
+                  </span>
+                </div>
+                <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+                  {soonOpen.summary}
+                </p>
+              </div>
+            </div>
+
+            <ul className="mt-4 space-y-1.5">
+              {soonOpen.bullets.map((b) => (
+                <li key={b} className="text-muted-foreground flex gap-2 text-sm">
+                  <Check className="text-primary mt-0.5 size-3.5 shrink-0" />
+                  <span>{b}</span>
+                </li>
+              ))}
+            </ul>
+
+            <div className="dark:border-border mt-4 rounded-lg border border-slate-200/60 px-3 py-2.5">
+              <p className="dark:text-muted-foreground text-xs text-slate-500">
+                구현 예정 순서{' '}
+                <span className="text-foreground font-medium">
+                  {soonOpen.order}번째 / 전체 {SOON.length}개
+                </span>
+                {' · '}
+                {SOON.map((s) => s.title).join(' → ')}
+              </p>
+            </div>
+
             <div className="mt-5 flex justify-end">
               <Button onClick={() => setSoonOpen(null)}>확인</Button>
             </div>

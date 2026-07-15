@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader2, Search, Star } from 'lucide-react';
+import { Filter, Loader2, Search, Star } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -11,6 +11,14 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
+import {
+  campaignsHref,
+  filterCampaigns,
+  filterText,
+  filterTone,
+  parseCampaignFilter,
+  type CampaignFilter,
+} from '../filter';
 import { useCampaigns } from '../hooks/use-campaigns';
 import { LABEL_META } from '../label';
 import { type Campaign } from '../types';
@@ -88,18 +96,24 @@ function Row({ c, onToggleFavorite }: { c: Campaign; onToggleFavorite: (id: stri
 
 export function CampaignList() {
   const { campaigns, hydrated, toggleFavorite } = useCampaigns();
+  const router = useRouter();
 
-  // ?status=running — e.g. the Dashboard's "진행 중 캠페인" KPI card links here.
+  // ?label=active (Dashboard KPI) or ?status=running (검색 중). Parsed + validated
+  // by the shared helper; an unknown value falls back to null = 전체 목록.
   // Read from location (not useSearchParams) to avoid forcing a Suspense boundary.
-  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [filter, setFilter] = useState<CampaignFilter | null>(null);
   useEffect(() => {
-    setStatusFilter(new URLSearchParams(window.location.search).get('status'));
+    setFilter(parseCampaignFilter(window.location.search));
   }, []);
 
-  const visible = useMemo(
-    () => (statusFilter ? campaigns.filter((c) => c.status === statusFilter) : campaigns),
-    [campaigns, statusFilter],
-  );
+  // Keep the chip and the URL in one state: clearing also drops the query param,
+  // so a refresh doesn't resurrect the filter.
+  const clearFilter = () => {
+    setFilter(null);
+    router.replace(campaignsHref(null), { scroll: false });
+  };
+
+  const visible = useMemo(() => filterCampaigns(campaigns, filter), [campaigns, filter]);
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8 sm:py-10">
@@ -115,14 +129,13 @@ export function CampaignList() {
         }
       />
 
-      {statusFilter ? (
+      {filter ? (
         <div className="mb-4 flex items-center gap-2">
-          <StatusBadge tone={statusFilter === 'running' ? 'amber' : 'neutral'}>
-            {statusFilter === 'running' ? '검색 중' : statusFilter} 만 보기
-          </StatusBadge>
+          <StatusBadge tone={filterTone(filter)}>{filterText(filter)}만 보기</StatusBadge>
+          <span className="text-muted-foreground text-xs tabular-nums">{visible.length}건</span>
           <button
             type="button"
-            onClick={() => setStatusFilter(null)}
+            onClick={clearFilter}
             className="text-muted-foreground hover:text-foreground text-xs underline-offset-2 hover:underline"
           >
             필터 해제
@@ -136,6 +149,18 @@ export function CampaignList() {
           <Skeleton className="h-12 w-full rounded-lg" />
           <Skeleton className="h-12 w-full rounded-lg" />
         </div>
+      ) : filter && campaigns.length > 0 && visible.length === 0 ? (
+        // Campaigns exist — the filter just excluded them all. Never claim "없어요".
+        <EmptyState
+          icon={<Filter className="size-5" />}
+          title={`${filterText(filter)} 캠페인이 없어요`}
+          description={`전체 ${campaigns.length}건 중 조건에 맞는 캠페인이 없습니다.`}
+          action={
+            <Button size="sm" variant="outline" onClick={clearFilter}>
+              전체 캠페인 보기
+            </Button>
+          }
+        />
       ) : visible.length === 0 ? (
         <EmptyState
           icon={<Search className="size-5" />}
