@@ -130,6 +130,177 @@ export function expandKeyword(query: string): string[] {
   return [...new Set(variants)].slice(0, 6);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Async run API — start a run, poll its status, read its dataset.
+// Used by the Campaign state machine so a search never blocks a request.
+// The staged pipeline (and therefore search quality) is unchanged; each stage
+// is just started/collected across separate requests instead of awaited inline.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Apify run lifecycle states we care about. */
+export type ApifyRunStatus =
+  'READY' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'ABORTING' | 'ABORTED' | 'TIMED-OUT';
+
+export type StartedRun = { runId: string; datasetId: string };
+
+function apifyToken(): string {
+  const token = env.APIFY_API_TOKEN;
+  if (!token) {
+    throw new AppError('APIFY_NOT_CONFIGURED', 'Instagram 연동이 설정되지 않았습니다.', 503);
+  }
+  return token;
+}
+
+function apifyActorId(): string {
+  return env.APIFY_INSTAGRAM_ACTOR.replace('/', '~');
+}
+
+/** Start an actor run WITHOUT waiting for it. Returns the run + dataset ids. */
+export async function startActorRun(actorInput: unknown): Promise<StartedRun> {
+  const token = apifyToken();
+  let res: Response;
+  try {
+    res = await fetch(`${APIFY_BASE}/acts/${apifyActorId()}/runs?token=${token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(actorInput),
+    });
+  } catch {
+    throw new AppError('APIFY_NETWORK', 'Instagram 검색을 시작하지 못했습니다.', 502);
+  }
+  if (!res.ok) {
+    throw new AppError(
+      'APIFY_ERROR',
+      `Instagram 검색을 시작하지 못했습니다. (오류 ${res.status})`,
+      502,
+    );
+  }
+  const json = (await res.json().catch(() => null)) as {
+    data?: { id?: string; defaultDatasetId?: string };
+  } | null;
+  const runId = json?.data?.id;
+  const datasetId = json?.data?.defaultDatasetId;
+  if (!runId || !datasetId) {
+    throw new AppError('APIFY_PARSE', 'Instagram 검색 시작 응답을 처리하지 못했습니다.', 502);
+  }
+  return { runId, datasetId };
+}
+
+/** Current status of a run. `null` when the run can't be found/read. */
+export async function getRunStatus(
+  runId: string,
+): Promise<{ status: ApifyRunStatus; datasetId: string | null } | null> {
+  const token = apifyToken();
+  try {
+    const res = await fetch(`${APIFY_BASE}/actor-runs/${runId}?token=${token}`);
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      data?: { status?: string; defaultDatasetId?: string };
+    };
+    const status = json?.data?.status as ApifyRunStatus | undefined;
+    if (!status) return null;
+    return { status, datasetId: json.data?.defaultDatasetId ?? null };
+  } catch {
+    return null;
+  }
+}
+
+/** Read a finished run's dataset items. */
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+export async function readDataset(datasetId: string): Promise<any[]> {
+  const token = apifyToken();
+  let res: Response;
+  try {
+    res = await fetch(
+      `${APIFY_BASE}/datasets/${datasetId}/items?clean=true&format=json&token=${token}`,
+    );
+  } catch {
+    throw new AppError('APIFY_NETWORK', 'Instagram 결과를 불러오지 못했습니다.', 502);
+  }
+  if (!res.ok) {
+    throw new AppError(
+      'APIFY_ERROR',
+      `Instagram 결과를 불러오지 못했습니다. (오류 ${res.status})`,
+      502,
+    );
+  }
+  const items = await res.json().catch(() => null);
+  return Array.isArray(items) ? items : [];
+}
+
+// ── Stage inputs (identical shapes to the synchronous pipeline) ─────────────
+
+/** Stage 1 — user/profile search for the keyword. */
+export function stage1Input(query: string, limit?: number) {
+  const target = Math.min(Math.max(limit ?? TARGET, 1), 24);
+  return {
+    search: query,
+    searchType: 'user',
+    searchLimit: target,
+    resultsType: 'details',
+    resultsLimit: target,
+  };
+}
+
+/** Stage 2 — hashtag/post search over rule-expanded keywords. */
+export function stage2Input(query: string) {
+  const tags = expandKeyword(query);
+  return {
+    directUrls: tags.map((t) => `https://www.instagram.com/explore/tags/${encodeURIComponent(t)}/`),
+    resultsType: 'posts',
+    resultsLimit: POSTS_LIMIT,
+  };
+}
+
+/** Stage 3 — enrich post-author usernames into full profile details. */
+export function stage3Input(usernames: string[]) {
+  return {
+    directUrls: usernames.map((u) => `https://www.instagram.com/${u}/`),
+    resultsType: 'details',
+    resultsLimit: usernames.length,
+  };
+}
+
+// ── Stage processors ────────────────────────────────────────────────────────
+
+/** Normalize dataset items → creators (post objects are never let through). */
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+export function profilesFromItems(items: any[]): InstagramCreator[] {
+  const out = new Map<string, InstagramCreator>();
+  for (const raw of items) {
+    if (!isProfileLike(raw)) continue;
+    const c = normalize(raw);
+    if (!c) continue;
+    const k = c.username.toLowerCase();
+    if (!out.has(k)) out.set(k, c);
+  }
+  return [...out.values()];
+}
+
+/** Post-author usernames from a posts dataset, excluding ones we already have. */
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+export function authorsFromPosts(items: any[], exclude: Iterable<string>): string[] {
+  const seen = new Set([...exclude].map((u) => u.toLowerCase()));
+  const authors: string[] = [];
+  for (const p of items) {
+    const u = postAuthorUsername(p);
+    if (!u) continue;
+    const k = u.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    authors.push(u);
+  }
+  return authors;
+}
+
+/** Search-quality knobs shared with the state machine (unchanged values). */
+export const SEARCH_TARGET = TARGET;
+export const SEARCH_MIN_SUFFICIENT = MIN_SUFFICIENT;
+/** Stage-3 enrichment cap (mirrors the synchronous pipeline's buffer). */
+export function stage3Cap(need: number): number {
+  return Math.min(Math.max(need, 0) + 4, 24);
+}
+
 /** Run the Apify actor once and return its dataset items. Throws AppError on failure. */
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 async function runActor(actorId: string, token: string, actorInput: unknown): Promise<any[]> {

@@ -10,7 +10,7 @@ type Sb = ReturnType<typeof createClient>;
 
 /** Columns selected for a campaign (order matches CAMPAIGN_COLUMNS). */
 export const CAMPAIGN_COLUMNS =
-  'id,title,query,platform,status,error,label,source,memo,brand,season,goal,favorite,product_id,result_count,created_at,updated_at';
+  'id,title,query,platform,status,error,label,source,memo,brand,season,goal,favorite,product_id,result_count,created_at,updated_at,started_at,completed_at,apify_stage';
 
 /** A campaign row from the DB, normalized to camelCase (no derived fields). */
 export type RawCampaign = {
@@ -31,6 +31,9 @@ export type RawCampaign = {
   resultCount: number;
   createdAt: string;
   updatedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  apifyStage: number | null;
 };
 
 function mapCampaign(r: any): RawCampaign {
@@ -52,7 +55,41 @@ function mapCampaign(r: any): RawCampaign {
     resultCount: r.result_count ?? 0,
     createdAt: r.created_at,
     updatedAt: r.updated_at ?? r.created_at,
+    startedAt: r.started_at ?? null,
+    completedAt: r.completed_at ?? null,
+    apifyStage: r.apify_stage ?? null,
   };
+}
+
+/**
+ * The campaign Discover should open on entry. Priority: newest running (a search
+ * in flight) → newest succeeded → newest failed. Null when the user has none.
+ */
+export async function getLatestCampaign(sb: Sb, userId: string): Promise<RawCampaign | null> {
+  const pick = async (status: string) => {
+    const { data } = await sb
+      .from('campaigns')
+      .select(CAMPAIGN_COLUMNS)
+      .eq('user_id', userId)
+      .eq('status', status)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const row = (data as any[] | null)?.[0];
+    return row ? mapCampaign(row) : null;
+  };
+  return (await pick('running')) ?? (await pick('succeeded')) ?? (await pick('failed'));
+}
+
+/** All of the user's in-flight campaigns — drives the global poller. */
+export async function listRunningCampaigns(sb: Sb, userId: string): Promise<RawCampaign[]> {
+  const { data } = await sb
+    .from('campaigns')
+    .select(CAMPAIGN_COLUMNS)
+    .eq('user_id', userId)
+    .eq('status', 'running')
+    .order('created_at', { ascending: false })
+    .limit(5);
+  return ((data as any[] | null) ?? []).map(mapCampaign);
 }
 
 /** All of a user's campaigns, newest first. */

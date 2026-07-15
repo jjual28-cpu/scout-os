@@ -14,8 +14,10 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useState } from 'react';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/features/auth';
 import { isSupabaseConfigured } from '@/lib/env';
 import { cn } from '@/lib/utils';
@@ -25,18 +27,18 @@ import { useCurrentUser } from './use-current-user';
 type NavItem = { title: string; href: string; icon: LucideIcon };
 
 const NAV: NavItem[] = [
-  { title: 'Dashboard', href: '/home', icon: LayoutDashboard },
-  { title: 'Discover', href: '/discover', icon: Compass },
-  { title: 'Campaigns', href: '/campaigns', icon: Megaphone },
-  { title: 'CRM', href: '/crm', icon: KanbanSquare },
-  { title: 'Products', href: '/products', icon: Package },
+  { title: '대시보드', href: '/home', icon: LayoutDashboard },
+  { title: '셀럽 찾기', href: '/discover', icon: Compass },
+  { title: '캠페인', href: '/campaigns', icon: Megaphone },
+  { title: '협업 관리', href: '/crm', icon: KanbanSquare },
+  { title: '상품', href: '/products', icon: Package },
 ];
 
-// Not yet built — shown disabled with a "준비 중" badge (never a broken link).
+// Not yet built — clickable, but they open a "개발 중" modal instead of routing.
 const SOON: { title: string; icon: LucideIcon }[] = [
-  { title: 'AI Engine', icon: Sparkles },
-  { title: 'Reports', icon: BarChart3 },
-  { title: 'Settings', icon: Settings },
+  { title: 'AI 직원', icon: Sparkles },
+  { title: '리포트', icon: BarChart3 },
+  { title: '설정', icon: Settings },
 ];
 
 /** Sidebar content column — placed by AppShell into both the desktop rail and the
@@ -45,6 +47,7 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { signOut } = useAuth();
   const { email, name } = useCurrentUser();
+  const [soonOpen, setSoonOpen] = useState<string | null>(null);
 
   const initials = (name ?? email ?? 'SC').slice(0, 2).toUpperCase();
 
@@ -92,17 +95,18 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
           {SOON.map((item) => {
             const Icon = item.icon;
             return (
-              <div
+              <button
                 key={item.title}
-                aria-disabled
-                className="dark:text-muted-foreground/50 flex cursor-default items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-slate-400"
+                type="button"
+                onClick={() => setSoonOpen(item.title)}
+                className="dark:text-muted-foreground/60 dark:hover:bg-muted flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
               >
                 <Icon className="size-[18px] shrink-0" />
-                <span className="flex-1 truncate">{item.title}</span>
+                <span className="flex-1 truncate text-left">{item.title}</span>
                 <span className="dark:bg-muted dark:text-muted-foreground/70 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
                   준비 중
                 </span>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -136,6 +140,27 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
           ) : null}
         </div>
       </div>
+
+      {/* "준비 중" menus are clickable — they explain instead of dead-ending. */}
+      {soonOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+          <div
+            className="fixed inset-0 bg-black/40"
+            onClick={() => setSoonOpen(null)}
+            aria-hidden
+          />
+          <div className="bg-card relative w-full max-w-sm rounded-2xl border p-6 shadow-2xl">
+            <h2 className="text-base font-semibold">{soonOpen}</h2>
+            <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
+              개발 중입니다.
+              <br />곧 사용할 수 있습니다.
+            </p>
+            <div className="mt-5 flex justify-end">
+              <Button onClick={() => setSoonOpen(null)}>확인</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

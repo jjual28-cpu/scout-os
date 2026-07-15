@@ -43,6 +43,9 @@ export function DiscoverCard({
   // Real creators carry a profileUrl → the detail/outreach flow applies to them.
   const isReal = Boolean(item.profileUrl);
   const detailHref = `/creators/${encodeURIComponent(item.id)}`;
+  // profileUrl wins; fall back to building one from the handle.
+  const instagramUrl =
+    item.profileUrl ?? (item.handle ? `https://www.instagram.com/${item.handle}/` : null);
 
   const rec = outreach.records[item.id];
   const badge = creatorBadge(rec?.status, Boolean(rec?.dmDraft?.trim()));
@@ -89,7 +92,7 @@ export function DiscoverCard({
         </div>
       ) : null}
 
-      <OpportunityBody result={item} />
+      <OpportunityBody result={item} profileHref={instagramUrl} />
 
       {/* 발견일 + 최근 연락 상태 */}
       <div className="text-muted-foreground mt-4 flex items-center justify-between gap-2 text-xs">

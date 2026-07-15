@@ -1,10 +1,11 @@
 'use client';
 
-import { Search, Star } from 'lucide-react';
+import { Loader2, Search, Star } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-import { EmptyState } from '@/components/layout/blocks';
+import { EmptyState, StatusBadge } from '@/components/layout/blocks';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -54,9 +55,18 @@ function Row({ c, onToggleFavorite }: { c: Campaign; onToggleFavorite: (id: stri
         <p className="dark:text-muted-foreground truncate text-xs text-slate-400">{c.query}</p>
       </td>
       <td className="py-3 pr-4">
-        <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', meta.className)}>
-          {meta.label}
-        </span>
+        {c.status === 'running' ? (
+          <StatusBadge tone="amber">
+            <Loader2 className="size-3 animate-spin" />
+            검색 중
+          </StatusBadge>
+        ) : c.status === 'failed' ? (
+          <StatusBadge tone="rose">실패</StatusBadge>
+        ) : (
+          <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', meta.className)}>
+            {meta.label}
+          </span>
+        )}
       </td>
       <td className="dark:text-muted-foreground hidden max-w-[140px] py-3 pr-4 text-slate-500 lg:table-cell">
         <span className="block truncate">{c.productName ?? '—'}</span>
@@ -79,6 +89,18 @@ function Row({ c, onToggleFavorite }: { c: Campaign; onToggleFavorite: (id: stri
 export function CampaignList() {
   const { campaigns, hydrated, toggleFavorite } = useCampaigns();
 
+  // ?status=running — e.g. the Dashboard's "진행 중 캠페인" KPI card links here.
+  // Read from location (not useSearchParams) to avoid forcing a Suspense boundary.
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  useEffect(() => {
+    setStatusFilter(new URLSearchParams(window.location.search).get('status'));
+  }, []);
+
+  const visible = useMemo(
+    () => (statusFilter ? campaigns.filter((c) => c.status === statusFilter) : campaigns),
+    [campaigns, statusFilter],
+  );
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8 sm:py-10">
       <PageHeader
@@ -93,13 +115,28 @@ export function CampaignList() {
         }
       />
 
+      {statusFilter ? (
+        <div className="mb-4 flex items-center gap-2">
+          <StatusBadge tone={statusFilter === 'running' ? 'amber' : 'neutral'}>
+            {statusFilter === 'running' ? '검색 중' : statusFilter} 만 보기
+          </StatusBadge>
+          <button
+            type="button"
+            onClick={() => setStatusFilter(null)}
+            className="text-muted-foreground hover:text-foreground text-xs underline-offset-2 hover:underline"
+          >
+            필터 해제
+          </button>
+        </div>
+      ) : null}
+
       {!hydrated ? (
         <div className="space-y-2">
           <Skeleton className="h-12 w-full rounded-lg" />
           <Skeleton className="h-12 w-full rounded-lg" />
           <Skeleton className="h-12 w-full rounded-lg" />
         </div>
-      ) : campaigns.length === 0 ? (
+      ) : visible.length === 0 ? (
         <EmptyState
           icon={<Search className="size-5" />}
           title="아직 캠페인이 없어요"
@@ -130,7 +167,7 @@ export function CampaignList() {
               </tr>
             </thead>
             <tbody>
-              {campaigns.map((c) => (
+              {visible.map((c) => (
                 <Row key={c.id} c={c} onToggleFavorite={toggleFavorite} />
               ))}
             </tbody>
