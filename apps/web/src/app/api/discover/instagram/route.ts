@@ -4,19 +4,26 @@ import { z } from 'zod';
 import { type InstagramCreator } from '@/features/search/instagram';
 import { ok, withErrorHandling } from '@/lib/api/response';
 import { getDiscoveryProvider, isSupabaseConfigured } from '@/lib/env';
-import { runInstagramDiscovery } from '@/services/apify/instagram';
+import { normalizeQuery } from '@/lib/normalize-query';
+import { stage1Input, startActorRun } from '@/services/apify/instagram';
 
 // Env is read and Apify/Supabase clients are created only per request.
 export const dynamic = 'force-dynamic';
-// A topic search may run up to 3 sequential Apify passes (user → posts → details),
-// so allow a larger budget (Vercel caps this to the plan's max at runtime).
-export const maxDuration = 300;
+// Starts an Apify run and returns — it never waits for the scrape to finish.
+export const maxDuration = 60;
+
+const PLATFORM = 'instagram';
+/** Matches the Discover client's limit (today's effective search target). */
+const DEFAULT_LIMIT = 24;
+const CACHE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const bodySchema = z.object({
   query: z.string().trim().max(100).optional(),
   hashtag: z.string().trim().max(100).optional(),
   limit: z.number().int().min(1).max(30).optional(),
   refresh: z.boolean().optional(),
+  /** 최신 결과로 재검색 — ignore the 24h cache and start a new run. */
+  force: z.boolean().optional(),
   /** Campaign metadata carried from 다시 검색 / 복제 / (future) AI Engine. All nullable. */
   productId: z.string().uuid().optional(),
   title: z.string().trim().max(120).optional(),
@@ -29,24 +36,6 @@ const bodySchema = z.object({
 });
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- DB rows are loosely typed here */
-function creatorToRow(c: InstagramCreator, userId: string) {
-  return {
-    user_id: userId,
-    platform: 'instagram',
-    external_id: c.id,
-    username: c.username,
-    display_name: c.displayName,
-    profile_url: c.profileUrl,
-    profile_image_url: c.profileImageUrl,
-    biography: c.biography,
-    followers_count: c.followersCount,
-    following_count: c.followingCount,
-    posts_count: c.postsCount,
-    is_verified: c.isVerified,
-    category: c.category,
-    raw_data: c.rawData,
-  };
-}
 
 function rowToCreator(r: any): InstagramCreator {
   return {
@@ -65,18 +54,17 @@ function rowToCreator(r: any): InstagramCreator {
     rawData: r.raw_data,
   };
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 /**
- * POST /api/discover/instagram — real Instagram creator discovery.
+ * POST /api/discover/instagram — start a creator search.
  *
- * The source is selected by DISCOVERY_PROVIDER (see `getDiscoveryProvider`):
- *  - 'worker': serve the user's `discovered_creators` from Supabase and enqueue a
- *    `discovery_jobs` row that the local Playwright worker (packages/worker) picks
- *    up. The worker fills the table asynchronously; the next visit shows results.
- *  - 'apify': run the Apify actor inline (server-only APIFY_API_TOKEN).
- *  - 'mock' (or unconfigured): { configured: false } so the client keeps mock mode.
- * The browser never calls Apify or the worker directly.
+ * Apify mode is ASYNCHRONOUS: it creates a `running` Campaign, kicks off the
+ * Stage-1 Actor run and returns the campaignId within ~1s. The scrape then
+ * advances via POST /api/campaigns/:id/status (Discover + global poller), so
+ * the user never waits and can navigate freely.
+ *
+ * Cost guards, in order: reuse a same-query `running` campaign → reuse a
+ * ≤24h succeeded campaign (unless `force`) → only then start a new Actor run.
  */
 export const POST = withErrorHandling(async (request: NextRequest) => {
   const provider = getDiscoveryProvider();
@@ -96,8 +84,6 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   }
 
   // ── Worker mode ──────────────────────────────────────────────────────────
-  // Serve already-discovered creators (DB-first), else enqueue a job the local
-  // Playwright worker picks up to fill `discovered_creators` asynchronously.
   if (provider === 'worker') {
     const existing =
       supabase && userId && !body.refresh ? await fetchDiscovered(supabase, userId) : [];
@@ -113,81 +99,164 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     return ok({ configured: true, queued: true, creators: current });
   }
 
-  // ── Apify mode (keyword search → Campaign) ───────────────────────────────
-  // Each search is a CAMPAIGN: create it (status 'running'), run Apify, upsert
-  // `discovered_creators`, snapshot all results into `campaign_results`, then
-  // complete the campaign (or mark it failed). Returns the campaign's id.
-  const query = (body.query ?? body.hashtag ?? '').trim();
-  if (!query) {
-    return ok({ configured: true, creators: [] as InstagramCreator[] });
+  // ── Apify mode (async Campaign search) ───────────────────────────────────
+  const rawQuery = (body.query ?? body.hashtag ?? '').trim();
+  if (!rawQuery) {
+    return ok({ configured: true, campaignId: null, status: 'idle' as const });
   }
 
-  let campaignId: string | null = null;
-  if (supabase && userId) {
-    campaignId = await createCampaign(supabase, userId, query, {
-      title: body.title?.trim() || query,
-      productId: body.productId ?? null,
-      brand: body.brand ?? null,
-      season: body.season ?? null,
-      goal: body.goal ?? null,
-      memo: body.memo ?? null,
-      label: body.label ?? 'active',
-      source: body.source ?? 'manual',
+  // A Campaign is the unit of a search — without a signed-in user there's nothing
+  // to persist to, so fall back to mock mode (never mixed with real data).
+  if (!supabase || !userId) {
+    return ok({ configured: false, creators: [] as InstagramCreator[] });
+  }
+
+  const qNorm = normalizeQuery(rawQuery);
+
+  // 1) Same-query run already in flight → reuse it, never start a second Actor.
+  const running = await findRunning(supabase, userId, qNorm);
+  if (running) {
+    return ok({
+      configured: true,
+      campaignId: running,
+      status: 'running' as const,
+      reusedRunning: true,
     });
   }
 
-  let creators: InstagramCreator[];
-  try {
-    creators = await runInstagramDiscovery({ query, limit: body.limit ?? 24 });
-  } catch (err) {
-    if (supabase && userId && campaignId) {
-      const message = err instanceof Error ? err.message : 'search_failed';
-      await updateCampaign(supabase, campaignId, {
-        status: 'failed',
-        error: message,
-        result_count: 0,
+  // 2) 24h cache — reuse a succeeded campaign that actually has results.
+  if (!body.force) {
+    const cached = await findCached(supabase, userId, qNorm);
+    if (cached) {
+      return ok({
+        configured: true,
+        campaignId: cached,
+        status: 'succeeded' as const,
+        cached: true,
       });
     }
-    throw err;
   }
 
-  // `resultsSaved` tells the client whether the campaign_results snapshot persisted.
-  // A campaign is only marked 'succeeded' (with a result_count) when its snapshot saved.
-  let resultsSaved = true;
-  if (supabase && userId) {
-    if (creators.length > 0) {
-      const { error: dcError } = await supabase.from('discovered_creators').upsert(
-        creators.map((c) => creatorToRow(c, userId as string)),
-        { onConflict: 'user_id,platform,external_id' },
-      );
-      if (dcError) {
-        console.error(`[discover] discovered_creators upsert failed: ${formatDbError(dcError)}`);
-      }
-    }
-    if (campaignId) {
-      const saveError = await saveResults(supabase, userId, campaignId, query, creators);
-      if (saveError) {
-        // Snapshot save FAILED → surface the real PostgREST error, keep the campaign
-        // out of 'succeeded', and do NOT record a result_count (only saved on success).
-        console.error(
-          `[discover] campaign_results insert failed (campaign ${campaignId}): ${formatDbError(saveError)}`,
-        );
-        await updateCampaign(supabase, campaignId, {
-          status: 'failed',
-          error: `검색 결과 저장 실패: ${saveError.message}`,
-        });
-        resultsSaved = false;
-      } else {
-        await updateCampaign(supabase, campaignId, {
-          status: 'succeeded',
-          result_count: creators.length,
-        });
-      }
-    }
+  // 3) Create the running Campaign (query stored as the user typed it).
+  const created = await createCampaign(supabase, userId, rawQuery, {
+    title: body.title?.trim() || rawQuery,
+    productId: body.productId ?? null,
+    brand: body.brand ?? null,
+    season: body.season ?? null,
+    goal: body.goal ?? null,
+    memo: body.memo ?? null,
+    label: body.label ?? 'active',
+    source: body.source ?? 'manual',
+  });
+  if (!created) {
+    return ok({
+      configured: true,
+      campaignId: null,
+      status: 'failed' as const,
+      error: '검색을 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    });
+  }
+  // Lost the insert race → another request already owns this running search.
+  if (created.reused) {
+    return ok({
+      configured: true,
+      campaignId: created.id,
+      status: 'running' as const,
+      reusedRunning: true,
+    });
   }
 
-  return ok({ configured: true, creators, campaignId, resultsSaved });
+  // 4) Kick off Stage 1 and return immediately.
+  try {
+    const started = await startActorRun(stage1Input(rawQuery, body.limit ?? DEFAULT_LIMIT));
+    await supabase
+      .from('campaigns')
+      .update({
+        apify_run_id: started.runId,
+        apify_dataset_id: started.datasetId,
+        apify_stage: 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', created.id)
+      .eq('status', 'running');
+  } catch (err) {
+    // Never leave a Campaign stuck 'running' — release the lock and surface why.
+    const message = err instanceof Error ? err.message : '검색을 시작하지 못했습니다.';
+    console.error(`[discover] Apify run start failed (campaign ${created.id}): ${message}`);
+    await supabase
+      .from('campaigns')
+      .update({
+        status: 'failed',
+        error: message,
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        apify_run_id: null,
+      })
+      .eq('id', created.id)
+      .eq('status', 'running');
+    return ok({
+      configured: true,
+      campaignId: created.id,
+      status: 'failed' as const,
+      error: message,
+    });
+  }
+
+  return ok({
+    configured: true,
+    campaignId: created.id,
+    status: 'running' as const,
+    cached: false,
+  });
 });
+
+/** A same-user/platform/query campaign that is still running → its id. */
+async function findRunning(
+  supabase: Awaited<ReturnType<typeof getSupabase>>,
+  userId: string,
+  qNorm: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('campaigns')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('platform', PLATFORM)
+    .eq('query_norm', qNorm)
+    .eq('status', 'running')
+    .limit(1);
+  return (data as any[] | null)?.[0]?.id ?? null;
+}
+
+/** A ≤24h succeeded campaign for the same query that really has results → its id. */
+async function findCached(
+  supabase: Awaited<ReturnType<typeof getSupabase>>,
+  userId: string,
+  qNorm: string,
+): Promise<string | null> {
+  const since = new Date(Date.now() - CACHE_WINDOW_MS).toISOString();
+  const { data } = await supabase
+    .from('campaigns')
+    .select('id,created_at,completed_at')
+    .eq('user_id', userId)
+    .eq('platform', PLATFORM)
+    .eq('query_norm', qNorm)
+    .eq('status', 'succeeded')
+    .order('created_at', { ascending: false })
+    .limit(5);
+
+  for (const row of (data as any[] | null) ?? []) {
+    const at = row.completed_at ?? row.created_at;
+    if (!at || at < since) continue;
+    // result_count alone isn't trusted — the snapshots must actually exist.
+    const { count } = await supabase
+      .from('campaign_results')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('campaign_id', row.id);
+    if ((count ?? 0) > 0) return row.id as string;
+  }
+  return null;
+}
 
 type CampaignMetaInput = {
   title: string;
@@ -200,117 +269,50 @@ type CampaignMetaInput = {
   source: string;
 };
 
-/** Create a Campaign (status 'running'); returns its id or null on failure. */
+/**
+ * Create a `running` Campaign. `query` keeps the user's raw input; the DB's
+ * generated `query_norm` is what the unique index and lookups compare on.
+ * A unique violation means a concurrent request won — we return that campaign
+ * instead of starting another Actor.
+ */
 async function createCampaign(
   supabase: Awaited<ReturnType<typeof getSupabase>>,
   userId: string,
   query: string,
   meta: CampaignMetaInput,
-): Promise<string | null> {
-  try {
-    const { data, error } = await supabase
-      .from('campaigns')
-      .insert({
-        user_id: userId,
-        query,
-        title: meta.title,
-        platform: 'instagram',
-        status: 'running',
-        result_count: 0,
-        product_id: meta.productId,
-        brand: meta.brand,
-        season: meta.season,
-        goal: meta.goal,
-        memo: meta.memo,
-        label: meta.label,
-        source: meta.source,
-      })
-      .select('id')
-      .single();
-    if (error) return null;
-    return (data as { id: string }).id;
-  } catch {
-    return null;
+): Promise<{ id: string; reused: boolean } | null> {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('campaigns')
+    .insert({
+      user_id: userId,
+      query,
+      title: meta.title,
+      platform: PLATFORM,
+      status: 'running',
+      result_count: 0,
+      product_id: meta.productId,
+      brand: meta.brand,
+      season: meta.season,
+      goal: meta.goal,
+      memo: meta.memo,
+      label: meta.label,
+      source: meta.source,
+      started_at: now,
+      updated_at: now,
+    })
+    .select('id')
+    .single();
+
+  if (!error) return { id: (data as { id: string }).id, reused: false };
+
+  // 23505 = unique_violation → campaigns_one_running_uniq caught a duplicate.
+  if ((error as any).code === '23505') {
+    const existing = await findRunning(supabase, userId, normalizeQuery(query));
+    if (existing) return { id: existing, reused: true };
   }
-}
-
-/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-async function updateCampaign(
-  supabase: Awaited<ReturnType<typeof getSupabase>>,
-  campaignId: string,
-  patch: Record<string, any>,
-): Promise<void> {
-  try {
-    await supabase
-      .from('campaigns')
-      .update({ ...patch, updated_at: new Date().toISOString() })
-      .eq('id', campaignId);
-  } catch {
-    /* best-effort */
-  }
-}
-
-/** A DB error shape (PostgREST/Supabase). */
-type DbError = {
-  message: string;
-  details?: string | null;
-  hint?: string | null;
-  code?: string | null;
-};
-
-/** Compact one-line rendering of a DB error for server logs. */
-function formatDbError(err: DbError): string {
-  return (
-    err.message +
-    (err.code ? ` [${err.code}]` : '') +
-    (err.details ? ` — ${err.details}` : '') +
-    (err.hint ? ` (hint: ${err.hint})` : '')
-  );
-}
-
-/**
- * Snapshot the campaign's results into `campaign_results` (dedup by unique key).
- * Returns the PostgREST error on failure (null on success). Zero creators is a
- * success (nothing to save) — the caller then marks the campaign succeeded.
- */
-async function saveResults(
-  supabase: Awaited<ReturnType<typeof getSupabase>>,
-  userId: string,
-  campaignId: string,
-  query: string,
-  creators: InstagramCreator[],
-): Promise<DbError | null> {
-  if (creators.length === 0) return null;
-  const rows = creators.map((c, i) => ({
-    user_id: userId,
-    campaign_id: campaignId,
-    creator_id: c.id,
-    platform: 'instagram',
-    rank: i + 1,
-    search_keyword: query,
-    creator_snapshot: {
-      externalId: c.id,
-      username: c.username,
-      displayName: c.displayName,
-      profileUrl: c.profileUrl,
-      profileImageUrl: c.profileImageUrl,
-      biography: c.biography,
-      followersCount: c.followersCount,
-      followingCount: c.followingCount,
-      postsCount: c.postsCount,
-      isVerified: c.isVerified,
-      category: c.category,
-    },
-  }));
-  try {
-    const { error } = await supabase
-      .from('campaign_results')
-      .upsert(rows, { onConflict: 'user_id,campaign_id,creator_id', ignoreDuplicates: true });
-    return error ?? null;
-  } catch (err) {
-    // Unexpected throw (network, etc.) — surface it like a DB error.
-    return { message: err instanceof Error ? err.message : 'unknown error saving results' };
-  }
+  console.error(`[discover] campaign insert failed: ${error.message}`);
+  return null;
 }
 
 /** Read a user's previously discovered Instagram creators (newest first). */

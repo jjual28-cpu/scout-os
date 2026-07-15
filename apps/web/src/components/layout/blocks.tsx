@@ -1,24 +1,28 @@
+import Link from 'next/link';
 import { type ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
 
 /** A KPI tile: colored icon, label, big number. Delta is optional — omit when
- *  there's no real comparison data (never fabricate one). */
+ *  there's no real comparison data (never fabricate one). When `href` is set the
+ *  whole card is a link (not just the number). */
 export function StatCard({
   icon,
   label,
   value,
   iconClassName,
   delta,
+  href,
 }: {
   icon: ReactNode;
   label: string;
   value: ReactNode;
   iconClassName?: string;
   delta?: ReactNode;
+  href?: string;
 }) {
-  return (
-    <div className="bg-card rounded-xl border p-5">
+  const body = (
+    <>
       <div className="text-muted-foreground flex items-center gap-2">
         <span
           className={cn(
@@ -36,8 +40,20 @@ export function StatCard({
         </p>
         {delta ? <span className="pb-0.5 text-xs">{delta}</span> : null}
       </div>
-    </div>
+    </>
   );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="bg-card hover:border-primary/40 block rounded-xl border p-5 transition-all duration-150 hover:-translate-y-px"
+      >
+        {body}
+      </Link>
+    );
+  }
+  return <div className="bg-card rounded-xl border p-5">{body}</div>;
 }
 
 /** A titled card section with an optional right-aligned action slot. */

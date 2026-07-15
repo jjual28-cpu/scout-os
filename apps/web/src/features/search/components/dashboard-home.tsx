@@ -117,10 +117,26 @@ export function DashboardHome() {
           icon={<Megaphone className="size-4" />}
           label="진행 중 캠페인"
           value={kpis.activeCampaigns}
+          href="/campaigns?status=running"
         />
-        <StatCard icon={<Users className="size-4" />} label="발견한 셀럽" value={kpis.discovered} />
-        <StatCard icon={<MessageSquare className="size-4" />} label="DM 발송" value={kpis.dmSent} />
-        <StatCard icon={<Reply className="size-4" />} label="답변 받음" value={kpis.replies} />
+        <StatCard
+          icon={<Users className="size-4" />}
+          label="발견한 셀럽"
+          value={kpis.discovered}
+          href="/campaigns"
+        />
+        <StatCard
+          icon={<MessageSquare className="size-4" />}
+          label="DM 발송"
+          value={kpis.dmSent}
+          href="/outreach"
+        />
+        <StatCard
+          icon={<Reply className="size-4" />}
+          label="답변 받음"
+          value={kpis.replies}
+          href="/crm"
+        />
       </div>
 
       {/* Recent campaigns */}

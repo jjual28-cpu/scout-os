@@ -274,6 +274,10 @@ export function CampaignDetail({ id }: { id: string }) {
           >
             <Star className={cn('size-4', campaign.favorite && 'fill-amber-500 text-amber-500')} />
           </Button>
+          {/* Opens this campaign in Discover — restores results, never re-searches. */}
+          <Button asChild variant="outline">
+            <Link href={`/discover?campaign=${campaign.id}`}>결과 보기</Link>
+          </Button>
           <Button variant="outline" onClick={research}>
             <RefreshCw className="size-4" />
             다시 검색

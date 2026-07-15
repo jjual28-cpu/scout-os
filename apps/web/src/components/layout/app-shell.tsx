@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { CampaignPoller } from '@/features/campaigns/components/campaign-poller';
 import { cn } from '@/lib/utils';
 
 import { AppHeader } from './app-header';
@@ -58,6 +59,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <AppHeader onOpenMenu={() => setOpen(true)} />
         <main className="flex-1">{children}</main>
       </div>
+
+      {/* Keeps an in-flight search advancing while the user browses other menus. */}
+      <CampaignPoller />
     </div>
   );
 }

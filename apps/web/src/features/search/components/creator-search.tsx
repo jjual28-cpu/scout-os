@@ -11,6 +11,7 @@ import {
   MessageSquarePlus,
   Music2,
   Package,
+  RefreshCw,
   Search,
   SearchX,
   SlidersHorizontal,
@@ -21,10 +22,9 @@ import {
   ArrowRight,
   History,
   EyeOff,
-  AlertTriangle,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { EmptyState } from '@/components/layout/blocks';
 import { PageHeader } from '@/components/layout/page-header';
@@ -32,10 +32,15 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
+import * as runStore from '@/features/campaigns/campaign-run-store';
 import { useCampaigns } from '@/features/campaigns/hooks/use-campaigns';
 import { consumeCampaignDraft } from '@/features/campaigns/draft';
-import { type CampaignDraft } from '@/features/campaigns/types';
+import { getLastViewedCampaign, setLastViewedCampaign } from '@/features/campaigns/last-viewed';
+import { getLatestCampaign, listResults } from '@/features/campaigns/services/campaign-service';
+import { type CampaignDraft, type CampaignResult } from '@/features/campaigns/types';
 import { useProducts } from '@/features/products/hooks/use-products';
+import { isSupabaseConfigured } from '@/lib/env';
+import { createClient } from '@/lib/supabase/client';
 
 import { isDefaultHidden } from '../creator-status';
 import { DISCOVER_CATEGORIES, type DiscoverOpportunity } from '../discover-mock';
@@ -45,6 +50,26 @@ import { toDiscoverOpportunity, type InstagramCreator } from '../instagram';
 import { keywordEmoji } from '../keyword';
 import { summarizeResults } from '../recommend';
 import { DiscoverCard } from './discover-card';
+
+/** A stored campaign_results snapshot → the same card shape the live search uses. */
+function snapshotToOpportunity(s: CampaignResult): DiscoverOpportunity {
+  const creator: InstagramCreator = {
+    id: s.externalId,
+    platform: 'instagram',
+    username: s.username,
+    displayName: s.displayName,
+    profileUrl: s.profileUrl,
+    profileImageUrl: s.profileImageUrl,
+    biography: s.biography,
+    followersCount: s.followersCount,
+    followingCount: s.followingCount,
+    postsCount: s.postsCount,
+    isVerified: s.isVerified,
+    category: s.category,
+    rawData: null,
+  };
+  return toDiscoverOpportunity(creator);
+}
 
 const POPULAR = [
   '뷰티',
@@ -58,8 +83,6 @@ const POPULAR = [
   '육아',
   '맛집',
 ];
-const RECENT_KEY = 'scout:recent-searches';
-const MAX_RECENT = 8;
 
 const PLATFORMS = [
   { id: 'instagram', label: 'Instagram', icon: Instagram, enabled: true },
@@ -99,23 +122,6 @@ function inBucket(f: number, b: Bucket): boolean {
   return f >= 50_000;
 }
 
-function readRecent(): string[] {
-  try {
-    const raw = window.localStorage.getItem(RECENT_KEY);
-    return raw ? (JSON.parse(raw) as string[]) : [];
-  } catch {
-    return [];
-  }
-}
-function pushRecent(query: string): string[] {
-  const next = [query, ...readRecent().filter((q) => q !== query)].slice(0, MAX_RECENT);
-  try {
-    window.localStorage.setItem(RECENT_KEY, JSON.stringify(next));
-  } catch {
-    /* ignore */
-  }
-  return next;
-}
 function relativeTime(ts: number | null): string {
   if (!ts) return '';
   const s = Math.floor((Date.now() - ts) / 1000);
@@ -125,6 +131,73 @@ function relativeTime(ts: number | null): string {
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}시간 전`;
   return `${Math.floor(h / 24)}일 전`;
+}
+
+/** HH:MM of an ISO timestamp. */
+function clock(iso: string | null): string | null {
+  if (!iso) return null;
+  try {
+    return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return null;
+  }
+}
+
+/** Search duration (started → completed), auto-calculated. */
+function durationLabel(startedAt: string | null, completedAt: string | null): string | null {
+  if (!startedAt || !completedAt) return null;
+  const ms = new Date(completedAt).getTime() - new Date(startedAt).getTime();
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  const s = Math.round(ms / 1000);
+  return s < 60 ? `${s}초` : `${Math.floor(s / 60)}분 ${s % 60}초`;
+}
+
+const STAGES = [
+  { n: 1, label: '프로필 수집' },
+  { n: 2, label: '게시물 분석' },
+  { n: 3, label: '상세 분석' },
+] as const;
+
+/** Stage 1 → 2 → 3 tracker: done = check, current = emphasized, pending = muted. */
+function StageTracker({ stage, progress }: { stage: number; progress: number }) {
+  return (
+    <div className="mt-5">
+      <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
+        <div
+          className="bg-primary h-full rounded-full transition-all duration-500"
+          style={{ width: `${Math.max(5, Math.min(progress, 100))}%` }}
+        />
+      </div>
+      <ol className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5">
+        {STAGES.map((s) => {
+          const done = stage > s.n;
+          const current = stage === s.n;
+          return (
+            <li
+              key={s.n}
+              className={cn(
+                'flex items-center gap-1.5 text-xs',
+                current
+                  ? 'text-foreground font-medium'
+                  : done
+                    ? 'text-muted-foreground'
+                    : 'text-muted-foreground/50',
+              )}
+            >
+              {done ? (
+                <Check className="size-3.5 text-emerald-600" />
+              ) : current ? (
+                <Loader2 className="text-primary size-3.5 animate-spin" />
+              ) : (
+                <span className="bg-muted-foreground/30 size-1.5 rounded-full" />
+              )}
+              Stage {s.n} · {s.label}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
 }
 
 /** Mock fallback used ONLY when Apify isn't configured (never mixed with real data). */
@@ -141,7 +214,6 @@ export function CreatorSearch() {
   const [items, setItems] = useState<DiscoverOpportunity[]>([]);
   const [searchedAt, setSearchedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [recent, setRecent] = useState<string[]>([]);
   const reqId = useRef(0);
 
   // Workspace controls
@@ -150,7 +222,12 @@ export function CreatorSearch() {
   const [sort, setSort] = useState<SortKey>('recommended');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [campaignId, setCampaignId] = useState<string | null>(null);
-  const [saveFailed, setSaveFailed] = useState(false);
+  const [cached, setCached] = useState(false);
+  const [restoring, setRestoring] = useState(true);
+  const [times, setTimes] = useState<{ startedAt: string | null; completedAt: string | null }>({
+    startedAt: null,
+    completedAt: null,
+  });
   const [hideHandled, setHideHandled] = useState(true);
 
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
@@ -160,39 +237,158 @@ export function CreatorSearch() {
   const products = useProducts();
   const { campaigns } = useCampaigns();
 
+  // Global poller's view of in-flight searches → auto-refresh when ours finishes.
+  const runSnap = useSyncExternalStore(
+    runStore.subscribe,
+    runStore.getSnapshot,
+    runStore.getServerSnapshot,
+  );
+
   // Metadata carried in from a Campaign (다시 검색 / 복제); applied to the next
   // search then cleared so later manual searches aren't tagged with stale meta.
   const draftMeta = useRef<CampaignDraft | null>(null);
 
+  /** Load a campaign + its stored results — the single source of truth for the view.
+   *  Returns false when the campaign can't be opened (e.g. deleted), so callers
+   *  can fall back to the next restore candidate. */
+  const openCampaign = useCallback(async (id: string): Promise<boolean> => {
+    if (!isSupabaseConfigured()) return false;
+    try {
+      const sb = createClient();
+      const {
+        data: { user },
+      } = await sb.auth.getUser();
+      if (!user) return false;
+      const { data: row } = await sb
+        .from('campaigns')
+        .select('id,query,status,error,created_at,completed_at,started_at')
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (!row) return false;
+      const c = row as unknown as {
+        id: string;
+        query: string;
+        status: 'running' | 'succeeded' | 'failed';
+        error: string | null;
+        created_at: string;
+        completed_at: string | null;
+        started_at: string | null;
+      };
+
+      setCampaignId(c.id);
+      setLastViewedCampaign(c.id); // Discover reopens this session next time
+      setKeyword(c.query);
+      setInput(c.query); // the search box always carries the campaign's query
+      setSearchedAt(new Date(c.completed_at ?? c.created_at).getTime());
+      setTimes({ startedAt: c.started_at, completedAt: c.completed_at });
+
+      if (c.status === 'running') {
+        setPhase('searching');
+        setError(null);
+        return true;
+      }
+      if (c.status === 'failed') {
+        setPhase('done');
+        setItems([]);
+        setError(c.error ?? '검색이 실패했습니다. 다시 검색해 주세요.');
+        return true;
+      }
+      const results = await listResults(sb, user.id, c.id);
+      setItems(results.map(snapshotToOpportunity));
+      setError(null);
+      setPhase('done');
+      return true;
+    } catch {
+      return false; // leave the current view untouched
+    }
+  }, []);
+
+  // ── Restore on entry: Discover is a Campaign Viewer, never a blank screen ──
   useEffect(() => {
-    setRecent(readRecent());
     const draft = consumeCampaignDraft();
     if (draft) {
       draftMeta.current = draft;
       setInput(draft.query);
       setKeyword(draft.query);
       if (draft.productId) setSelectedProductId(draft.productId);
-      if (draft.autoRun) void runSearch(draft.query);
+      setRestoring(false);
+      if (draft.autoRun) void runSearch(draft.query, true);
+      return;
     }
+    (async () => {
+      if (!isSupabaseConfigured()) {
+        setRestoring(false);
+        return;
+      }
+      try {
+        const sb = createClient();
+        const {
+          data: { user },
+        } = await sb.auth.getUser();
+        if (!user) {
+          setRestoring(false);
+          return;
+        }
+        // Restore priority: ?campaign=<id> (Campaign 상세 → 결과 보기)
+        //   → the session the user last had open → newest running/succeeded/failed.
+        // Reading location directly avoids forcing a Suspense boundary here.
+        const fromUrl = new URLSearchParams(window.location.search).get('campaign');
+        const target = fromUrl ?? getLastViewedCampaign();
+        // never re-runs Apify — results come straight from the DB
+        if (target && (await openCampaign(target))) return;
+        const latest = await getLatestCampaign(sb, user.id);
+        if (latest) await openCampaign(latest.id);
+      } catch {
+        /* fall through to the empty start screen */
+      } finally {
+        setRestoring(false);
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function runSearch(raw: string) {
+  // The global poller finished our campaign → pull the saved results in.
+  const myStatus = campaignId ? runSnap.statuses[campaignId] : undefined;
+  useEffect(() => {
+    if (!campaignId) return;
+    if (myStatus === 'succeeded' || myStatus === 'failed') void openCampaign(campaignId);
+  }, [campaignId, myStatus, openCampaign]);
+
+  /** Stage/progress reported by the global poller for the campaign on screen. */
+  const liveDetail = campaignId ? runSnap.details[campaignId] : undefined;
+
+  // Live "N초 경과" while a search is running (1s tick, only while running).
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (phase !== 'searching') return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [phase]);
+  const elapsedLabel = useMemo(() => {
+    if (phase !== 'searching' || !times.startedAt) return null;
+    const s = Math.max(0, Math.round((now - new Date(times.startedAt).getTime()) / 1000));
+    return s < 60 ? `${s}초` : `${Math.floor(s / 60)}분 ${s % 60}초`;
+  }, [phase, times.startedAt, now]);
+
+  /**
+   * Start a search. The POST returns a campaignId within ~1s — it never waits for
+   * Apify. `force` = 최신 결과로 재검색 (ignores the 24h cache).
+   */
+  async function runSearch(raw: string, force = false) {
     const q = raw.trim();
     if (!q) return;
-    if (phase === 'searching') return; // prevent duplicate Apify calls while one is in flight
+    if (phase === 'searching') return; // a run is already in flight
     setInput(q);
     setKeyword(q);
     setError(null);
     setPhase('searching');
     setSelected(new Set());
-    setCampaignId(null);
-    setSaveFailed(false);
-    setRecent(pushRecent(q));
+    setCached(false);
 
     const meta = draftMeta.current;
     draftMeta.current = null; // one-shot
-    const body: Record<string, unknown> = { query: q, limit: 24 };
+    const body: Record<string, unknown> = { query: q, limit: 24, force };
     if (meta) {
       if (meta.title) body.title = meta.title;
       if (meta.brand) body.brand = meta.brand;
@@ -215,33 +411,60 @@ export function CreatorSearch() {
       const json = (await res.json().catch(() => null)) as {
         data?: {
           configured: boolean;
-          creators: InstagramCreator[];
+          creators?: InstagramCreator[];
           campaignId?: string | null;
-          resultsSaved?: boolean;
+          status?: 'running' | 'succeeded' | 'failed' | 'idle';
+          cached?: boolean;
+          error?: string;
         };
       } | null;
       if (my !== reqId.current) return; // superseded by a newer search
 
       const data = json?.data;
-      if (data?.configured && Array.isArray(data.creators)) {
-        setItems(data.creators.map(toDiscoverOpportunity));
-        setCampaignId(data.campaignId ?? null);
-        setSaveFailed(data.campaignId != null && data.resultsSaved === false);
-      } else if (data && data.configured === false) {
-        setItems(MOCK_ITEMS); // Apify unconfigured → mock only (never mixed)
-      } else {
-        setItems([]);
+
+      // Apify/Supabase unavailable (e.g. signed out) → mock only, never mixed.
+      if (data && data.configured === false) {
+        setItems(MOCK_ITEMS);
+        setSearchedAt(Date.now());
+        setPhase('done');
+        return;
       }
-      setSearchedAt(Date.now());
-      setPhase('done');
+      if (!data?.campaignId) {
+        setError(data?.error ?? '검색을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.');
+        setPhase('done');
+        return;
+      }
+
+      setCampaignId(data.campaignId);
+      setCached(Boolean(data.cached));
+      if (data.status === 'succeeded') {
+        await openCampaign(data.campaignId); // cache hit → results are already stored
+      } else if (data.status === 'failed') {
+        setError(data.error ?? '검색이 실패했습니다. 다시 검색해 주세요.');
+        setPhase('done');
+      } else {
+        // running — the global poller drives it to completion, even off this page.
+        runStore.setRunStatus(data.campaignId, 'running', q);
+        setPhase('searching');
+      }
     } catch {
       if (my !== reqId.current) return;
       setError('검색 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.');
-      setItems([]);
-      setSearchedAt(Date.now());
       setPhase('done');
     }
   }
+
+  /** 다른 검색 시작 — clear the view only; the campaign and its results stay. */
+  const startNewSearch = () => {
+    setPhase('idle');
+    setItems([]);
+    setKeyword('');
+    setInput('');
+    setCampaignId(null);
+    setCached(false);
+    setError(null);
+    setSelected(new Set());
+  };
 
   // Creators hidden ONLY because they're already handled (연락완료/답변/협업/제외).
   // The DB keeps the full result set — this filter is screen-only.
@@ -319,6 +542,22 @@ export function CreatorSearch() {
     [campaigns],
   );
 
+  /** Search sessions for the rail — Campaign-centric, so an AI multi-keyword run
+   *  later just shows up as more sessions here. */
+  const sessions = useMemo(
+    () =>
+      [...campaigns]
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, 6)
+        .map((c) => ({
+          id: c.id,
+          query: c.query,
+          status: c.status,
+          count: c.summary?.discovered ?? c.resultCount ?? 0,
+        })),
+    [campaigns],
+  );
+
   // ── Search Rail body (product / keywords / filters / recent campaigns) ──────
   const railBody = (
     <div className="space-y-6">
@@ -347,14 +586,45 @@ export function CreatorSearch() {
         onPick={(c) => void runSearch(c)}
       />
 
-      {recent.length > 0 ? (
-        <ChipRow
-          icon={<Clock className="size-3.5" />}
-          label="최근 검색"
-          chips={recent}
-          variant="soft"
-          onPick={(c) => void runSearch(c)}
-        />
+      {/* Search sessions — click restores the Campaign from the DB, never re-runs Apify */}
+      {sessions.length > 0 ? (
+        <div>
+          <RailLabel icon={<Clock className="size-3.5" />}>검색 세션</RailLabel>
+          <div className="space-y-1">
+            {sessions.map((s) => {
+              const active = s.id === campaignId;
+              const live = runSnap.statuses[s.id] ?? s.status;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => void openCampaign(s.id)}
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors',
+                    active
+                      ? 'bg-primary/10 text-primary'
+                      : 'dark:hover:bg-muted hover:bg-slate-100',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'size-1.5 shrink-0 rounded-full',
+                      live === 'running'
+                        ? 'bg-amber-500'
+                        : live === 'failed'
+                          ? 'bg-rose-500'
+                          : 'bg-emerald-500',
+                    )}
+                  />
+                  <span className="min-w-0 flex-1 truncate text-sm">{s.query}</span>
+                  <span className="text-muted-foreground shrink-0 text-[11px]">
+                    {live === 'running' ? '검색중' : live === 'failed' ? '실패' : `${s.count}명`}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       ) : null}
 
       <div>
@@ -416,152 +686,200 @@ export function CreatorSearch() {
     </div>
   );
 
-  const resultsWorkspace =
-    phase === 'idle' ? (
-      <EmptyState
-        className="min-h-[340px] justify-center"
-        icon={<Search className="size-5" />}
-        title="셀럽을 검색해보세요"
-        description="키워드를 입력하거나 추천 키워드를 눌러 검색을 시작하세요."
-      />
-    ) : phase === 'searching' ? (
-      <div>
-        <div className="text-muted-foreground flex items-center gap-2 text-sm">
+  const resultsWorkspace = restoring ? (
+    <div>
+      <Skeleton className="h-6 w-40 rounded" />
+      {skeletons}
+    </div>
+  ) : phase === 'idle' ? (
+    <EmptyState
+      className="min-h-[340px] justify-center"
+      icon={<Search className="size-5" />}
+      title="셀럽을 검색해보세요"
+      description="키워드를 입력하거나 추천 키워드를 눌러 검색을 시작하세요."
+    />
+  ) : phase === 'searching' ? (
+    <div>
+      <div className="dark:border-border rounded-xl border border-slate-200/60 p-5">
+        <p className="flex items-center gap-2 text-base font-semibold">
           <Loader2 className="text-primary size-4 animate-spin" />
-          <span>
-            <span className="text-foreground font-medium">‘{keyword}’</span> 셀럽을 찾는 중…
-          </span>
-        </div>
-        <div className="bg-muted mt-4 h-1.5 w-full overflow-hidden rounded-full">
-          <div className="bg-primary h-full w-2/5 animate-pulse rounded-full" />
-        </div>
-        <p className="text-muted-foreground mt-3 text-xs">
-          인스타그램 검색 → 프로필 수집 → 추천 이유 분석 · 예상 20~30초
+          셀럽을 찾고 있어요
         </p>
-        {skeletons}
-      </div>
-    ) : (
-      <>
-        {error ? (
-          <div className="border-destructive/30 bg-destructive/10 text-destructive mb-6 rounded-xl border p-3 text-sm">
-            {error}
-          </div>
+        <p className="text-muted-foreground mt-1.5 text-sm">
+          ‘{keyword}’ · 예상 소요시간 20~40초
+          {elapsedLabel ? ` · 진행 중 · ${elapsedLabel} 경과` : ''}
+        </p>
+        <p className="text-muted-foreground mt-1 text-sm">
+          다른 메뉴를 이용하셔도 됩니다. 검색은 계속 진행됩니다.
+        </p>
+        {clock(times.startedAt) ? (
+          <p className="text-muted-foreground mt-1 text-xs">검색 시작 {clock(times.startedAt)}</p>
         ) : null}
 
-        {items.length > 0 ? (
-          <>
-            {/* Results header */}
-            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl leading-none">{keywordEmoji(keyword)}</span>
-                  <h2 className="truncate text-xl font-semibold tracking-tight">{keyword}</h2>
-                </div>
-                <p className="text-muted-foreground mt-1 text-sm">
-                  Instagram · 셀럽{' '}
-                  <span className="text-foreground font-medium">{visible.length}명</span>
-                  {visible.length !== items.length ? ` / ${items.length}명` : ''} ·{' '}
-                  {relativeTime(searchedAt)}
-                </p>
-              </div>
-            </div>
+        <StageTracker stage={liveDetail?.stage ?? 1} progress={liveDetail?.progress ?? 30} />
 
-            {/* Save state */}
-            {saveFailed ? (
-              <div className="border-destructive/30 bg-destructive/10 text-destructive mb-5 flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm">
-                <AlertTriangle className="size-4 shrink-0" />
-                검색 결과 저장에 실패했어요. 결과가 캠페인에 저장되지 않았습니다 · 잠시 후 다시
-                시도해 주세요.
+        {campaignId ? (
+          <Button asChild variant="ghost" size="sm" className="-ml-2 mt-3">
+            <Link href={`/campaigns/${campaignId}`}>
+              캠페인에서 상태 보기
+              <ArrowRight className="size-4" />
+            </Link>
+          </Button>
+        ) : null}
+      </div>
+      {skeletons}
+    </div>
+  ) : (
+    <>
+      {error ? (
+        <div className="border-destructive/30 bg-destructive/10 text-destructive mb-6 rounded-xl border p-3 text-sm">
+          {error}
+        </div>
+      ) : null}
+
+      {items.length > 0 ? (
+        <>
+          {/* Results header — search / re-search are explicit, separate actions */}
+          <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xl leading-none">{keywordEmoji(keyword)}</span>
+                <h2 className="truncate text-xl font-semibold tracking-tight">{keyword}</h2>
               </div>
-            ) : campaignId ? (
-              <div className="border-primary/20 bg-primary/[0.04] text-muted-foreground mb-5 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-2.5 text-sm">
-                <span className="inline-flex items-center gap-1.5">
-                  <History className="text-primary size-4" />
-                  캠페인이 만들어졌습니다 · 진행 현황을 캠페인에서 관리하세요.
-                </span>
+              <p className="text-muted-foreground mt-1 text-sm">
+                Instagram · 셀럽{' '}
+                <span className="text-foreground font-medium">{visible.length}명</span>
+                {visible.length !== items.length ? ` / ${items.length}명` : ''} ·{' '}
+                {relativeTime(searchedAt)}
+              </p>
+              {/* 검색 시작 · 완료 · 소요시간 (auto-calculated) */}
+              {clock(times.startedAt) ? (
+                <p className="text-muted-foreground mt-1 text-xs">
+                  검색 시작 {clock(times.startedAt)}
+                  {clock(times.completedAt) ? ` · 완료 ${clock(times.completedAt)}` : ''}
+                  {durationLabel(times.startedAt, times.completedAt)
+                    ? ` · 소요 ${durationLabel(times.startedAt, times.completedAt)}`
+                    : ''}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={startNewSearch}>
+                <Search className="size-4" />
+                다른 검색 시작
+              </Button>
+              <Button type="button" size="sm" onClick={() => void runSearch(keyword, true)}>
+                <RefreshCw className="size-4" />
+                최신 결과로 재검색
+              </Button>
+            </div>
+          </div>
+
+          {/* Reused an existing campaign — say so, and offer the fresh path */}
+          {cached ? (
+            <div className="text-muted-foreground dark:border-border mb-5 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200/60 px-4 py-2.5 text-sm">
+              <span className="inline-flex items-center gap-1.5">
+                <History className="size-4" />
+                최근 검색 결과를 불러왔습니다 · 최신 데이터가 필요하면 재검색하세요.
+              </span>
+              {campaignId ? (
                 <Button asChild variant="ghost" size="sm">
                   <Link href={`/campaigns/${campaignId}`}>
                     캠페인 보기
                     <ArrowRight className="size-4" />
                   </Link>
                 </Button>
-              </div>
-            ) : null}
-
-            {/* AI Summary */}
-            {summary.length > 0 ? (
-              <div className="border-primary/20 bg-primary/[0.04] mb-5 rounded-2xl border p-5">
-                <p className="text-primary flex items-center gap-1.5 text-sm font-semibold">
-                  <Sparkles className="size-4" />
-                  AI Summary
-                </p>
-                <ul className="text-foreground/90 mt-3 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
-                  {summary.map((line) => (
-                    <li key={line} className="flex items-start gap-2">
-                      <span className="bg-primary mt-1.5 size-1.5 shrink-0 rounded-full" />
-                      {line}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            {/* Sort + hidden toggle */}
-            <div className="mb-5 flex flex-wrap items-center gap-2">
-              {hiddenHandledCount > 0 ? (
-                <FilterChip active={!hideHandled} onClick={() => setHideHandled((v) => !v)}>
-                  <EyeOff className="size-3.5" />
-                  이미 연락한 {hiddenHandledCount}명 {hideHandled ? '숨김' : '표시 중'}
-                </FilterChip>
               ) : null}
-              <div className="ml-auto flex items-center gap-1.5">
-                <ArrowUpDown className="text-muted-foreground size-3.5" />
-                <select
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value as SortKey)}
-                  className="border-input bg-background focus-visible:ring-ring rounded-lg border px-2.5 py-1.5 text-sm outline-none focus-visible:ring-2"
-                >
-                  {SORTS.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
             </div>
+          ) : campaignId ? (
+            <div className="border-primary/20 bg-primary/[0.04] text-muted-foreground mb-5 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-2.5 text-sm">
+              <span className="inline-flex items-center gap-1.5">
+                <History className="text-primary size-4" />
+                캠페인이 만들어졌습니다 · 진행 현황을 캠페인에서 관리하세요.
+              </span>
+              <Button asChild variant="ghost" size="sm">
+                <Link href={`/campaigns/${campaignId}`}>
+                  캠페인 보기
+                  <ArrowRight className="size-4" />
+                </Link>
+              </Button>
+            </div>
+          ) : null}
 
-            {visible.length > 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {visible.map((item) => (
-                  <DiscoverCard
-                    key={item.id}
-                    item={item}
-                    keyword={keyword}
-                    selectable
-                    selected={selected.has(item.id)}
-                    onSelectChange={onSelectChange}
-                  />
+          {/* AI Summary */}
+          {summary.length > 0 ? (
+            <div className="border-primary/20 bg-primary/[0.04] mb-5 rounded-2xl border p-5">
+              <p className="text-primary flex items-center gap-1.5 text-sm font-semibold">
+                <Sparkles className="size-4" />
+                AI Summary
+              </p>
+              <ul className="text-foreground/90 mt-3 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+                {summary.map((line) => (
+                  <li key={line} className="flex items-start gap-2">
+                    <span className="bg-primary mt-1.5 size-1.5 shrink-0 rounded-full" />
+                    {line}
+                  </li>
                 ))}
-              </div>
-            ) : (
-              <EmptyState
-                className="min-h-[240px] justify-center"
-                icon={<SearchX className="size-5" />}
-                title="필터 조건에 맞는 셀럽이 없어요"
-                description="필터를 조정해 보세요."
-              />
-            )}
-          </>
-        ) : (
-          <EmptyState
-            className="min-h-[340px] justify-center"
-            icon={<SearchX className="size-5" />}
-            title={`‘${keyword}’ 결과가 없어요`}
-            description="다른 키워드로 다시 검색해보세요."
-          />
-        )}
-      </>
-    );
+              </ul>
+            </div>
+          ) : null}
+
+          {/* Sort + hidden toggle */}
+          <div className="mb-5 flex flex-wrap items-center gap-2">
+            {hiddenHandledCount > 0 ? (
+              <FilterChip active={!hideHandled} onClick={() => setHideHandled((v) => !v)}>
+                <EyeOff className="size-3.5" />
+                이미 연락한 {hiddenHandledCount}명 {hideHandled ? '숨김' : '표시 중'}
+              </FilterChip>
+            ) : null}
+            <div className="ml-auto flex items-center gap-1.5">
+              <ArrowUpDown className="text-muted-foreground size-3.5" />
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value as SortKey)}
+                className="border-input bg-background focus-visible:ring-ring rounded-lg border px-2.5 py-1.5 text-sm outline-none focus-visible:ring-2"
+              >
+                {SORTS.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {visible.length > 0 ? (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {visible.map((item) => (
+                <DiscoverCard
+                  key={item.id}
+                  item={item}
+                  keyword={keyword}
+                  selectable
+                  selected={selected.has(item.id)}
+                  onSelectChange={onSelectChange}
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              className="min-h-[240px] justify-center"
+              icon={<SearchX className="size-5" />}
+              title="필터 조건에 맞는 셀럽이 없어요"
+              description="필터를 조정해 보세요."
+            />
+          )}
+        </>
+      ) : (
+        <EmptyState
+          className="min-h-[340px] justify-center"
+          icon={<SearchX className="size-5" />}
+          title={`‘${keyword}’ 결과가 없어요`}
+          description="다른 키워드로 다시 검색해보세요."
+        />
+      )}
+    </>
+  );
 
   return (
     <div className="relative">
@@ -580,6 +898,7 @@ export function CreatorSearch() {
                 size="md"
                 onChange={setInput}
                 onSubmit={() => void runSearch(input)}
+                disabled={phase === 'searching'}
               />
               <PlatformSelector platform={platform} onSelect={setPlatform} compact />
             </div>
@@ -668,19 +987,22 @@ function SearchField({
   onSubmit,
   size = 'lg',
   autoFocus,
+  disabled,
 }: {
   value: string;
   onChange: (v: string) => void;
   onSubmit: () => void;
   size?: 'lg' | 'md';
   autoFocus?: boolean;
+  /** True while a run is in flight — blocks repeat submits (server dedupes too). */
+  disabled?: boolean;
 }) {
   const big = size === 'lg';
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        onSubmit();
+        if (!disabled) onSubmit();
       }}
       className="w-full"
     >
@@ -705,12 +1027,18 @@ function SearchField({
         <button
           type="submit"
           aria-label="검색"
+          disabled={disabled}
           className={cn(
             'bg-primary text-primary-foreground hover:bg-primary/90 absolute right-2 inline-flex items-center justify-center rounded-xl transition-colors',
             big ? 'size-11' : 'right-1.5 size-8 rounded-lg',
+            disabled && 'pointer-events-none opacity-50',
           )}
         >
-          <ArrowRight className={big ? 'size-5' : 'size-4'} />
+          {disabled ? (
+            <Loader2 className={cn('animate-spin', big ? 'size-5' : 'size-4')} />
+          ) : (
+            <ArrowRight className={big ? 'size-5' : 'size-4'} />
+          )}
         </button>
       </div>
     </form>

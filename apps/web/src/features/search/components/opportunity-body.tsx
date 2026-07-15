@@ -45,39 +45,77 @@ const PLATFORM_META: Record<SearchPlatform, { icon: LucideIcon; label: string }>
  * badges, discovery reason, recommended action). Reused by the search result
  * card and the saved-opportunity card so the visual language stays identical.
  */
-export function OpportunityBody({ result }: { result: SearchResult }) {
+export function OpportunityBody({
+  result,
+  profileHref,
+}: {
+  result: SearchResult;
+  /** When set, the avatar, name, @handle and platform badge all open this in a new tab. */
+  profileHref?: string | null;
+}) {
   const typeMeta = TYPE_META[result.type];
   const platformMeta = PLATFORM_META[result.platform];
   const TypeIcon = typeMeta.icon;
   const PlatformIcon = platformMeta.icon;
+
+  // Wrap a node in an external profile link when we have one.
+  const linked = (node: React.ReactNode, className?: string) =>
+    profileHref ? (
+      <a
+        href={profileHref}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Instagram에서 보기"
+        aria-label="Instagram에서 보기"
+        className={className}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {node}
+      </a>
+    ) : (
+      node
+    );
 
   return (
     <>
       {/* Header: identity + opportunity score */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          {result.profileImageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element -- external IG CDN, unoptimized is fine
-            <img
-              src={result.profileImageUrl}
-              alt={result.name}
-              className="size-11 shrink-0 rounded-xl object-cover"
-            />
-          ) : (
-            <div
-              className={cn(
-                'flex size-11 shrink-0 items-center justify-center rounded-xl',
-                typeMeta.chip,
-              )}
-            >
-              <TypeIcon className="size-5" />
-            </div>
+          {linked(
+            result.profileImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- external IG CDN, unoptimized is fine
+              <img
+                src={result.profileImageUrl}
+                alt={result.name}
+                className="size-11 shrink-0 rounded-xl object-cover"
+              />
+            ) : (
+              <div
+                className={cn(
+                  'flex size-11 shrink-0 items-center justify-center rounded-xl',
+                  typeMeta.chip,
+                )}
+              >
+                <TypeIcon className="size-5" />
+              </div>
+            ),
+            'shrink-0',
           )}
           <div className="min-w-0">
-            <h3 className="truncate text-base font-semibold tracking-tight">{result.name}</h3>
-            {result.handle ? (
-              <p className="text-muted-foreground truncate text-sm">@{result.handle}</p>
-            ) : null}
+            {linked(
+              <h3 className="truncate text-base font-semibold tracking-tight hover:underline">
+                {result.name}
+              </h3>,
+              'block min-w-0',
+            )}
+            {result.handle
+              ? linked(
+                  <p className="text-muted-foreground truncate text-sm hover:underline">
+                    @{result.handle}
+                  </p>,
+                  'block min-w-0',
+                )
+              : null}
             {result.followersCount != null ? (
               <p className="text-muted-foreground truncate text-xs">
                 팔로워 {formatCompactNumber(result.followersCount)}
@@ -92,10 +130,17 @@ export function OpportunityBody({ result }: { result: SearchResult }) {
         <span className="dark:bg-muted dark:text-muted-foreground inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
           {result.type}
         </span>
-        <span className="dark:text-muted-foreground dark:border-border inline-flex items-center gap-1 rounded-md border border-slate-200/70 px-2 py-0.5 text-xs font-medium text-slate-500">
-          <PlatformIcon className="size-3" />
-          {platformMeta.label}
-        </span>
+        {linked(
+          <span
+            className={cn(
+              'dark:text-muted-foreground dark:border-border inline-flex items-center gap-1 rounded-md border border-slate-200/70 px-2 py-0.5 text-xs font-medium text-slate-500',
+              profileHref && 'hover:text-foreground transition-colors hover:border-slate-300',
+            )}
+          >
+            <PlatformIcon className="size-3" />
+            {platformMeta.label}
+          </span>,
+        )}
       </div>
 
       {/* AI 추천 이유 chips */}
