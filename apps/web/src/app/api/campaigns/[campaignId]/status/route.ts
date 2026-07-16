@@ -258,6 +258,15 @@ export const POST = withErrorHandling(
       return ok({ status: 'failed' as const, error: msg });
     }
     if (run.status === 'READY' || run.status === 'RUNNING' || run.status === 'ABORTING') {
+      // Still running — but if it's been stuck well past the expected time, give
+      // up so the campaign never sits on "검색 중" forever (the browser poller may
+      // have been paused for hours). A SUCCEEDED run is handled below and always
+      // collected, so this only fails runs that genuinely never finished.
+      if (stale) {
+        const msg = '검색이 시간 내에 완료되지 않았습니다. 다시 검색해 주세요.';
+        await markFailed(sb, campaignId, msg);
+        return ok({ status: 'failed' as const, error: msg });
+      }
       return ok(runningBody(curStage));
     }
     if (run.status !== 'SUCCEEDED') {
