@@ -68,6 +68,17 @@ export const env = {
   AI_DEFAULT_PROVIDER: (process.env.AI_DEFAULT_PROVIDER as 'anthropic' | 'openai') ?? 'anthropic',
   AI_DEFAULT_MODEL: process.env.AI_DEFAULT_MODEL ?? 'claude-sonnet-5',
 
+  // OpenRouter (server-only — NEVER prefix with NEXT_PUBLIC). ONE platform key
+  // billed to the operator; all users share it, capped per-user per-day. The key
+  // never reaches the browser. Undefined ⇒ AI features report "not configured".
+  OPENROUTER_API_KEY: optional(nonEmpty, process.env.OPENROUTER_API_KEY),
+  OPENROUTER_MODEL: process.env.OPENROUTER_MODEL ?? 'google/gemini-2.5-flash-lite',
+  /** Per-user AI calls allowed per day (Asia/Seoul). Guards the shared key. */
+  AI_DAILY_LIMIT: ((): number => {
+    const n = Number.parseInt(process.env.AI_DAILY_LIMIT ?? '', 10);
+    return Number.isFinite(n) && n > 0 ? n : 50;
+  })(),
+
   CRON_SECRET: optional(nonEmpty, process.env.CRON_SECRET),
 
   // Apify (server-only — NEVER prefix with NEXT_PUBLIC). Powers real Instagram
@@ -97,6 +108,11 @@ export function isDatabaseConfigured(): boolean {
 /** True when at least one AI provider key is configured. */
 export function isAiConfigured(): boolean {
   return Boolean(env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY);
+}
+
+/** True when the shared OpenRouter platform key is configured (server-side). */
+export function isAiPlatformConfigured(): boolean {
+  return Boolean(env.OPENROUTER_API_KEY);
 }
 
 /** True when Apify is configured (server-only token present). */

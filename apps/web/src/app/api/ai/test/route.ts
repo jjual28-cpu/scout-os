@@ -1,7 +1,6 @@
 import { fail, ok, withErrorHandling } from '@/lib/api/response';
 import { isSupabaseConfigured } from '@/lib/env';
-import { getCredentialKey, getCredentialModel } from '@/services/ai/credentials';
-import { callGemini, DEFAULT_GEMINI_MODEL } from '@/services/ai/gemini';
+import { runAi } from '@/services/ai/run';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,8 +10,9 @@ async function getSupabase() {
 }
 
 /**
- * POST /api/ai/test — verify the stored key still works with a tiny call.
- * Reads the key server-side only; returns a short sample, never the key.
+ * POST /api/ai/test — run a tiny real AI call to verify the platform is working
+ * (key + model + balance). Counts against the caller's daily limit like any AI
+ * call, so it can't be used to bypass the cap.
  */
 export const POST = withErrorHandling(async () => {
   if (!isSupabaseConfigured()) return fail('UNAVAILABLE', '서버가 구성되지 않았습니다.', 503);
@@ -22,16 +22,11 @@ export const POST = withErrorHandling(async () => {
   const userId = auth.user?.id;
   if (!userId) return fail('UNAUTHORIZED', '로그인이 필요합니다.', 401);
 
-  const key = await getCredentialKey(userId);
-  if (!key) return fail('NOT_CONNECTED', '연결된 AI가 없습니다.', 400);
-
-  const model = (await getCredentialModel(userId)) ?? DEFAULT_GEMINI_MODEL;
-  const text = await callGemini(key, {
+  const text = await runAi(userId, {
     prompt: '연결 테스트입니다. "연결됨"이라고만 답해 주세요.',
-    model,
     maxTokens: 20,
     temperature: 0,
   });
 
-  return ok({ ok: true, model, sample: text.trim().slice(0, 60) });
+  return ok({ ok: true, sample: text.trim().slice(0, 60) });
 });
