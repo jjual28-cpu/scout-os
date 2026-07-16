@@ -34,6 +34,7 @@ const NAV: NavItem[] = [
   { title: '협업 관리', href: '/crm', icon: KanbanSquare },
   { title: '상품', href: '/products', icon: Package },
   { title: '리포트', href: '/reports', icon: BarChart3 },
+  { title: '설정', href: '/settings', icon: Settings },
 ];
 
 /**
@@ -51,20 +52,9 @@ type SoonItem = {
 
 const SOON: SoonItem[] = [
   {
-    title: '설정',
-    icon: Settings,
-    order: 1,
-    summary: '검색 기본값과 브랜드 정보를 계정에 저장합니다.',
-    bullets: [
-      '기본 플랫폼 · 검색 결과 수 · 캐시 시간',
-      '브랜드 기본 정보와 DM 기본 말투',
-      '프로필 · 알림 설정',
-    ],
-  },
-  {
     title: 'AI 직원',
     icon: Sparkles,
-    order: 2,
+    order: 1,
     summary: '상품을 고르면 키워드 추천부터 DM 초안까지 이어서 만들어 줍니다.',
     bullets: [
       '상품 분석 → 추천 키워드 생성 → 캠페인 자동 생성',
