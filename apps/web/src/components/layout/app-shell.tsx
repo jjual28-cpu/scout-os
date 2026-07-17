@@ -26,8 +26,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="dark:bg-background flex min-h-screen bg-white">
-      {/* Desktop sidebar */}
-      <aside className="dark:border-border dark:bg-card hidden w-[248px] shrink-0 border-r border-slate-200/60 bg-white md:block">
+      {/* Desktop sidebar — tinted so the nav reads as a distinct surface from the
+          white content area (premium two-tone shell). */}
+      <aside className="dark:border-border dark:bg-card hidden w-[248px] shrink-0 border-r border-slate-200/60 bg-gradient-to-b from-slate-50 to-violet-50/40 md:block">
         <div className="sticky top-0 h-screen">
           <AppSidebar />
         </div>
@@ -47,7 +48,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           onClick={() => setOpen(false)}
         />
         <div
-          className="bg-card absolute inset-y-0 left-0 w-64 border-r shadow-xl"
+          className="dark:bg-card absolute inset-y-0 left-0 w-64 border-r bg-gradient-to-b from-slate-50 to-violet-50/40 shadow-xl"
           style={{ transform: open ? 'translateX(0)' : 'translateX(-100%)' }}
         >
           <AppSidebar onNavigate={() => setOpen(false)} />

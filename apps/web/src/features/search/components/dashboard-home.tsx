@@ -120,24 +120,28 @@ export function DashboardHome() {
           icon={<Megaphone className="size-4" />}
           label="진행 중 캠페인"
           value={kpis.activeCampaigns}
+          accent="primary"
           href={campaignsHref(ACTIVE_FILTER)}
         />
         <StatCard
           icon={<Users className="size-4" />}
           label="발견한 셀럽"
           value={kpis.discovered}
+          accent="blue"
           href="/campaigns"
         />
         <StatCard
           icon={<MessageSquare className="size-4" />}
           label="DM 발송"
           value={kpis.dmSent}
+          accent="fuchsia"
           href="/outreach"
         />
         <StatCard
           icon={<Reply className="size-4" />}
           label="답변 받음"
           value={kpis.replies}
+          accent="emerald"
           href="/crm"
         />
       </div>

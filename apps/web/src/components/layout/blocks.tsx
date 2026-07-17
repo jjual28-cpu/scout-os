@@ -3,39 +3,53 @@ import { type ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
 
-/** A KPI tile: colored icon, label, big number. Delta is optional — omit when
- *  there's no real comparison data (never fabricate one). When `href` is set the
- *  whole card is a link (not just the number). */
+/** Icon-chip accent colors for KPI tiles. */
+export type StatAccent = 'primary' | 'blue' | 'emerald' | 'amber' | 'fuchsia' | 'rose';
+const STAT_ACCENTS: Record<StatAccent, string> = {
+  primary: 'bg-primary/10 text-primary',
+  blue: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  emerald: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  fuchsia: 'bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400',
+  rose: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
+};
+
+/** A KPI tile: icon in a colored chip, label, big number. Delta is optional —
+ *  omit when there's no real comparison data (never fabricate one). When `href`
+ *  is set the whole card is a link (not just the number). */
 export function StatCard({
   icon,
   label,
   value,
-  iconClassName,
+  accent,
   delta,
   href,
 }: {
   icon: ReactNode;
   label: string;
   value: ReactNode;
-  iconClassName?: string;
+  /** Icon-chip color. Omit for a neutral slate chip. */
+  accent?: StatAccent;
   delta?: ReactNode;
   href?: string;
 }) {
   const body = (
     <>
-      <div className="text-muted-foreground flex items-center gap-2">
+      <div className="flex items-center gap-2.5">
         <span
           className={cn(
-            'flex size-6 shrink-0 items-center justify-center',
-            iconClassName ?? 'text-muted-foreground',
+            'flex size-9 shrink-0 items-center justify-center rounded-xl',
+            accent
+              ? STAT_ACCENTS[accent]
+              : 'dark:bg-muted dark:text-muted-foreground bg-slate-100 text-slate-500',
           )}
         >
           {icon}
         </span>
-        <span className="text-[13px]">{label}</span>
+        <span className="text-muted-foreground text-[13px] font-medium">{label}</span>
       </div>
-      <div className="mt-3 flex items-end gap-2">
-        <p className="text-[28px] font-semibold tabular-nums leading-none tracking-tight">
+      <div className="mt-3.5 flex items-end gap-2">
+        <p className="text-[30px] font-semibold tabular-nums leading-none tracking-tight">
           {value}
         </p>
         {delta ? <span className="pb-0.5 text-xs">{delta}</span> : null}
@@ -47,13 +61,13 @@ export function StatCard({
     return (
       <Link
         href={href}
-        className="bg-card hover:border-primary/40 block rounded-xl border p-5 transition-all duration-150 hover:-translate-y-px"
+        className="bg-card hover:border-primary/40 block rounded-2xl border p-5 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-sm"
       >
         {body}
       </Link>
     );
   }
-  return <div className="bg-card rounded-xl border p-5">{body}</div>;
+  return <div className="bg-card rounded-2xl border p-5">{body}</div>;
 }
 
 /** A titled card section with an optional right-aligned action slot. */
