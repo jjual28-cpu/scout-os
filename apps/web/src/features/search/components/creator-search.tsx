@@ -4,6 +4,7 @@ import {
   ArrowUpDown,
   Bookmark,
   Check,
+  CheckCircle2,
   ChevronDown,
   Clock,
   Instagram,
@@ -355,6 +356,33 @@ export function CreatorSearch() {
     if (myStatus === 'succeeded' || myStatus === 'failed') void openCampaign(campaignId);
   }, [campaignId, myStatus, openCampaign]);
 
+  // Progressive results: while a search runs, pull in whatever's already been
+  // found (Stage 1 saves first) so the user sees the first batch immediately and
+  // can browse while the rest keeps coming — instead of staring at a spinner.
+  useEffect(() => {
+    if (!campaignId || phase !== 'searching' || !isSupabaseConfigured()) return;
+    let alive = true;
+    const load = async () => {
+      try {
+        const sb = createClient();
+        const {
+          data: { user },
+        } = await sb.auth.getUser();
+        if (!user || !alive) return;
+        const results = await listResults(sb, user.id, campaignId);
+        if (alive && results.length > 0) setItems(results.map(snapshotToOpportunity));
+      } catch {
+        /* ignore — next tick retries */
+      }
+    };
+    void load();
+    const id = setInterval(load, 3000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [campaignId, phase]);
+
   /** Stage/progress reported by the global poller for the campaign on screen. */
   const liveDetail = campaignId ? runSnap.details[campaignId] : undefined;
 
@@ -385,6 +413,7 @@ export function CreatorSearch() {
     setPhase('searching');
     setSelected(new Set());
     setCached(false);
+    setItems([]); // clear the previous session so the first batch shows fresh
 
     const meta = draftMeta.current;
     draftMeta.current = null; // one-shot
@@ -583,6 +612,7 @@ export function CreatorSearch() {
         icon={<TrendingUp className="size-3.5" />}
         label="추천 키워드"
         chips={POPULAR}
+        variant="soft"
         onPick={(c) => void runSearch(c)}
       />
 
@@ -700,34 +730,55 @@ export function CreatorSearch() {
     />
   ) : phase === 'searching' ? (
     <div>
-      <div className="dark:border-border rounded-xl border border-slate-200/60 p-5">
-        <p className="flex items-center gap-2 text-base font-semibold">
-          <Loader2 className="text-primary size-4 animate-spin" />
-          셀럽을 찾고 있어요
-        </p>
-        <p className="text-muted-foreground mt-1.5 text-sm">
-          ‘{keyword}’ · 예상 소요시간 20~40초
-          {elapsedLabel ? ` · 진행 중 · ${elapsedLabel} 경과` : ''}
-        </p>
-        <p className="text-muted-foreground mt-1 text-sm">
-          다른 메뉴를 이용하셔도 됩니다. 검색은 계속 진행됩니다.
-        </p>
-        {clock(times.startedAt) ? (
-          <p className="text-muted-foreground mt-1 text-xs">검색 시작 {clock(times.startedAt)}</p>
-        ) : null}
+      {/* Prominent, colorful "searching" banner — hard to miss, reassures the
+          user the search keeps running in the background. */}
+      <div className="border-primary/20 from-primary/[0.10] via-primary/[0.04] relative overflow-hidden rounded-2xl border bg-gradient-to-br to-transparent p-6">
+        <div className="flex items-start gap-3.5">
+          <span className="bg-primary text-primary-foreground flex size-12 shrink-0 items-center justify-center rounded-2xl shadow-sm">
+            <Loader2 className="size-6 animate-spin" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-lg font-semibold tracking-tight">
+              <span className="mr-1">{keywordEmoji(keyword)}</span>‘{keyword}’ 셀럽을 찾고 있어요
+            </p>
+            <p className="text-muted-foreground mt-1 text-sm">
+              보통 <span className="text-foreground font-semibold">1~2분</span> 걸려요
+              {elapsedLabel ? ` · ${elapsedLabel} 경과` : ''}
+            </p>
+            <p className="text-primary bg-primary/10 mt-2.5 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium">
+              <CheckCircle2 className="size-3.5" />
+              다른 메뉴를 봐도 괜찮아요 — 다 찾으면 알림으로 알려드려요
+            </p>
+          </div>
+        </div>
 
         <StageTracker stage={liveDetail?.stage ?? 1} progress={liveDetail?.progress ?? 30} />
-
-        {campaignId ? (
-          <Button asChild variant="ghost" size="sm" className="-ml-2 mt-3">
-            <Link href={`/campaigns/${campaignId}`}>
-              캠페인에서 상태 보기
-              <ArrowRight className="size-4" />
-            </Link>
-          </Button>
-        ) : null}
       </div>
-      {skeletons}
+
+      {/* First batch arrives while later stages keep running (progressive) */}
+      {visible.length > 0 ? (
+        <div className="mt-6">
+          <p className="text-muted-foreground mb-4 flex items-center gap-2 text-sm">
+            <Sparkles className="text-primary size-4" />
+            우선 <span className="text-foreground font-semibold">{visible.length}명</span>을
+            찾았어요 · 둘러보는 동안 더 찾고 있어요
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {visible.map((item) => (
+              <DiscoverCard
+                key={item.id}
+                item={item}
+                keyword={keyword}
+                selectable
+                selected={selected.has(item.id)}
+                onSelectChange={onSelectChange}
+              />
+            ))}
+          </div>
+        </div>
+      ) : (
+        skeletons
+      )}
     </div>
   ) : (
     <>
@@ -911,7 +962,12 @@ export function CreatorSearch() {
               </summary>
               <div className="dark:border-border border-t border-slate-200/60 p-4">{railBody}</div>
             </details>
-            <div className="mt-6 hidden lg:block">{railBody}</div>
+            {/* Desktop: a distinct, colored panel that scrolls INTERNALLY so the
+                filters at the bottom are always reachable (previously the sticky
+                rail could grow taller than the viewport and clip them). */}
+            <div className="dark:border-border dark:from-muted/30 mt-4 hidden rounded-2xl border border-slate-200/70 bg-gradient-to-b from-slate-50 to-white p-4 lg:block lg:max-h-[calc(100vh-13rem)] lg:overflow-y-auto dark:to-transparent">
+              {railBody}
+            </div>
           </aside>
 
           {/* ── Results Workspace ── */}
@@ -947,7 +1003,7 @@ export function CreatorSearch() {
 // ---------------------------------------------------------------------------
 function RailLabel({ icon, children }: { icon?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <p className="dark:text-muted-foreground mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+    <p className="dark:text-muted-foreground [&_svg]:text-primary mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-500">
       {icon}
       {children}
     </p>
@@ -1108,7 +1164,7 @@ function ChipRow({
       {label ? (
         <p
           className={cn(
-            'dark:text-muted-foreground mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-500',
+            'dark:text-muted-foreground [&_svg]:text-primary mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-500',
             center && 'justify-center',
           )}
         >
@@ -1126,7 +1182,7 @@ function ChipRow({
               'rounded-full px-3 py-1 text-sm transition-colors',
               variant === 'outline'
                 ? 'hover:border-primary/40 hover:text-foreground dark:border-border dark:text-muted-foreground border border-slate-200/70 text-slate-600'
-                : 'bg-secondary text-secondary-foreground hover:bg-secondary/70',
+                : 'bg-primary/10 text-primary hover:bg-primary/20 font-medium',
             )}
           >
             {c}
