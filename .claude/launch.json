@@ -4,7 +4,7 @@
     {
       "name": "web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["dev"],
+      "runtimeArgs": ["dev", "--filter=@scout-os/web"],
       "port": 3000,
       "autoPort": false
     }

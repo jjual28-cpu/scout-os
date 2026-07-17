@@ -17,7 +17,9 @@ import {
   SearchX,
   SlidersHorizontal,
   Sparkles,
+  Store,
   Tag,
+  UserRound,
   TrendingUp,
   X,
   Youtube,
@@ -107,6 +109,32 @@ const STALL_MS = 10 * 60 * 1000;
 /** Two discovery entrances. `tagged` finds creators who already tag a brand —
  *  proof they do brand work, which a hashtag match can't tell you. */
 type SearchMode = 'keyword' | 'tagged';
+
+/**
+ * What the user is hunting. The same word means opposite searches: "바디케어"
+ * as `creator` finds reviewers to pitch, as `brand` finds the shops themselves —
+ * and each rejects what the other wants. The server judges by this, so getting
+ * it wrong throws away precisely the results the user came for.
+ */
+type SearchTarget = 'creator' | 'brand';
+
+const TARGET_KEY = 'scout:search-target';
+
+function readStoredTarget(): SearchTarget | null {
+  try {
+    return localStorage.getItem(TARGET_KEY) === 'brand' ? 'brand' : 'creator';
+  } catch {
+    return null; // storage blocked (private mode / embedded) — just use the default
+  }
+}
+
+function storeTarget(t: SearchTarget): void {
+  try {
+    localStorage.setItem(TARGET_KEY, t);
+  } catch {
+    // preference not remembered — harmless, the search still runs
+  }
+}
 
 // ── Filters / sort ──────────────────────────────────────────────────────────
 type Bucket = '0-5k' | '5k-10k' | '10k-50k' | '50k+';
@@ -251,6 +279,19 @@ export function CreatorSearch() {
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   /** Competitor/brand handle for the tagged entrance. */
   const [rival, setRival] = useState('');
+  /**
+   * Who this search is for. Most users hunt creators, so that's the default —
+   * but someone who hunts brands does it every time, so the last choice sticks.
+   * Read after mount: localStorage doesn't exist during SSR.
+   */
+  const [target, setTarget] = useState<SearchTarget>('creator');
+  useEffect(() => {
+    if (readStoredTarget() === 'brand') setTarget('brand');
+  }, []);
+  const chooseTarget = (t: SearchTarget) => {
+    setTarget(t);
+    storeTarget(t);
+  };
 
   const saved = useSavedOpportunities();
   const outreach = useOutreach();
@@ -477,7 +518,14 @@ export function CreatorSearch() {
 
     const meta = draftMeta.current;
     draftMeta.current = null; // one-shot
-    const body: Record<string, unknown> = { query: q, limit: 24, force, mode };
+    // tagged is inherently a creator hunt — the server pins it, we just agree.
+    const body: Record<string, unknown> = {
+      query: q,
+      limit: 24,
+      force,
+      mode,
+      target: mode === 'tagged' ? 'creator' : target,
+    };
     if (meta) {
       if (meta.title) body.title = meta.title;
       if (meta.brand) body.brand = meta.brand;
@@ -565,7 +613,10 @@ export function CreatorSearch() {
   // Accounts the AI judged as not a real fit (info/news/unrelated). Hidden by
   // default — that's the whole point of the matching layer — but never deleted,
   // so the user can always look at what was filtered out.
-  const aiRejectedCount = useMemo(() => items.filter((it) => it.aiVerdict === 'reject').length, [items]);
+  const aiRejectedCount = useMemo(
+    () => items.filter((it) => it.aiVerdict === 'reject').length,
+    [items],
+  );
 
   // Filter + sort (client-side, over the current result set)
   const visible = useMemo(() => {
@@ -1064,9 +1115,15 @@ export function CreatorSearch() {
           {/* ── Search Rail ── */}
           <aside className="lg:sticky lg:top-[76px] lg:self-start">
             <div className="space-y-3">
+              <TargetToggle
+                target={target}
+                onSelect={chooseTarget}
+                disabled={phase === 'searching'}
+              />
               <SearchField
                 value={input}
                 size="md"
+                target={target}
                 onChange={setInput}
                 onSubmit={() => void runSearch(input)}
                 disabled={phase === 'searching'}
@@ -1171,6 +1228,7 @@ function SearchField({
   onChange,
   onSubmit,
   size = 'lg',
+  target = 'creator',
   autoFocus,
   disabled,
 }: {
@@ -1178,11 +1236,15 @@ function SearchField({
   onChange: (v: string) => void;
   onSubmit: () => void;
   size?: 'lg' | 'md';
+  /** Only shapes the example — the toggle above already states the choice. */
+  target?: SearchTarget;
   autoFocus?: boolean;
   /** True while a run is in flight — blocks repeat submits (server dedupes too). */
   disabled?: boolean;
 }) {
   const big = size === 'lg';
+  const placeholder =
+    target === 'brand' ? '예: 신생 비건 바디케어 브랜드' : '예: 요즘 뜨는 셀럽 찾아줘';
   return (
     <form
       onSubmit={(e) => {
@@ -1203,7 +1265,7 @@ function SearchField({
           autoFocus={autoFocus}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="예: 신생 바디케어 브랜드 찾아줘"
+          placeholder={placeholder}
           className={cn(
             'border-input bg-background/80 focus-visible:ring-ring/60 w-full rounded-2xl border shadow-sm outline-none transition-shadow focus-visible:shadow-md focus-visible:ring-2',
             big ? 'h-16 pl-12 pr-16 text-base' : 'h-11 pl-10 pr-12 text-sm',
@@ -1227,6 +1289,62 @@ function SearchField({
         </button>
       </div>
     </form>
+  );
+}
+
+const TARGETS: { id: SearchTarget; label: string; icon: typeof UserRound; hint: string }[] = [
+  { id: 'creator', label: '셀럽 찾기', icon: UserRound, hint: '협업 제안할 크리에이터를 찾아요' },
+  { id: 'brand', label: '브랜드 찾기', icon: Store, hint: '제품을 파는 브랜드 계정을 찾아요' },
+];
+
+/**
+ * The one choice that decides what the whole search means. It sits above the
+ * box rather than beside it because picking it after typing is picking it too
+ * late — the AI plans different hashtags per target, not just different verdicts.
+ */
+function TargetToggle({
+  target,
+  onSelect,
+  disabled,
+}: {
+  target: SearchTarget;
+  onSelect: (t: SearchTarget) => void;
+  disabled?: boolean;
+}) {
+  const hint = TARGETS.find((t) => t.id === target)?.hint ?? '';
+  return (
+    <div className="space-y-1.5">
+      <div
+        role="group"
+        aria-label="검색 대상"
+        className="bg-card grid grid-cols-2 gap-0.5 rounded-full border p-1"
+      >
+        {TARGETS.map((t) => {
+          const active = target === t.id;
+          const Icon = t.icon;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              aria-pressed={active}
+              disabled={disabled}
+              onClick={() => onSelect(t.id)}
+              className={cn(
+                'inline-flex items-center justify-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-medium transition-colors',
+                active
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground',
+                disabled && 'pointer-events-none opacity-50',
+              )}
+            >
+              <Icon className="size-3.5" />
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-muted-foreground px-1 text-[11px] leading-snug">{hint}</p>
+    </div>
   );
 }
 

@@ -5,7 +5,7 @@ import { type InstagramCreator } from '@/features/search/instagram';
 import { ok, withErrorHandling } from '@/lib/api/response';
 import { getDiscoveryProvider, isSupabaseConfigured } from '@/lib/env';
 import { normalizeQuery } from '@/lib/normalize-query';
-import { type BrandContext } from '@/services/ai/match';
+import { type BrandContext, type SearchTarget } from '@/services/ai/match';
 import { looksNatural, planSearch, type SearchPlan } from '@/services/ai/query';
 import {
   normalizeHandle,
@@ -43,6 +43,8 @@ const bodySchema = z.object({
   source: z.enum(['manual', 'ai']).optional(),
   /** 'keyword' — 이름/해시태그 검색. 'tagged' — 이 브랜드를 태그한 계정 찾기. */
   mode: z.enum(['keyword', 'tagged']).optional(),
+  /** 'creator' — 협업할 셀럽. 'brand' — 제품 파는 브랜드 공식 계정. */
+  target: z.enum(['creator', 'brand']).optional(),
 });
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- DB rows are loosely typed here */
@@ -111,6 +113,9 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
   // ── Apify mode (async Campaign search) ───────────────────────────────────
   const mode = body.mode ?? 'keyword';
+  // "이 브랜드를 태그한 계정"은 본질적으로 크리에이터 찾기다 — 브랜드가 경쟁사를
+  // 태그하는 일은 거의 없어서 tagged+brand 는 켜봐야 빈 결과다.
+  const target: SearchTarget = mode === 'tagged' ? 'creator' : (body.target ?? 'creator');
   let rawQuery = (body.query ?? body.hashtag ?? '').trim();
 
   // In tagged mode the query IS the brand handle — normalise it up front so the
@@ -141,7 +146,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   const qNorm = normalizeQuery(rawQuery);
 
   // 1) Same-query run already in flight → reuse it, never start a second Actor.
-  const running = await findRunning(supabase, userId, qNorm);
+  const running = await findRunning(supabase, userId, qNorm, target, mode);
   if (running) {
     return ok({
       configured: true,
@@ -153,7 +158,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
   // 2) 24h cache — reuse a succeeded campaign that actually has results.
   if (!body.force) {
-    const cached = await findCached(supabase, userId, qNorm);
+    const cached = await findCached(supabase, userId, qNorm, target, mode);
     if (cached) {
       return ok({
         configured: true,
@@ -166,7 +171,13 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
   // 3) Create the running Campaign (query stored as the user typed it).
   const created = await createCampaign(supabase, userId, rawQuery, {
-    title: body.title?.trim() || (mode === 'tagged' ? `@${rawQuery} 태그` : rawQuery),
+    title:
+      body.title?.trim() ||
+      (mode === 'tagged'
+        ? `@${rawQuery} 태그`
+        : target === 'brand'
+          ? `${rawQuery} (브랜드)`
+          : rawQuery),
     productId: body.productId ?? null,
     brand: body.brand ?? null,
     season: body.season ?? null,
@@ -175,6 +186,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     label: body.label ?? 'active',
     source: body.source ?? 'manual',
     mode,
+    target,
   });
   if (!created) {
     return ok({
@@ -202,7 +214,12 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     // first; a plain keyword ("골프") skips the AI entirely (no cost, no latency).
     let plan: SearchPlan | null = null;
     if (mode === 'keyword' && looksNatural(rawQuery)) {
-      plan = await planSearch(userId, rawQuery, await brandFor(supabase, body.productId ?? null));
+      plan = await planSearch(
+        userId,
+        rawQuery,
+        await brandFor(supabase, body.productId ?? null),
+        target,
+      );
       if (plan) {
         await supabase
           .from('campaigns')
@@ -275,11 +292,19 @@ async function brandFor(
   return { productName: row.name, category: row.category, target: row.target };
 }
 
-/** A same-user/platform/query campaign that is still running → its id. */
+/**
+ * A same-user/platform/query campaign that is still running → its id.
+ *
+ * target/mode are part of the key: the same word searched for brands is a
+ * different search from the same word searched for creators, and reusing one
+ * for the other returns exactly what the user didn't ask for.
+ */
 async function findRunning(
   supabase: Awaited<ReturnType<typeof getSupabase>>,
   userId: string,
   qNorm: string,
+  target: SearchTarget,
+  mode: 'keyword' | 'tagged',
 ): Promise<string | null> {
   const { data } = await supabase
     .from('campaigns')
@@ -287,6 +312,8 @@ async function findRunning(
     .eq('user_id', userId)
     .eq('platform', PLATFORM)
     .eq('query_norm', qNorm)
+    .eq('search_target', target)
+    .eq('search_mode', mode)
     .eq('status', 'running')
     .limit(1);
   return (data as any[] | null)?.[0]?.id ?? null;
@@ -297,6 +324,8 @@ async function findCached(
   supabase: Awaited<ReturnType<typeof getSupabase>>,
   userId: string,
   qNorm: string,
+  target: SearchTarget,
+  mode: 'keyword' | 'tagged',
 ): Promise<string | null> {
   const since = new Date(Date.now() - CACHE_WINDOW_MS).toISOString();
   const { data } = await supabase
@@ -305,6 +334,8 @@ async function findCached(
     .eq('user_id', userId)
     .eq('platform', PLATFORM)
     .eq('query_norm', qNorm)
+    .eq('search_target', target)
+    .eq('search_mode', mode)
     .eq('status', 'succeeded')
     .order('created_at', { ascending: false })
     .limit(5);
@@ -334,6 +365,8 @@ type CampaignMetaInput = {
   source: string;
   /** How the state machine should interpret this campaign's stages. */
   mode: 'keyword' | 'tagged';
+  /** What the user is hunting — flips the AI's verdict on every candidate. */
+  target: SearchTarget;
 };
 
 /**
@@ -366,6 +399,7 @@ async function createCampaign(
       label: meta.label,
       source: meta.source,
       search_mode: meta.mode,
+      search_target: meta.target,
       started_at: now,
       updated_at: now,
     })
@@ -376,7 +410,13 @@ async function createCampaign(
 
   // 23505 = unique_violation → campaigns_one_running_uniq caught a duplicate.
   if ((error as any).code === '23505') {
-    const existing = await findRunning(supabase, userId, normalizeQuery(query));
+    const existing = await findRunning(
+      supabase,
+      userId,
+      normalizeQuery(query),
+      meta.target,
+      meta.mode,
+    );
     if (existing) return { id: existing, reused: true };
   }
   console.error(`[discover] campaign insert failed: ${error.message}`);

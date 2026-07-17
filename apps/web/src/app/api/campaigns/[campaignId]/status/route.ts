@@ -3,7 +3,7 @@ import { type NextRequest } from 'next/server';
 import { type InstagramCreator } from '@/features/search/instagram';
 import { fail, ok, withErrorHandling } from '@/lib/api/response';
 import { isSupabaseConfigured } from '@/lib/env';
-import { matchCreators, type BrandContext } from '@/services/ai/match';
+import { matchCreators, type BrandContext, type SearchTarget } from '@/services/ai/match';
 import {
   authorsFromPosts,
   getRunStatus,
@@ -167,6 +167,7 @@ async function applyAiMatch(
   campaignId: string,
   query: string,
   productId: string | null,
+  target: SearchTarget,
 ): Promise<void> {
   try {
     const { data: rows } = await sb
@@ -180,23 +181,21 @@ async function applyAiMatch(
     const creators = (rows as any[])
       .map((r) => r.creator_snapshot as any)
       .filter((s) => s && typeof s.username === 'string')
-      .map(
-        (s): InstagramCreator => ({
-          id: s.externalId,
-          platform: 'instagram',
-          username: s.username,
-          displayName: s.displayName ?? s.username,
-          profileUrl: s.profileUrl ?? '',
-          profileImageUrl: s.profileImageUrl ?? null,
-          biography: s.biography ?? null,
-          followersCount: s.followersCount ?? null,
-          followingCount: s.followingCount ?? null,
-          postsCount: s.postsCount ?? null,
-          isVerified: Boolean(s.isVerified),
-          category: s.category ?? null,
-          rawData: null,
-        }),
-      );
+      .map((s): InstagramCreator => ({
+        id: s.externalId,
+        platform: 'instagram',
+        username: s.username,
+        displayName: s.displayName ?? s.username,
+        profileUrl: s.profileUrl ?? '',
+        profileImageUrl: s.profileImageUrl ?? null,
+        biography: s.biography ?? null,
+        followersCount: s.followersCount ?? null,
+        followingCount: s.followingCount ?? null,
+        postsCount: s.postsCount ?? null,
+        isVerified: Boolean(s.isVerified),
+        category: s.category ?? null,
+        rawData: null,
+      }));
     /* eslint-enable @typescript-eslint/no-explicit-any */
     if (creators.length === 0) return;
 
@@ -222,7 +221,7 @@ async function applyAiMatch(
       }
     }
 
-    const verdicts = await matchCreators(userId, query, creators, brand);
+    const verdicts = await matchCreators(userId, query, creators, brand, target);
     if (verdicts.size === 0) return;
 
     // Persist per creator. Sequential updates keep it simple and are cheap at
@@ -314,7 +313,7 @@ export const POST = withErrorHandling(
     const { data: row } = await sb
       .from('campaigns')
       .select(
-        'id,query,status,error,result_count,apify_run_id,apify_dataset_id,apify_stage,started_at,product_id,search_mode,search_plan',
+        'id,query,status,error,result_count,apify_run_id,apify_dataset_id,apify_stage,started_at,product_id,search_mode,search_target,search_plan',
       )
       .eq('id', campaignId)
       .eq('user_id', userId)
@@ -380,6 +379,8 @@ export const POST = withErrorHandling(
     const stage: number = c.apify_stage ?? 1;
     const query: string = c.query;
     const mode: 'keyword' | 'tagged' = c.search_mode === 'tagged' ? 'tagged' : 'keyword';
+    /** Chosen when the search started — decides which way the AI judges. */
+    const target: SearchTarget = c.search_target === 'brand' ? 'brand' : 'creator';
     // AI's translation of a natural-language request (null for plain keywords).
     const plan = (c.search_plan ?? null) as {
       searchTerm?: string;
@@ -422,6 +423,7 @@ export const POST = withErrorHandling(
           campaignId,
           `@${query} 브랜드를 태그한 계정 (브랜드 협업 경험 있음)`,
           c.product_id ?? null,
+          target,
         );
         await markSucceeded(sb, campaignId, count);
         return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
@@ -435,7 +437,7 @@ export const POST = withErrorHandling(
         const { count } = await existingResults(sb, userId, campaignId);
 
         if (count >= Math.min(TARGET, SEARCH_MIN_SUFFICIENT)) {
-          await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null);
+          await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null, target);
           await markSucceeded(sb, campaignId, count);
           return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
         }
@@ -455,7 +457,7 @@ export const POST = withErrorHandling(
         const toEnrich = authors.slice(0, stage3Cap(Math.max(TARGET - count, 0)));
 
         if (toEnrich.length === 0) {
-          await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null);
+          await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null, target);
           await markSucceeded(sb, campaignId, count);
           return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
         }
@@ -479,7 +481,7 @@ export const POST = withErrorHandling(
         before,
       );
       const { count } = await existingResults(sb, userId, campaignId);
-      await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null);
+      await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null, target);
       await markSucceeded(sb, campaignId, count);
       return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
     } catch (err) {

@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { type BrandContext } from './match';
+import { type BrandContext, type SearchTarget } from './match';
 import { runAi } from './run';
 
 /**
@@ -24,7 +24,7 @@ export type SearchPlan = {
   intent: string;
 };
 
-const SYSTEM = `당신은 한국 인스타그램 검색 전문가입니다. 사용자의 자연어 요청을 인스타그램에서 실제로 검색되는 형태로 번역합니다.
+const COMMON_HEAD = `당신은 한국 인스타그램 검색 전문가입니다. 사용자의 자연어 요청을 인스타그램에서 실제로 검색되는 형태로 번역합니다.
 
 인스타그램은 다음만 이해합니다:
 - 계정 이름에 포함된 단어
@@ -33,7 +33,14 @@ const SYSTEM = `당신은 한국 인스타그램 검색 전문가입니다. 사�
 절대 하지 말 것:
 - 요청 문장을 그대로 붙여서 해시태그로 만들기 (#신생바디케어브랜드찾아줘 같은 건 존재하지 않음)
 - "찾아줘", "추천", "해줘" 같은 요청 표현을 검색어에 남기기
-- 존재하지 않을 것 같은 긴 합성 해시태그 만들기
+- 존재하지 않을 것 같은 긴 합성 해시태그 만들기`;
+
+const COMMON_TAIL = `오직 JSON만 출력하세요. 설명 금지.
+형식: {"searchTerm":"...","hashtags":["...","..."],"intent":"..."}`;
+
+const SYSTEM_CREATOR = `${COMMON_HEAD}
+
+이번 검색의 목표는 **브랜드가 협업 제안을 보낼 크리에이터(셀럽)** 를 찾는 것입니다.
 
 반드시 할 것:
 - searchTerm: 계정 이름에 들어갈 법한 짧은 명사 1개 (2~6자). 예: "바디케어", "뷰티", "캠핑"
@@ -42,8 +49,29 @@ const SYSTEM = `당신은 한국 인스타그램 검색 전문가입니다. 사�
   - 예("바디케어"): ["바디케어","바디로션","홈케어","뷰티스타그램","셀프케어","뷰티추천"]
 - intent: 사용자가 실제로 찾는 대상을 한 문장으로 (셀럽 판별에 쓰임)
 
-오직 JSON만 출력하세요. 설명 금지.
-형식: {"searchTerm":"...","hashtags":["...","..."],"intent":"..."}`;
+트렌드/라이징 요청일 때 (요청에 요즘 / 뜨는 / 트렌드 / 대세 / 핫한 / 떠오르는 / 라이징 이 들어간 경우):
+- hashtags: 지금 활발하게 활동하며 성장 중인 크리에이터가 실제로 다는 태그를 고를 것. 트렌드·챌린지·신상·대세 성격 태그를 섞을 것. 예: ["요즘핫한","챌린지","릴스추천","트렌드","떡상","인스타셀럽"] (실제로 존재하는 태그만)
+  - "팔로우","소통","맞팔","선팔","인친" 같은 맞팔·팔로워 늘리기 태그는 금지 (뜨는 크리에이터가 아니라 팔로워 장사 계정이 걸린다)
+- 분야(니치)가 특정되지 않은 경우: 빈 hashtags를 내지 말고, 지금 활발한 크리에이터가 콘텐츠에 다는 태그로 채울 것. 예: ["릴스추천","릴스","일상스타그램","데일리룩","브이로그","셀스타그램"]
+- intent: 트렌드 뉘앙스를 그대로 담을 것 (예: "요즘 뜨는/성장 중인 크리에이터")
+
+${COMMON_TAIL}`;
+
+const SYSTEM_BRAND = `${COMMON_HEAD}
+
+이번 검색의 목표는 **제품을 파는 브랜드 공식 계정** 을 찾는 것입니다. 크리에이터가 아닙니다.
+크리에이터가 쓰는 태그가 아니라, **브랜드가 자기 제품을 홍보할 때 다는 태그** 를 골라야 합니다.
+
+반드시 할 것:
+- searchTerm: 브랜드 계정 이름에 실제로 들어가는 짧은 명사 1개 (2~6자). 예: "바디", "코스메틱", "스킨"
+  - 브랜드 계정명에 "리뷰", "일상", "스타그램" 같은 단어는 들어가지 않음
+- hashtags: 브랜드/쇼핑몰 계정이 자기 게시물에 실제로 다는 해시태그 5~6개. # 없이 단어만.
+  - 제품 분야 태그 + 판매/신제품 성격 태그를 섞을 것
+  - 예("바디케어"): ["바디케어","바디로션","신상코스메틱","뷰티브랜드","비건화장품","입점문의"]
+  - "일상", "소통", "맞팔" 같은 개인 계정 태그는 금지
+- intent: 사용자가 찾는 브랜드의 성격을 한 문장으로 (브랜드 판별에 쓰임)
+
+${COMMON_TAIL}`;
 
 /**
  * Does this look like a sentence rather than a keyword? Single short words
@@ -98,6 +126,7 @@ export async function planSearch(
   userId: string,
   request: string,
   brand: BrandContext | null,
+  target: SearchTarget = 'creator',
 ): Promise<SearchPlan | null> {
   const brandLine =
     brand && (brand.productName || brand.category)
@@ -108,7 +137,7 @@ export async function planSearch(
 
   try {
     const text = await runAi(userId, {
-      system: SYSTEM,
+      system: target === 'brand' ? SYSTEM_BRAND : SYSTEM_CREATOR,
       prompt: `사용자 요청: "${request}"${brandLine}`,
       json: true,
       maxTokens: 400,
