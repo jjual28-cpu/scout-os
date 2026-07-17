@@ -100,6 +100,10 @@ const PLATFORMS = [
 
 type Phase = 'idle' | 'searching' | 'done';
 
+/** How long the UI waits before declaring a search dead. Mirrors the server's
+ *  own stale window (status route STALE_MS) so the two agree. */
+const STALL_MS = 10 * 60 * 1000;
+
 /** Two discovery entrances. `tagged` finds creators who already tag a brand —
  *  proof they do brand work, which a hashtag match can't tell you. */
 type SearchMode = 'keyword' | 'tagged';
@@ -423,6 +427,37 @@ export function CreatorSearch() {
     const s = Math.max(0, Math.round((now - new Date(times.startedAt).getTime()) / 1000));
     return s < 60 ? `${s}초` : `${Math.floor(s / 60)}분 ${s % 60}초`;
   }, [phase, times.startedAt, now]);
+
+  /** Stop a running search and release its lock so the term can be searched again. */
+  const cancelSearch = useCallback(async (id: string, reason: string) => {
+    try {
+      await fetch(`/api/campaigns/${id}/cancel`, { method: 'POST' });
+    } catch {
+      /* the campaign may already be finished — the UI still moves on */
+    }
+    runStore.setRunStatus(id, 'failed');
+    setPhase('done');
+    setError(reason);
+  }, []);
+
+  /**
+   * Client-side give-up. Finishing a search depends on the poller reaching the
+   * status route; if any link in that chain misbehaves the screen would sit on
+   * "검색 중" indefinitely (it once showed 30분 경과). The UI refuses to lie —
+   * past the server's own stale window it cancels and says so.
+   */
+  const gaveUp = useRef(false);
+  useEffect(() => {
+    if (phase !== 'searching') {
+      gaveUp.current = false;
+      return;
+    }
+    if (!campaignId || !times.startedAt || gaveUp.current) return;
+    const startedMs = new Date(times.startedAt).getTime();
+    if (!Number.isFinite(startedMs) || now - startedMs <= STALL_MS) return;
+    gaveUp.current = true;
+    void cancelSearch(campaignId, '검색이 너무 오래 걸려 중단했어요. 다시 검색해 주세요.');
+  }, [phase, campaignId, times.startedAt, now, cancelSearch]);
 
   /**
    * Start a search. The POST returns a campaignId within ~1s — it never waits for
@@ -816,6 +851,19 @@ export function CreatorSearch() {
               다른 메뉴를 봐도 괜찮아요 — 다 찾으면 알림으로 알려드려요
             </p>
           </div>
+          {/* Always an escape hatch — a search must never hold the user hostage. */}
+          {campaignId ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-foreground shrink-0"
+              onClick={() => void cancelSearch(campaignId, '검색을 중단했어요.')}
+            >
+              <X className="size-4" />
+              중단
+            </Button>
+          ) : null}
         </div>
 
         <StageTracker stage={liveDetail?.stage ?? 1} progress={liveDetail?.progress ?? 30} />
