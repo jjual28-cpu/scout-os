@@ -800,8 +800,12 @@ export function CreatorSearch() {
             <Loader2 className="size-6 animate-spin" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-lg font-semibold tracking-tight">
-              <span className="mr-1">{keywordEmoji(keyword)}</span>‘{keyword}’ 셀럽을 찾고 있어요
+            {/* Title stays a clean sentence — the query can be a whole request
+                ("신생 바디케어 브랜드 찾아줘"), so it reads as a quote below. */}
+            <p className="text-lg font-semibold tracking-tight">셀럽을 찾고 있어요</p>
+            <p className="text-foreground/80 mt-1 truncate text-sm">
+              <span className="mr-1">{keywordEmoji(keyword)}</span>
+              {keyword}
             </p>
             <p className="text-muted-foreground mt-1 text-sm">
               보통 <span className="text-foreground font-semibold">1~2분</span> 걸려요
@@ -1019,6 +1023,15 @@ export function CreatorSearch() {
                 onSubmit={() => void runSearch(input)}
                 disabled={phase === 'searching'}
               />
+              {/* Users type like they're asking an assistant — say so, since the
+                  box looks like an ordinary keyword field. */}
+              <p className="text-muted-foreground flex items-start gap-1.5 text-[11px] leading-snug">
+                <Sparkles className="text-primary mt-px size-3 shrink-0" />
+                <span>
+                  AI에게 말하듯 문장으로 써도 돼요. AI가 인스타에서 찾을 수 있는 키워드로 바꿔서
+                  검색해요.
+                </span>
+              </p>
               <PlatformSelector platform={platform} onSelect={setPlatform} compact />
             </div>
 
@@ -1142,7 +1155,7 @@ function SearchField({
           autoFocus={autoFocus}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="예: 뷰티, 골프, 반려동물…"
+          placeholder="예: 신생 바디케어 브랜드 찾아줘"
           className={cn(
             'border-input bg-background/80 focus-visible:ring-ring/60 w-full rounded-2xl border shadow-sm outline-none transition-shadow focus-visible:shadow-md focus-visible:ring-2',
             big ? 'h-16 pl-12 pr-16 text-base' : 'h-11 pl-10 pr-12 text-sm',

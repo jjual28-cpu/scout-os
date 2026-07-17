@@ -314,7 +314,7 @@ export const POST = withErrorHandling(
     const { data: row } = await sb
       .from('campaigns')
       .select(
-        'id,query,status,error,result_count,apify_run_id,apify_dataset_id,apify_stage,started_at,product_id,search_mode',
+        'id,query,status,error,result_count,apify_run_id,apify_dataset_id,apify_stage,started_at,product_id,search_mode,search_plan',
       )
       .eq('id', campaignId)
       .eq('user_id', userId)
@@ -380,6 +380,14 @@ export const POST = withErrorHandling(
     const stage: number = c.apify_stage ?? 1;
     const query: string = c.query;
     const mode: 'keyword' | 'tagged' = c.search_mode === 'tagged' ? 'tagged' : 'keyword';
+    // AI's translation of a natural-language request (null for plain keywords).
+    const plan = (c.search_plan ?? null) as {
+      searchTerm?: string;
+      hashtags?: string[];
+      intent?: string;
+    } | null;
+    /** What the AI should judge fit against — the intent, not "…찾아줘". */
+    const matchContext = plan?.intent || query;
 
     try {
       const items = await readDataset(datasetId);
@@ -427,14 +435,15 @@ export const POST = withErrorHandling(
         const { count } = await existingResults(sb, userId, campaignId);
 
         if (count >= Math.min(TARGET, SEARCH_MIN_SUFFICIENT)) {
-          await applyAiMatch(sb, userId, campaignId, query, c.product_id ?? null);
+          await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null);
           await markSucceeded(sb, campaignId, count);
           return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
         }
         if (!(await claimStage(sb, campaignId, 1, c.apify_run_id, 2))) {
           return ok(runningBody(2)); // another poll won the claim
         }
-        const started = await startActorRun(stage2Input(query));
+        // AI's real hashtags when the user wrote a sentence; rule-based otherwise.
+        const started = await startActorRun(stage2Input(query, plan?.hashtags));
         await attachRun(sb, campaignId, started);
         return ok(runningBody(2));
       }
@@ -446,7 +455,7 @@ export const POST = withErrorHandling(
         const toEnrich = authors.slice(0, stage3Cap(Math.max(TARGET - count, 0)));
 
         if (toEnrich.length === 0) {
-          await applyAiMatch(sb, userId, campaignId, query, c.product_id ?? null);
+          await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null);
           await markSucceeded(sb, campaignId, count);
           return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
         }
@@ -470,7 +479,7 @@ export const POST = withErrorHandling(
         before,
       );
       const { count } = await existingResults(sb, userId, campaignId);
-      await applyAiMatch(sb, userId, campaignId, query, c.product_id ?? null);
+      await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null);
       await markSucceeded(sb, campaignId, count);
       return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
     } catch (err) {

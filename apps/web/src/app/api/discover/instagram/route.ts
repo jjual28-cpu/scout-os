@@ -5,6 +5,8 @@ import { type InstagramCreator } from '@/features/search/instagram';
 import { ok, withErrorHandling } from '@/lib/api/response';
 import { getDiscoveryProvider, isSupabaseConfigured } from '@/lib/env';
 import { normalizeQuery } from '@/lib/normalize-query';
+import { type BrandContext } from '@/services/ai/match';
+import { looksNatural, planSearch, type SearchPlan } from '@/services/ai/query';
 import {
   normalizeHandle,
   stage1Input,
@@ -193,13 +195,29 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   }
 
   // 4) Kick off Stage 1 and return immediately.
-  //    keyword → profile search on the query.
+  //    keyword → profile search on the query (AI-translated when it's a sentence).
   //    tagged  → posts tagging that brand (a different actor, same run API).
   try {
+    // "신생 바디케어 브랜드 찾아줘" → Instagram understands none of that. Translate
+    // first; a plain keyword ("골프") skips the AI entirely (no cost, no latency).
+    let plan: SearchPlan | null = null;
+    if (mode === 'keyword' && looksNatural(rawQuery)) {
+      plan = await planSearch(userId, rawQuery, await brandFor(supabase, body.productId ?? null));
+      if (plan) {
+        await supabase
+          .from('campaigns')
+          .update({ search_plan: plan })
+          .eq('id', created.id)
+          .eq('status', 'running');
+      }
+    }
+
     const started =
       mode === 'tagged'
         ? await startActorRun(taggedInput([rawQuery]), taggedActor())
-        : await startActorRun(stage1Input(rawQuery, body.limit ?? DEFAULT_LIMIT));
+        : await startActorRun(
+            stage1Input(plan?.searchTerm || rawQuery, body.limit ?? DEFAULT_LIMIT),
+          );
     await supabase
       .from('campaigns')
       .update({
@@ -240,6 +258,22 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     cached: false,
   });
 });
+
+/** Product context so the AI plans terms around what the brand actually sells. */
+async function brandFor(
+  supabase: Awaited<ReturnType<typeof getSupabase>>,
+  productId: string | null,
+): Promise<BrandContext | null> {
+  if (!productId) return null;
+  const { data } = await supabase
+    .from('products')
+    .select('name,category,target')
+    .eq('id', productId)
+    .maybeSingle();
+  if (!data) return null;
+  const row = data as Record<string, string | null>;
+  return { productName: row.name, category: row.category, target: row.target };
+}
 
 /** A same-user/platform/query campaign that is still running → its id. */
 async function findRunning(

@@ -251,9 +251,19 @@ export function stage1Input(query: string, limit?: number) {
   };
 }
 
-/** Stage 2 — hashtag/post search over rule-expanded keywords. */
-export function stage2Input(query: string) {
-  const tags = expandKeyword(query);
+/**
+ * Stage 2 — hashtag/post search.
+ *
+ * `tags` comes from the AI search plan when the user wrote a sentence; the
+ * rule-based expansion is only a fallback (it produces junk for phrases, e.g.
+ * "신생 바디케어 브랜드 찾아줘" → #신생바디케어브랜드찾아줘스타그램).
+ */
+export function stage2Input(query: string, tags?: string[]) {
+  const tags_ = tags?.length ? tags.slice(0, 6) : expandKeyword(query);
+  return buildStage2(tags_);
+}
+
+function buildStage2(tags: string[]) {
   return {
     directUrls: tags.map((t) => `https://www.instagram.com/explore/tags/${encodeURIComponent(t)}/`),
     resultsType: 'posts',
