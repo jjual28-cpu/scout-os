@@ -11,6 +11,10 @@ export type DiscoverOpportunity = SearchResult & {
   category?: string | null;
   postsCount?: number | null;
   biography?: string | null;
+  /** AI fit verdict (0~100 + one-line reason). Undefined ⇒ AI hasn't judged it. */
+  aiScore?: number | null;
+  aiVerdict?: 'fit' | 'maybe' | 'reject' | null;
+  aiReason?: string | null;
 };
 
 export type DiscoverCategory = {

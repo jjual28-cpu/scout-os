@@ -8,6 +8,7 @@ import {
   MessageSquarePlus,
   MoreHorizontal,
   Send,
+  Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -93,6 +94,57 @@ export function DiscoverCard({
       ) : null}
 
       <OpportunityBody result={item} profileHref={instagramUrl} />
+
+      {/* AI 적합도 — why this account is (or isn't) a real fit for the brand. */}
+      {item.aiVerdict ? (
+        <div
+          className={cn(
+            'mt-4 rounded-lg border p-2.5',
+            item.aiVerdict === 'fit'
+              ? 'border-primary/20 bg-primary/[0.05]'
+              : item.aiVerdict === 'reject'
+                ? 'dark:border-border border-slate-200/70 bg-slate-50/70'
+                : 'border-amber-500/20 bg-amber-500/[0.06]',
+          )}
+        >
+          <div className="flex items-center gap-1.5">
+            <Sparkles
+              className={cn(
+                'size-3.5',
+                item.aiVerdict === 'fit'
+                  ? 'text-primary'
+                  : item.aiVerdict === 'reject'
+                    ? 'text-slate-400'
+                    : 'text-amber-600',
+              )}
+            />
+            <span
+              className={cn(
+                'text-[11px] font-semibold',
+                item.aiVerdict === 'fit'
+                  ? 'text-primary'
+                  : item.aiVerdict === 'reject'
+                    ? 'text-slate-500'
+                    : 'text-amber-700 dark:text-amber-500',
+              )}
+            >
+              {item.aiVerdict === 'fit'
+                ? 'AI 추천'
+                : item.aiVerdict === 'reject'
+                  ? 'AI 제외'
+                  : 'AI 보류'}
+            </span>
+            {typeof item.aiScore === 'number' ? (
+              <span className="text-muted-foreground text-[11px] tabular-nums">
+                적합도 {item.aiScore}
+              </span>
+            ) : null}
+          </div>
+          {item.aiReason ? (
+            <p className="text-foreground/80 mt-1 text-xs leading-snug">{item.aiReason}</p>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* 발견일 + 최근 연락 상태 */}
       <div className="text-muted-foreground mt-4 flex items-center justify-between gap-2 text-xs">

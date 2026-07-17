@@ -3,6 +3,7 @@ import { type NextRequest } from 'next/server';
 import { type InstagramCreator } from '@/features/search/instagram';
 import { fail, ok, withErrorHandling } from '@/lib/api/response';
 import { isSupabaseConfigured } from '@/lib/env';
+import { matchCreators, type BrandContext } from '@/services/ai/match';
 import {
   authorsFromPosts,
   getRunStatus,
@@ -150,6 +151,99 @@ async function markFailed(sb: Sb, campaignId: string, message: string): Promise<
     .eq('status', 'running');
 }
 
+/**
+ * AI matching pass — runs ONCE, right before a campaign is marked succeeded.
+ *
+ * Apify only casts a wide net; this is where the results actually get judged
+ * against the brand so info/irrelevant accounts drop out and real fits rank up.
+ *
+ * Deliberately best-effort: ANY failure (no AI key, daily cap reached, bad model
+ * output) leaves the raw results untouched and the search still succeeds. The
+ * search must never break because AI was unavailable.
+ */
+async function applyAiMatch(
+  sb: Sb,
+  userId: string,
+  campaignId: string,
+  query: string,
+  productId: string | null,
+): Promise<void> {
+  try {
+    const { data: rows } = await sb
+      .from('campaign_results')
+      .select('creator_id,creator_snapshot')
+      .eq('user_id', userId)
+      .eq('campaign_id', campaignId);
+    if (!rows || rows.length === 0) return;
+
+    /* eslint-disable @typescript-eslint/no-explicit-any -- stored snapshots are jsonb */
+    const creators = (rows as any[])
+      .map((r) => r.creator_snapshot as any)
+      .filter((s) => s && typeof s.username === 'string')
+      .map(
+        (s): InstagramCreator => ({
+          id: s.externalId,
+          platform: 'instagram',
+          username: s.username,
+          displayName: s.displayName ?? s.username,
+          profileUrl: s.profileUrl ?? '',
+          profileImageUrl: s.profileImageUrl ?? null,
+          biography: s.biography ?? null,
+          followersCount: s.followersCount ?? null,
+          followingCount: s.followingCount ?? null,
+          postsCount: s.postsCount ?? null,
+          isVerified: Boolean(s.isVerified),
+          category: s.category ?? null,
+          rawData: null,
+        }),
+      );
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+    if (creators.length === 0) return;
+
+    // Brand context makes the verdict "fit for THIS product" instead of just
+    // "on topic". Absent product → judge against the search intent only.
+    let brand: BrandContext | null = null;
+    if (productId) {
+      const { data: p } = await sb
+        .from('products')
+        .select('name,brand,category,usp,selling_points,target')
+        .eq('id', productId)
+        .maybeSingle();
+      if (p) {
+        const row = p as Record<string, string | null>;
+        brand = {
+          productName: row.name,
+          brand: row.brand,
+          category: row.category,
+          usp: row.usp,
+          sellingPoints: row.selling_points,
+          target: row.target,
+        };
+      }
+    }
+
+    const verdicts = await matchCreators(userId, query, creators, brand);
+    if (verdicts.size === 0) return;
+
+    // Persist per creator. Sequential updates keep it simple and are cheap at
+    // ~24 rows; a failure on one row must not abort the rest.
+    for (const c of creators) {
+      const m = verdicts.get(c.username.toLowerCase());
+      if (!m) continue;
+      const { error } = await sb
+        .from('campaign_results')
+        .update({ ai_score: m.score, ai_verdict: m.verdict, ai_reason: m.reason })
+        .eq('user_id', userId)
+        .eq('campaign_id', campaignId)
+        .eq('creator_id', c.id);
+      if (error) console.error(`[status] ai verdict save failed (${c.username}): ${error.message}`);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[status] AI matching skipped for campaign ${campaignId}: ${msg}`);
+  }
+}
+
 async function markSucceeded(sb: Sb, campaignId: string, count: number): Promise<void> {
   await sb
     .from('campaigns')
@@ -220,7 +314,7 @@ export const POST = withErrorHandling(
     const { data: row } = await sb
       .from('campaigns')
       .select(
-        'id,query,status,error,result_count,apify_run_id,apify_dataset_id,apify_stage,started_at',
+        'id,query,status,error,result_count,apify_run_id,apify_dataset_id,apify_stage,started_at,product_id',
       )
       .eq('id', campaignId)
       .eq('user_id', userId)
@@ -296,6 +390,7 @@ export const POST = withErrorHandling(
         const { count } = await existingResults(sb, userId, campaignId);
 
         if (count >= Math.min(TARGET, SEARCH_MIN_SUFFICIENT)) {
+          await applyAiMatch(sb, userId, campaignId, query, c.product_id ?? null);
           await markSucceeded(sb, campaignId, count);
           return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
         }
@@ -314,6 +409,7 @@ export const POST = withErrorHandling(
         const toEnrich = authors.slice(0, stage3Cap(Math.max(TARGET - count, 0)));
 
         if (toEnrich.length === 0) {
+          await applyAiMatch(sb, userId, campaignId, query, c.product_id ?? null);
           await markSucceeded(sb, campaignId, count);
           return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
         }
@@ -337,6 +433,7 @@ export const POST = withErrorHandling(
         before,
       );
       const { count } = await existingResults(sb, userId, campaignId);
+      await applyAiMatch(sb, userId, campaignId, query, c.product_id ?? null);
       await markSucceeded(sb, campaignId, count);
       return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
     } catch (err) {

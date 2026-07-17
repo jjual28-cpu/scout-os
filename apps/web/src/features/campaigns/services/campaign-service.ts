@@ -132,14 +132,26 @@ export async function listResults(
   userId: string,
   campaignId: string,
 ): Promise<CampaignResult[]> {
+  // AI fit first (ai_score desc), then the original discovery order. Results the
+  // AI hasn't judged (null score) fall back to rank so nothing disappears.
   const { data } = await sb
     .from('campaign_results')
-    .select('creator_snapshot,rank')
+    .select('creator_snapshot,rank,ai_score,ai_verdict,ai_reason')
     .eq('campaign_id', campaignId)
     .eq('user_id', userId)
+    .order('ai_score', { ascending: false, nullsFirst: false })
     .order('rank', { ascending: true });
   return (data ?? [])
-    .map((r: any) => r.creator_snapshot as CampaignResult)
+    .map((r: any) => {
+      const snap = r.creator_snapshot as CampaignResult;
+      if (!snap) return snap;
+      return {
+        ...snap,
+        aiScore: r.ai_score ?? null,
+        aiVerdict: r.ai_verdict ?? null,
+        aiReason: r.ai_reason ?? null,
+      } satisfies CampaignResult;
+    })
     .filter((r) => r && r.externalId);
 }
 

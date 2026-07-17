@@ -52,7 +52,8 @@ import { keywordEmoji } from '../keyword';
 import { summarizeResults } from '../recommend';
 import { DiscoverCard } from './discover-card';
 
-/** A stored campaign_results snapshot → the same card shape the live search uses. */
+/** A stored campaign_results snapshot → the same card shape the live search uses.
+ *  Carries the AI verdict through so Discover can filter/rank/explain by fit. */
 function snapshotToOpportunity(s: CampaignResult): DiscoverOpportunity {
   const creator: InstagramCreator = {
     id: s.externalId,
@@ -69,7 +70,12 @@ function snapshotToOpportunity(s: CampaignResult): DiscoverOpportunity {
     category: s.category,
     rawData: null,
   };
-  return toDiscoverOpportunity(creator);
+  return {
+    ...toDiscoverOpportunity(creator),
+    aiScore: s.aiScore ?? null,
+    aiVerdict: s.aiVerdict ?? null,
+    aiReason: s.aiReason ?? null,
+  };
 }
 
 const POPULAR = [
@@ -110,7 +116,7 @@ const TOGGLES: { id: Toggle; label: string }[] = [
 ];
 type SortKey = 'recommended' | 'followers' | 'recent' | 'posts';
 const SORTS: { id: SortKey; label: string }[] = [
-  { id: 'recommended', label: '추천순' },
+  { id: 'recommended', label: 'AI 추천순' },
   { id: 'followers', label: '팔로워순' },
   { id: 'recent', label: '최근 발견순' },
   { id: 'posts', label: '게시물순' },
@@ -230,6 +236,8 @@ export function CreatorSearch() {
     completedAt: null,
   });
   const [hideHandled, setHideHandled] = useState(true);
+  /** Hide the accounts AI judged as not a real fit. On by default. */
+  const [hideRejected, setHideRejected] = useState(true);
 
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
 
@@ -512,9 +520,15 @@ export function CreatorSearch() {
     [items, outreach.records],
   );
 
+  // Accounts the AI judged as not a real fit (info/news/unrelated). Hidden by
+  // default — that's the whole point of the matching layer — but never deleted,
+  // so the user can always look at what was filtered out.
+  const aiRejectedCount = useMemo(() => items.filter((it) => it.aiVerdict === 'reject').length, [items]);
+
   // Filter + sort (client-side, over the current result set)
   const visible = useMemo(() => {
     const filtered = items.filter((it) => {
+      if (hideRejected && it.aiVerdict === 'reject') return false;
       if (hideHandled && isDefaultHidden(outreach.records[it.id]?.status)) return false;
       const f = it.followersCount ?? 0;
       if (buckets.size && ![...buckets].some((b) => inBucket(f, b))) return false;
@@ -528,14 +542,17 @@ export function CreatorSearch() {
     if (sort === 'followers') arr.sort((a, b) => (b.followersCount ?? 0) - (a.followersCount ?? 0));
     else if (sort === 'posts') arr.sort((a, b) => (b.postsCount ?? 0) - (a.postsCount ?? 0));
     else if (sort === 'recommended')
+      // AI fit leads; unjudged results fall back to the old rule-based order so
+      // a search without AI still ranks sensibly.
       arr.sort(
         (a, b) =>
+          (b.aiScore ?? -1) - (a.aiScore ?? -1) ||
           (b.reasons?.length ?? 0) - (a.reasons?.length ?? 0) ||
           (b.followersCount ?? 0) - (a.followersCount ?? 0),
       );
     // 'recent' keeps the original discovery order
     return arr;
-  }, [items, buckets, toggles, sort, hideHandled, outreach.records]);
+  }, [items, buckets, toggles, sort, hideHandled, hideRejected, outreach.records]);
 
   const summary = useMemo(() => summarizeResults(items), [items]);
 
@@ -887,6 +904,12 @@ export function CreatorSearch() {
 
           {/* Sort + hidden toggle */}
           <div className="mb-5 flex flex-wrap items-center gap-2">
+            {aiRejectedCount > 0 ? (
+              <FilterChip active={!hideRejected} onClick={() => setHideRejected((v) => !v)}>
+                <Sparkles className="size-3.5" />
+                AI가 거른 {aiRejectedCount}명 {hideRejected ? '숨김' : '표시 중'}
+              </FilterChip>
+            ) : null}
             {hiddenHandledCount > 0 ? (
               <FilterChip active={!hideHandled} onClick={() => setHideHandled((v) => !v)}>
                 <EyeOff className="size-3.5" />

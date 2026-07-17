@@ -61,6 +61,9 @@ export type Campaign = {
 };
 
 /** Snapshot of a creator as it appeared in a campaign's search. */
+/** AI's judgement of whether a creator actually fits the brand/search intent. */
+export type AiVerdict = 'fit' | 'maybe' | 'reject';
+
 export type CampaignResult = {
   externalId: string;
   username: string;
@@ -73,6 +76,11 @@ export type CampaignResult = {
   postsCount: number | null;
   isVerified: boolean;
   category: string | null;
+  /** 0~100 fit score. null when AI hasn't judged this result. */
+  aiScore?: number | null;
+  aiVerdict?: AiVerdict | null;
+  /** One-line reason shown on the card. */
+  aiReason?: string | null;
 };
 
 /** A campaign "draft" carried into /discover for 다시 검색 / 복제 prefill. */
