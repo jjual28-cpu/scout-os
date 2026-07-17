@@ -356,6 +356,16 @@ export function CreatorSearch() {
     if (myStatus === 'succeeded' || myStatus === 'failed') void openCampaign(campaignId);
   }, [campaignId, myStatus, openCampaign]);
 
+  // Completion toast tapped "바로 보기" → open that campaign even if Discover is
+  // already on screen (a same-page URL change wouldn't remount this component).
+  const openRequest = runSnap.openRequest;
+  useEffect(() => {
+    if (!openRequest) return;
+    void openCampaign(openRequest);
+    runStore.clearOpenRequest();
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [openRequest, openCampaign]);
+
   // Progressive results: while a search runs, pull in whatever's already been
   // found (Stage 1 saves first) so the user sees the first batch immediately and
   // can browse while the rest keeps coming — instead of staring at a spinner.

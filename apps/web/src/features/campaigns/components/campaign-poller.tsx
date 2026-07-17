@@ -111,11 +111,17 @@ export function CampaignPoller() {
             {finished.query ? `‘${finished.query}’ · ` : ''}
             {ok ? `${finished.resultCount}명의 셀럽을 찾았습니다.` : '다시 검색해 주세요.'}
           </p>
-          {/* Opens this exact campaign in Discover — restore only, no re-search. */}
+          {/* Opens this exact campaign in Discover — restore only, no re-search.
+              requestOpen() makes Discover reopen even if it's already mounted
+              (a same-page ?campaign= change alone wouldn't trigger it); the href
+              still handles navigating in from another page. */}
           <Button asChild size="sm" className="mt-2 h-7">
             <Link
               href={`/discover?campaign=${finished.id}`}
-              onClick={() => store.clearJustFinished()}
+              onClick={() => {
+                store.requestOpen(finished.id);
+                store.clearJustFinished();
+              }}
             >
               바로 보기
             </Link>

@@ -26,10 +26,26 @@ type Snapshot = {
     query: string;
     resultCount: number;
   } | null;
+  /** A campaign the user asked to open (e.g. tapped "바로 보기"). Discover reacts
+   *  to this even when it's already mounted, so the same-page URL change alone
+   *  wouldn't reopen it. */
+  openRequest: string | null;
 };
 
-let snapshot: Snapshot = { statuses: {}, details: {}, tick: 0, justFinished: null };
-const SERVER_SNAPSHOT: Snapshot = { statuses: {}, details: {}, tick: 0, justFinished: null };
+let snapshot: Snapshot = {
+  statuses: {},
+  details: {},
+  tick: 0,
+  justFinished: null,
+  openRequest: null,
+};
+const SERVER_SNAPSHOT: Snapshot = {
+  statuses: {},
+  details: {},
+  tick: 0,
+  justFinished: null,
+  openRequest: null,
+};
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -78,5 +94,18 @@ export function setRunDetail(id: string, detail: RunDetail): void {
 export function clearJustFinished(): void {
   if (!snapshot.justFinished) return;
   snapshot = { ...snapshot, justFinished: null, tick: snapshot.tick + 1 };
+  emit();
+}
+
+/** Ask Discover to open a specific campaign (from the completion toast). */
+export function requestOpen(id: string): void {
+  snapshot = { ...snapshot, openRequest: id, tick: snapshot.tick + 1 };
+  emit();
+}
+
+/** Discover clears the request once it has opened the campaign. */
+export function clearOpenRequest(): void {
+  if (snapshot.openRequest === null) return;
+  snapshot = { ...snapshot, openRequest: null, tick: snapshot.tick + 1 };
   emit();
 }
