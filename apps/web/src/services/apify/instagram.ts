@@ -153,12 +153,23 @@ function apifyActorId(): string {
   return env.APIFY_INSTAGRAM_ACTOR.replace('/', '~');
 }
 
-/** Start an actor run WITHOUT waiting for it. Returns the run + dataset ids. */
-export async function startActorRun(actorInput: unknown): Promise<StartedRun> {
+/** Actor that returns posts TAGGING a given account (different actor, same run API). */
+function taggedActorId(): string {
+  return env.APIFY_TAGGED_ACTOR.replace('/', '~');
+}
+
+/**
+ * Start an actor run WITHOUT waiting for it. Returns the run + dataset ids.
+ * `actorId` defaults to the Instagram scraper; the tagged scraper passes its own.
+ */
+export async function startActorRun(
+  actorInput: unknown,
+  actorId: string = apifyActorId(),
+): Promise<StartedRun> {
   const token = apifyToken();
   let res: Response;
   try {
-    res = await fetch(`${APIFY_BASE}/acts/${apifyActorId()}/runs?token=${token}`, {
+    res = await fetch(`${APIFY_BASE}/acts/${actorId}/runs?token=${token}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(actorInput),
@@ -248,6 +259,34 @@ export function stage2Input(query: string) {
     resultsType: 'posts',
     resultsLimit: POSTS_LIMIT,
   };
+}
+
+/**
+ * Tagged search — posts that TAG the given account(s).
+ *
+ * This is the high-signal entrance: whoever tags a cosmetics brand is already
+ * doing brand content, unlike a hashtag match. The actor returns POSTS (with the
+ * author's username) and no follower/bio data, so the authors still go through
+ * the same enrichment pass as hashtag authors do.
+ */
+export function taggedInput(handles: string[], limit = 40) {
+  return {
+    username: handles,
+    resultsLimit: Math.min(Math.max(limit, 1), 100),
+  };
+}
+
+/** Actor id for the tagged run (callers pass this to startActorRun). */
+export function taggedActor(): string {
+  return taggedActorId();
+}
+
+/** "@Brand_Name " / a profile URL → "brand_name". Empty when unusable. */
+export function normalizeHandle(raw: string): string {
+  const t = raw.trim().replace(/^@/, '');
+  const fromUrl = t.match(/instagram\.com\/([^/?#]+)/i)?.[1] ?? t;
+  const clean = fromUrl.trim().replace(/\/+$/, '');
+  return validUsername(clean) ? clean : '';
 }
 
 /** Stage 3 — enrich post-author usernames into full profile details. */

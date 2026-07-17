@@ -17,6 +17,7 @@ import {
   SearchX,
   SlidersHorizontal,
   Sparkles,
+  Tag,
   TrendingUp,
   X,
   Youtube,
@@ -98,6 +99,10 @@ const PLATFORMS = [
 ] as const;
 
 type Phase = 'idle' | 'searching' | 'done';
+
+/** Two discovery entrances. `tagged` finds creators who already tag a brand —
+ *  proof they do brand work, which a hashtag match can't tell you. */
+type SearchMode = 'keyword' | 'tagged';
 
 // ── Filters / sort ──────────────────────────────────────────────────────────
 type Bucket = '0-5k' | '5k-10k' | '10k-50k' | '50k+';
@@ -240,6 +245,8 @@ export function CreatorSearch() {
   const [hideRejected, setHideRejected] = useState(true);
 
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  /** Competitor/brand handle for the tagged entrance. */
+  const [rival, setRival] = useState('');
 
   const saved = useSavedOpportunities();
   const outreach = useOutreach();
@@ -421,7 +428,7 @@ export function CreatorSearch() {
    * Start a search. The POST returns a campaignId within ~1s — it never waits for
    * Apify. `force` = 최신 결과로 재검색 (ignores the 24h cache).
    */
-  async function runSearch(raw: string, force = false) {
+  async function runSearch(raw: string, force = false, mode: SearchMode = 'keyword') {
     const q = raw.trim();
     if (!q) return;
     if (phase === 'searching') return; // a run is already in flight
@@ -435,7 +442,7 @@ export function CreatorSearch() {
 
     const meta = draftMeta.current;
     draftMeta.current = null; // one-shot
-    const body: Record<string, unknown> = { query: q, limit: 24, force };
+    const body: Record<string, unknown> = { query: q, limit: 24, force, mode };
     if (meta) {
       if (meta.title) body.title = meta.title;
       if (meta.brand) body.brand = meta.brand;
@@ -634,6 +641,34 @@ export function CreatorSearch() {
           </select>
         </div>
       ) : null}
+
+      {/* The high-signal entrance: whoever tags a brand already does brand work. */}
+      <div>
+        <RailLabel icon={<Tag className="size-3.5" />}>경쟁사 태그로 찾기</RailLabel>
+        <p className="text-muted-foreground mb-2 text-[11px] leading-snug">
+          이 브랜드를 태그한 셀럽을 찾아요. 이미 브랜드 협업을 하는 계정이라 적중률이 높아요.
+        </p>
+        <div className="flex gap-1.5">
+          <input
+            value={rival}
+            onChange={(e) => setRival(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void runSearch(rival, false, 'tagged');
+            }}
+            placeholder="@경쟁사계정"
+            className={cn(RAIL_FIELD, 'flex-1')}
+            aria-label="경쟁사 인스타그램 계정"
+          />
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => void runSearch(rival, false, 'tagged')}
+            disabled={phase === 'searching' || rival.trim().length < 2}
+          >
+            찾기
+          </Button>
+        </div>
+      </div>
 
       <ChipRow
         icon={<TrendingUp className="size-3.5" />}

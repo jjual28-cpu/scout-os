@@ -5,7 +5,13 @@ import { type InstagramCreator } from '@/features/search/instagram';
 import { ok, withErrorHandling } from '@/lib/api/response';
 import { getDiscoveryProvider, isSupabaseConfigured } from '@/lib/env';
 import { normalizeQuery } from '@/lib/normalize-query';
-import { stage1Input, startActorRun } from '@/services/apify/instagram';
+import {
+  normalizeHandle,
+  stage1Input,
+  startActorRun,
+  taggedActor,
+  taggedInput,
+} from '@/services/apify/instagram';
 
 // Env is read and Apify/Supabase clients are created only per request.
 export const dynamic = 'force-dynamic';
@@ -33,6 +39,8 @@ const bodySchema = z.object({
   memo: z.string().trim().max(2000).optional(),
   label: z.enum(['active', 'hold', 'done', 'failed']).optional(),
   source: z.enum(['manual', 'ai']).optional(),
+  /** 'keyword' — 이름/해시태그 검색. 'tagged' — 이 브랜드를 태그한 계정 찾기. */
+  mode: z.enum(['keyword', 'tagged']).optional(),
 });
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- DB rows are loosely typed here */
@@ -100,7 +108,24 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   }
 
   // ── Apify mode (async Campaign search) ───────────────────────────────────
-  const rawQuery = (body.query ?? body.hashtag ?? '').trim();
+  const mode = body.mode ?? 'keyword';
+  let rawQuery = (body.query ?? body.hashtag ?? '').trim();
+
+  // In tagged mode the query IS the brand handle — normalise it up front so the
+  // campaign, the cache key and the actor input all agree on one form.
+  if (mode === 'tagged') {
+    const handle = normalizeHandle(rawQuery);
+    if (!handle) {
+      return ok({
+        configured: true,
+        campaignId: null,
+        status: 'failed' as const,
+        error: '올바른 인스타그램 계정을 입력해 주세요. (예: @brandname)',
+      });
+    }
+    rawQuery = handle;
+  }
+
   if (!rawQuery) {
     return ok({ configured: true, campaignId: null, status: 'idle' as const });
   }
@@ -139,7 +164,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
   // 3) Create the running Campaign (query stored as the user typed it).
   const created = await createCampaign(supabase, userId, rawQuery, {
-    title: body.title?.trim() || rawQuery,
+    title: body.title?.trim() || (mode === 'tagged' ? `@${rawQuery} 태그` : rawQuery),
     productId: body.productId ?? null,
     brand: body.brand ?? null,
     season: body.season ?? null,
@@ -147,6 +172,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     memo: body.memo ?? null,
     label: body.label ?? 'active',
     source: body.source ?? 'manual',
+    mode,
   });
   if (!created) {
     return ok({
@@ -167,8 +193,13 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   }
 
   // 4) Kick off Stage 1 and return immediately.
+  //    keyword → profile search on the query.
+  //    tagged  → posts tagging that brand (a different actor, same run API).
   try {
-    const started = await startActorRun(stage1Input(rawQuery, body.limit ?? DEFAULT_LIMIT));
+    const started =
+      mode === 'tagged'
+        ? await startActorRun(taggedInput([rawQuery]), taggedActor())
+        : await startActorRun(stage1Input(rawQuery, body.limit ?? DEFAULT_LIMIT));
     await supabase
       .from('campaigns')
       .update({
@@ -267,6 +298,8 @@ type CampaignMetaInput = {
   memo: string | null;
   label: string;
   source: string;
+  /** How the state machine should interpret this campaign's stages. */
+  mode: 'keyword' | 'tagged';
 };
 
 /**
@@ -298,6 +331,7 @@ async function createCampaign(
       memo: meta.memo,
       label: meta.label,
       source: meta.source,
+      search_mode: meta.mode,
       started_at: now,
       updated_at: now,
     })

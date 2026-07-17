@@ -314,7 +314,7 @@ export const POST = withErrorHandling(
     const { data: row } = await sb
       .from('campaigns')
       .select(
-        'id,query,status,error,result_count,apify_run_id,apify_dataset_id,apify_stage,started_at,product_id',
+        'id,query,status,error,result_count,apify_run_id,apify_dataset_id,apify_stage,started_at,product_id,search_mode',
       )
       .eq('id', campaignId)
       .eq('user_id', userId)
@@ -379,10 +379,47 @@ export const POST = withErrorHandling(
 
     const stage: number = c.apify_stage ?? 1;
     const query: string = c.query;
+    const mode: 'keyword' | 'tagged' = c.search_mode === 'tagged' ? 'tagged' : 'keyword';
 
     try {
       const items = await readDataset(datasetId);
 
+      // ── Tagged mode — the same 3-stage machine, two stages long ─────────────
+      //    1 = posts tagging the brand → author usernames
+      //    2 = enrich those authors → profiles → done
+      if (mode === 'tagged') {
+        if (stage === 1) {
+          // The tagged actor returns POSTS; the value is who wrote them.
+          const authors = authorsFromPosts(items, []).slice(0, stage3Cap(TARGET));
+          if (authors.length === 0) {
+            await markSucceeded(sb, campaignId, 0);
+            return ok({ status: 'succeeded' as const, resultCount: 0, progress: 100 });
+          }
+          if (!(await claimStage(sb, campaignId, 1, c.apify_run_id, 2))) {
+            return ok(runningBody(2));
+          }
+          const started = await startActorRun(stage3Input(authors));
+          await attachRun(sb, campaignId, started);
+          return ok(runningBody(2));
+        }
+
+        // Stage 2 — enriched profiles → save → judge → finish.
+        const creators = profilesFromItems(items).slice(0, TARGET);
+        await saveCreators(sb, userId, campaignId, query, creators, 0);
+        const { count } = await existingResults(sb, userId, campaignId);
+        // Tell the AI these came from tagging a brand — that's the signal.
+        await applyAiMatch(
+          sb,
+          userId,
+          campaignId,
+          `@${query} 브랜드를 태그한 계정 (브랜드 협업 경험 있음)`,
+          c.product_id ?? null,
+        );
+        await markSucceeded(sb, campaignId, count);
+        return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
+      }
+
+      // ── Keyword mode (unchanged) ───────────────────────────────────────────
       // Stage 1 — profile search results.
       if (stage === 1) {
         const creators = profilesFromItems(items).slice(0, TARGET);

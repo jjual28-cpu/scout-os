@@ -85,6 +85,8 @@ export const env = {
   // creator discovery. Undefined ⇒ /discover falls back to mock data.
   APIFY_API_TOKEN: optional(nonEmpty, process.env.APIFY_API_TOKEN),
   APIFY_INSTAGRAM_ACTOR: process.env.APIFY_INSTAGRAM_ACTOR ?? 'apify~instagram-scraper',
+  /** Posts that TAG a given account → the creators already doing brand work. */
+  APIFY_TAGGED_ACTOR: process.env.APIFY_TAGGED_ACTOR ?? 'apify~instagram-tagged-scraper',
 
   // Discovery provider (server-only). Selects how /discover sources creators:
   //   'worker' — enqueue a job for the local Playwright worker (packages/worker)
