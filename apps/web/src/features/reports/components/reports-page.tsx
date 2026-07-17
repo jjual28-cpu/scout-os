@@ -122,6 +122,7 @@ export function ReportsPage() {
               icon={<Search className="size-4" />}
               label="검색 수"
               value={kpis.searches}
+              accent="primary"
               delta={
                 <span className="text-muted-foreground">
                   완료 <Num>{sc.succeeded}</Num>
@@ -142,23 +143,45 @@ export function ReportsPage() {
               icon={<Users className="size-4" />}
               label="발견 셀럽"
               value={kpis.discovered}
+              accent="blue"
               delta={
                 <span className="text-muted-foreground">
                   고유 <Num>{kpis.uniqueCreators}</Num>명
                 </span>
               }
             />
-            <StatCard icon={<Star className="size-4" />} label="저장" value={kpis.saved} />
-            <StatCard icon={<MessageSquare className="size-4" />} label="DM" value={kpis.dm} />
+            <StatCard
+              icon={<Star className="size-4" />}
+              label="저장"
+              value={kpis.saved}
+              accent="amber"
+            />
+            <StatCard
+              icon={<MessageSquare className="size-4" />}
+              label="DM"
+              value={kpis.dm}
+              accent="fuchsia"
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatCard icon={<Reply className="size-4" />} label="답변" value={kpis.reply} />
-            <StatCard icon={<Star className="size-4" />} label="협업" value={kpis.collab} />
+            <StatCard
+              icon={<Reply className="size-4" />}
+              label="답변"
+              value={kpis.reply}
+              accent="emerald"
+            />
+            <StatCard
+              icon={<Star className="size-4" />}
+              label="협업"
+              value={kpis.collab}
+              accent="rose"
+            />
             <StatCard
               icon={<BarChart3 className="size-4" />}
               label="전환율"
               value={`${kpis.conversion}%`}
+              accent="primary"
               delta={<span className="text-muted-foreground">협업 ÷ DM</span>}
             />
           </div>

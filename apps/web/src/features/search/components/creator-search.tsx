@@ -975,7 +975,7 @@ export function CreatorSearch() {
             {/* Desktop: a distinct, colored panel that scrolls INTERNALLY so the
                 filters at the bottom are always reachable (previously the sticky
                 rail could grow taller than the viewport and clip them). */}
-            <div className="dark:border-border dark:from-muted/30 mt-4 hidden rounded-2xl border border-slate-200/70 bg-gradient-to-b from-slate-50 to-white p-4 lg:block lg:max-h-[calc(100vh-13rem)] lg:overflow-y-auto dark:to-transparent">
+            <div className="dark:border-border dark:from-muted/30 mt-4 hidden rounded-2xl border border-violet-200/50 bg-gradient-to-b from-violet-50/70 to-white p-4 lg:block lg:max-h-[calc(100vh-13rem)] lg:overflow-y-auto dark:to-transparent">
               {railBody}
             </div>
           </aside>
