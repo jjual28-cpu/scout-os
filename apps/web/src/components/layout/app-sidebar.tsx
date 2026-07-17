@@ -79,12 +79,10 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
       {/* Logo */}
       <div className="flex h-16 items-center gap-2.5 px-5">
         <Link href="/home" className="flex items-center gap-2.5" onClick={onNavigate}>
-          <div className="bg-primary text-primary-foreground flex h-7 w-7 items-center justify-center rounded-lg">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#8b5cf6] text-white">
             <span className="text-[13px] font-bold">S</span>
           </div>
-          <span className="dark:text-foreground text-[15px] font-semibold tracking-tight text-slate-900">
-            Scout OS
-          </span>
+          <span className="text-[15px] font-semibold tracking-tight text-white">Scout OS</span>
         </Link>
       </div>
 
@@ -103,8 +101,8 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
                 className={cn(
                   'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors duration-150',
                   active
-                    ? 'bg-primary/10 text-primary font-medium'
-                    : 'dark:text-muted-foreground dark:hover:bg-muted text-slate-600 hover:bg-slate-100',
+                    ? 'bg-[#8b5cf6] font-medium text-white'
+                    : 'text-[#c4b5f0] hover:bg-white/10 hover:text-white',
                 )}
               >
                 <Icon className="size-[18px] shrink-0" />
@@ -122,11 +120,11 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
                 key={item.title}
                 type="button"
                 onClick={() => setSoonOpen(item)}
-                className="dark:text-muted-foreground/60 dark:hover:bg-muted flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-[#9d8ecb] transition-colors hover:bg-white/10 hover:text-white"
               >
                 <Icon className="size-[18px] shrink-0" />
                 <span className="flex-1 truncate text-left">{item.title}</span>
-                <span className="dark:bg-muted dark:text-muted-foreground/70 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
+                <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-[#c4b5f0]">
                   준비 중
                 </span>
               </button>
@@ -136,27 +134,21 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
 
       {/* User / logout */}
-      <div className="dark:border-border border-t border-slate-200/60 p-3">
+      <div className="border-t border-white/10 p-3">
         <div className="flex items-center gap-2.5 px-2 py-1">
           <Avatar className="size-8">
-            <AvatarFallback className="dark:bg-muted dark:text-muted-foreground bg-slate-100 text-[11px] text-slate-600">
-              {initials}
-            </AvatarFallback>
+            <AvatarFallback className="bg-white/15 text-[11px] text-white">{initials}</AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <p className="dark:text-foreground truncate text-sm font-medium text-slate-900">
-              {name ?? '내 계정'}
-            </p>
-            {email ? (
-              <p className="dark:text-muted-foreground truncate text-xs text-slate-500">{email}</p>
-            ) : null}
+            <p className="truncate text-sm font-medium text-white">{name ?? '내 계정'}</p>
+            {email ? <p className="truncate text-xs text-[#9d8ecb]">{email}</p> : null}
           </div>
           {isSupabaseConfigured() ? (
             <button
               type="button"
               onClick={() => void signOut()}
               aria-label="로그아웃"
-              className="dark:hover:bg-muted dark:hover:text-foreground rounded-md p-1.5 text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-700"
+              className="rounded-md p-1.5 text-[#c4b5f0] transition-colors duration-150 hover:bg-white/10 hover:text-white"
             >
               <LogOut className="size-4" />
             </button>

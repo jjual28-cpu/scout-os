@@ -6,12 +6,12 @@ import { cn } from '@/lib/utils';
 /** Icon-chip accent colors for KPI tiles. */
 export type StatAccent = 'primary' | 'blue' | 'emerald' | 'amber' | 'fuchsia' | 'rose';
 const STAT_ACCENTS: Record<StatAccent, string> = {
-  primary: 'bg-primary/10 text-primary',
-  blue: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-  emerald: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-  amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-  fuchsia: 'bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400',
-  rose: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
+  primary: 'bg-[#7c3aed] text-white',
+  blue: 'bg-[#2b7fff] text-white',
+  emerald: 'bg-[#10b981] text-white',
+  amber: 'bg-[#f59e0b] text-white',
+  fuchsia: 'bg-[#ec4899] text-white',
+  rose: 'bg-[#f43f5e] text-white',
 };
 
 /** A KPI tile: icon in a colored chip, label, big number. Delta is optional —

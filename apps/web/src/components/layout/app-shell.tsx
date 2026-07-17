@@ -26,9 +26,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="dark:bg-background flex min-h-screen bg-white">
-      {/* Desktop sidebar — tinted so the nav reads as a distinct surface from the
-          white content area (premium two-tone shell). */}
-      <aside className="dark:border-border dark:bg-card hidden w-[248px] shrink-0 border-r border-slate-200/60 bg-gradient-to-b from-slate-50 to-violet-50/40 md:block">
+      {/* Desktop sidebar — deep purple, high-contrast against the white content
+          (premium two-tone shell). Uses a fixed brand color in both modes. */}
+      <aside className="hidden w-[248px] shrink-0 border-r border-[#2c1a56] bg-[#3a2170] md:block">
         <div className="sticky top-0 h-screen">
           <AppSidebar />
         </div>
@@ -48,7 +48,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           onClick={() => setOpen(false)}
         />
         <div
-          className="dark:bg-card absolute inset-y-0 left-0 w-64 border-r bg-gradient-to-b from-slate-50 to-violet-50/40 shadow-xl"
+          className="absolute inset-y-0 left-0 w-64 border-r border-[#2c1a56] bg-[#3a2170] shadow-xl"
           style={{ transform: open ? 'translateX(0)' : 'translateX(-100%)' }}
         >
           <AppSidebar onNavigate={() => setOpen(false)} />
@@ -58,7 +58,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Content column */}
       <div className="flex min-w-0 flex-1 flex-col">
         <AppHeader onOpenMenu={() => setOpen(true)} />
-        <main className="flex-1">{children}</main>
+        <main className="dark:bg-background flex-1 bg-[#faf9fc]">{children}</main>
       </div>
 
       {/* Keeps an in-flight search advancing while the user browses other menus. */}
