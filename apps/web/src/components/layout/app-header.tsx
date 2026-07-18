@@ -1,6 +1,7 @@
 'use client';
 
 import { Bell, Menu } from 'lucide-react';
+import Link from 'next/link';
 
 import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -36,9 +37,15 @@ export function AppHeader({ onOpenMenu }: { onOpenMenu: () => void }) {
         <Bell className="size-[18px]" />
       </button>
       <ThemeToggle />
-      <Avatar className="size-8">
-        <AvatarFallback className="text-xs">{initials}</AvatarFallback>
-      </Avatar>
+      <Link
+        href="/account"
+        aria-label="마이페이지"
+        className="focus-visible:ring-ring rounded-full transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2"
+      >
+        <Avatar className="size-8">
+          <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+        </Avatar>
+      </Link>
     </header>
   );
 }

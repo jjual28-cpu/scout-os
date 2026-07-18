@@ -124,16 +124,23 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
 
       {/* User / logout */}
       <div className="border-t border-white/10 p-3">
-        <div className="flex items-center gap-2.5 px-2 py-1">
-          <Avatar className="size-8">
-            <AvatarFallback className="bg-white/15 text-[11px] text-white">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-white">{name ?? '내 계정'}</p>
-            {email ? <p className="truncate text-xs text-[#9d8ecb]">{email}</p> : null}
-          </div>
+        <div className="flex items-center gap-1 px-1 py-1">
+          <Link
+            href="/account"
+            onClick={onNavigate}
+            aria-label="마이페이지"
+            className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md p-1.5 transition-colors hover:bg-white/10"
+          >
+            <Avatar className="size-8">
+              <AvatarFallback className="bg-white/15 text-[11px] text-white">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-white">{name ?? '내 계정'}</p>
+              {email ? <p className="truncate text-xs text-[#9d8ecb]">{email}</p> : null}
+            </div>
+          </Link>
           {isSupabaseConfigured() ? (
             <button
               type="button"
