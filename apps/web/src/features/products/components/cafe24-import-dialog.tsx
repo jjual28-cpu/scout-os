@@ -43,6 +43,7 @@ export function Cafe24ImportDialog({
   const [q, setQ] = useState('');
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [importing, setImporting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   // 연동 상태 조회
   useEffect(() => {
@@ -95,6 +96,30 @@ export function Cafe24ImportDialog({
     const mall = mallInput.trim().toLowerCase();
     if (!mall) return;
     window.location.href = `/api/cafe24/authorize?mall_id=${encodeURIComponent(mall)}`;
+  };
+
+  // 연결 해제 → 미연동 상태로 되돌려 다른 몰을 입력할 수 있게 한다.
+  const disconnect = async () => {
+    if (disconnecting) return;
+    setDisconnecting(true);
+    setListError(null);
+    try {
+      const res = await fetch('/api/cafe24/disconnect', { method: 'POST' });
+      if (!res.ok) {
+        setListError('연결 해제에 실패했어요. 잠시 후 다시 시도해 주세요.');
+        return;
+      }
+      setItems([]);
+      setSelected(new Set());
+      setNextOffset(null);
+      setQ('');
+      setMallInput('');
+      setStatus((s) => (s ? { ...s, connected: false, mallId: null } : s));
+    } catch {
+      setListError('연결 해제에 실패했어요. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setDisconnecting(false);
+    }
   };
 
   const filtered = useMemo(() => {
@@ -209,6 +234,14 @@ export function Cafe24ImportDialog({
                   {status.mallId} 연동됨
                 </span>
                 가져올 상품을 선택하세요.
+                <button
+                  type="button"
+                  onClick={() => void disconnect()}
+                  disabled={disconnecting}
+                  className="hover:text-foreground ml-auto shrink-0 underline underline-offset-2 disabled:opacity-50"
+                >
+                  {disconnecting ? '해제 중…' : '다른 몰 연결'}
+                </button>
               </div>
               <div className="relative">
                 <Search className="text-muted-foreground pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2" />
