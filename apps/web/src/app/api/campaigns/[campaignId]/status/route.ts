@@ -112,6 +112,9 @@ async function saveCreators(
       postsCount: c.postsCount,
       isVerified: c.isVerified,
       category: c.category,
+      lastPostAt: c.lastPostAt ?? null,
+      recentAvgLikes: c.recentAvgLikes ?? null,
+      recentAvgComments: c.recentAvgComments ?? null,
     },
   }));
   const { error } = await sb
@@ -194,6 +197,9 @@ async function applyAiMatch(
         postsCount: s.postsCount ?? null,
         isVerified: Boolean(s.isVerified),
         category: s.category ?? null,
+        lastPostAt: s.lastPostAt ?? null,
+        recentAvgLikes: s.recentAvgLikes ?? null,
+        recentAvgComments: s.recentAvgComments ?? null,
         rawData: null,
       }));
     /* eslint-enable @typescript-eslint/no-explicit-any */

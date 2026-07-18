@@ -73,6 +73,38 @@ function postAuthorUsername(o: any): string | null {
   return u && validUsername(u) ? u : null;
 }
 
+/**
+ * Recent-activity signals from the profile's `latestPosts` (the details scrape
+ * returns ~12). This is what tells a rising creator from a big-but-dead account:
+ * followers alone can't — an account with 67k followers whose last post was a
+ * year ago is not "요즘 뜨는". Missing/empty → all null (judged the old way).
+ */
+function recentActivity(raw: Record<string, any>): {
+  lastPostAt: string | null;
+  recentAvgLikes: number | null;
+  recentAvgComments: number | null;
+} {
+  const posts = Array.isArray(raw?.latestPosts) ? raw.latestPosts : [];
+  let newestMs: number | null = null;
+  const likes: number[] = [];
+  const comments: number[] = [];
+  for (const p of posts) {
+    const t = Date.parse(String(p?.timestamp ?? ''));
+    if (Number.isFinite(t)) newestMs = newestMs === null ? t : Math.max(newestMs, t);
+    const l = Number(p?.likesCount);
+    if (Number.isFinite(l) && l >= 0) likes.push(l); // Apify uses -1 for hidden likes
+    const c = Number(p?.commentsCount);
+    if (Number.isFinite(c) && c >= 0) comments.push(c);
+  }
+  const avg = (a: number[]) =>
+    a.length ? Math.round(a.reduce((s, x) => s + x, 0) / a.length) : null;
+  return {
+    lastPostAt: newestMs === null ? null : new Date(newestMs).toISOString(),
+    recentAvgLikes: avg(likes),
+    recentAvgComments: avg(comments),
+  };
+}
+
 /** Map a raw Apify PROFILE item to our normalized creator. */
 function normalize(raw: any): InstagramCreator | null {
   const o = (raw ?? {}) as Record<string, any>;
@@ -103,6 +135,7 @@ function normalize(raw: any): InstagramCreator | null {
     postsCount: pickNum(o, ['postsCount', 'igtvVideoCount', 'edge_owner_to_timeline_media']),
     isVerified: Boolean(o.verified ?? o.isVerified ?? o.is_verified),
     category: pickStr(o, ['businessCategoryName', 'category', 'categoryName']),
+    ...recentActivity(o),
     rawData: raw,
   };
 }

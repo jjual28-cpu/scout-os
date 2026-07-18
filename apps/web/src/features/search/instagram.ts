@@ -22,6 +22,14 @@ export type InstagramCreator = {
   postsCount: number | null;
   isVerified: boolean;
   category: string | null;
+  /**
+   * Recent-activity signals from the profile's latest posts — the difference
+   * between a genuinely rising creator and a big-but-dead account. All optional/
+   * null: older snapshots and non-detail scrapes won't have them.
+   */
+  lastPostAt?: string | null; // ISO timestamp of the newest recent post
+  recentAvgLikes?: number | null; // avg likes across the fetched recent posts
+  recentAvgComments?: number | null; // avg comments across the fetched recent posts
   rawData: unknown;
 };
 

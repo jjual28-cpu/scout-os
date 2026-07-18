@@ -71,11 +71,12 @@ fit 으로 볼 것:
 - 협업 제안이 자연스러운 규모/성격
 
 트렌드/라이징 검색일 때 (query/intent가 요즘 뜨는·성장 중·대세·라이징 성격이면):
-- 확보 가능한 신호(followersCount·postsCount·isVerified·biography·category)만으로 성장 중인 계정을 우대할 것. 성장 이력은 없으니 다음으로 근사한다:
-  - 팔로워가 초대형은 아니지만 유의미한 규모(중소형~중형)로 커가는 계정
-  - 최근 활발한 게시 (postsCount가 충분히 많고 활동성이 보이는 계정)
-  - 소개글에서 활발한 활동이 드러나는 계정 (협업/문의/최근 활동·링크 등) — 판정에 주어지는 신호는 팔로워·게시물수·인증·소개글·카테고리뿐이니 그 안에서 판단할 것
-- 작지만 활발한 계정을 규모만 보고 reject 하지 말 것 (초대형 아니라고 낮게 보지 말 것).
+후보에 주어지는 '최근 활동'(마지막 게시 N일 전, 최근 평균 좋아요·댓글)을 핵심 신호로 쓸 것:
+- 최근(대략 4주 이내)에 꾸준히 올리는 계정을 우대한다. "처음부터 쭉 컸던 사람"이 아니라 "지금 활발한 사람"을 찾는 것이다.
+- 마지막 게시가 수개월 이상 지났거나 '최근 게시물 없음'이면, 팔로워가 아무리 많아도 '죽은 계정'이니 트렌드 검색에서 fit 아님(크게 감점). 게시물 수 0도 마찬가지.
+- 팔로워 대비 좋아요·댓글이 활발한(참여가 뜨거운) 계정을 우대한다. 규모는 작아도 최근 반응이 뜨거우면 위로, 크기만 하고 최근 반응이 식었으면 아래로.
+- 작지만 최근 활발한 계정을 규모만 보고 reject 하지 말 것.
+- '최근 활동' 정보가 없는 후보는 팔로워·게시물수·소개글로만 판단(예전 방식).
 - 단, 위 우대는 아래 '반드시 reject 할 것'을 절대 완화하지 않는다 (정보성/뉴스/짤, 무관, 브랜드·쇼핑몰 공식계정, 스팸·팔로워장사·대행, 빈 계정은 그대로 reject).
 
 지역 업체 검색 예외:
@@ -133,7 +134,25 @@ ${lines.join('\n')}
 → 이 브랜드가 이 셀럽에게 협업을 제안하는 게 말이 되는지 판단하세요.`;
 }
 
+/** A human "최근 활동" line — the rising signal. Null when we have no post data. */
+function activityLine(c: InstagramCreator, now: number): string | null {
+  const hasAny = c.lastPostAt || c.recentAvgLikes != null || c.recentAvgComments != null;
+  if (!hasAny) return null;
+  const parts: string[] = [];
+  if (c.lastPostAt) {
+    const days = Math.floor((now - Date.parse(c.lastPostAt)) / 86_400_000);
+    parts.push(Number.isFinite(days) ? `마지막 게시 ${days}일 전` : '마지막 게시일 미상');
+  } else {
+    parts.push('최근 게시물 없음');
+  }
+  if (c.recentAvgLikes != null || c.recentAvgComments != null) {
+    parts.push(`최근 평균 좋아요 ${c.recentAvgLikes ?? '?'}·댓글 ${c.recentAvgComments ?? '?'}`);
+  }
+  return `   최근 활동: ${parts.join(' · ')}`;
+}
+
 function candidateBlock(creators: InstagramCreator[]): string {
+  const now = Date.now();
   return creators
     .map((c, i) => {
       const bio = (c.biography ?? '').replace(/\s+/g, ' ').trim().slice(0, 160);
@@ -143,7 +162,10 @@ function candidateBlock(creators: InstagramCreator[]): string {
         `   소개: ${bio || '(없음)'}`,
         `   카테고리: ${c.category ?? '(없음)'}`,
         `   팔로워: ${c.followersCount ?? '?'} · 게시물: ${c.postsCount ?? '?'}${c.isVerified ? ' · 인증됨' : ''}`,
-      ].join('\n');
+        activityLine(c, now),
+      ]
+        .filter(Boolean)
+        .join('\n');
     })
     .join('\n');
 }
