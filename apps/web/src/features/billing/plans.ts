@@ -31,7 +31,7 @@ export const PLANS: Record<PlanKey, Plan> = {
     key: 'pro',
     name: '프로',
     monthlySearches: 300,
-    priceMonthly: 29800,
+    priceMonthly: 39800,
     tagline: '월 300회 검색',
   },
 };
