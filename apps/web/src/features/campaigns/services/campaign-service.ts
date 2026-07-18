@@ -10,7 +10,7 @@ type Sb = ReturnType<typeof createClient>;
 
 /** Columns selected for a campaign (order matches CAMPAIGN_COLUMNS). */
 export const CAMPAIGN_COLUMNS =
-  'id,title,query,platform,status,error,label,source,memo,brand,season,goal,favorite,product_id,result_count,created_at,updated_at,started_at,completed_at,apify_stage';
+  'id,title,query,platform,status,error,ai_error,label,source,memo,brand,season,goal,favorite,product_id,result_count,created_at,updated_at,started_at,completed_at,apify_stage';
 
 /** A campaign row from the DB, normalized to camelCase (no derived fields). */
 export type RawCampaign = {
@@ -20,6 +20,8 @@ export type RawCampaign = {
   platform: string;
   status: CampaignStatus;
   error: string | null;
+  /** User-facing reason an AI step was skipped (null = AI fine or unused). */
+  aiError: string | null;
   label: CampaignLabel;
   source: 'manual' | 'ai';
   memo: string | null;
@@ -44,6 +46,7 @@ function mapCampaign(r: any): RawCampaign {
     platform: r.platform ?? 'instagram',
     status: (r.status ?? 'succeeded') as CampaignStatus,
     error: r.error ?? null,
+    aiError: r.ai_error ?? null,
     label: toLabel(r.label),
     source: r.source === 'ai' ? 'ai' : 'manual',
     memo: r.memo ?? null,

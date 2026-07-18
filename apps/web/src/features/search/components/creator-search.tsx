@@ -19,6 +19,7 @@ import {
   Sparkles,
   Store,
   Tag,
+  TriangleAlert,
   UserRound,
   TrendingUp,
   X,
@@ -258,6 +259,8 @@ export function CreatorSearch() {
   const [items, setItems] = useState<DiscoverOpportunity[]>([]);
   const [searchedAt, setSearchedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Non-fatal AI notice (판정/검색어 변환 실패) — search still succeeded. */
+  const [aiError, setAiError] = useState<string | null>(null);
   const reqId = useRef(0);
 
   // Workspace controls
@@ -322,7 +325,7 @@ export function CreatorSearch() {
       if (!user) return false;
       const { data: row } = await sb
         .from('campaigns')
-        .select('id,query,status,error,created_at,completed_at,started_at')
+        .select('id,query,status,error,ai_error,created_at,completed_at,started_at')
         .eq('id', id)
         .eq('user_id', user.id)
         .maybeSingle();
@@ -332,10 +335,12 @@ export function CreatorSearch() {
         query: string;
         status: 'running' | 'succeeded' | 'failed';
         error: string | null;
+        ai_error: string | null;
         created_at: string;
         completed_at: string | null;
         started_at: string | null;
       };
+      setAiError(c.ai_error);
 
       setCampaignId(c.id);
       setLastViewedCampaign(c.id); // Discover reopens this session next time
@@ -511,6 +516,7 @@ export function CreatorSearch() {
     setInput(q);
     setKeyword(q);
     setError(null);
+    setAiError(null);
     setPhase('searching');
     setSelected(new Set());
     setCached(false);
@@ -600,6 +606,7 @@ export function CreatorSearch() {
     setCampaignId(null);
     setCached(false);
     setError(null);
+    setAiError(null);
     setSelected(new Set());
   };
 
@@ -950,6 +957,13 @@ export function CreatorSearch() {
       {error ? (
         <div className="border-destructive/30 bg-destructive/10 text-destructive mb-6 rounded-xl border p-3 text-sm">
           {error}
+        </div>
+      ) : null}
+
+      {aiError ? (
+        <div className="mb-6 flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+          <span>{aiError}</span>
         </div>
       ) : null}
 

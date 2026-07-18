@@ -129,7 +129,12 @@ function parsePlan(text: string, fallback: string): SearchPlan | null {
 
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-/** Translate a natural-language request into a search plan. Null on any failure. */
+/**
+ * Translate a natural-language request into a search plan. Returns null when the
+ * model reply has no usable term/tags (search just uses the raw query). THROWS
+ * when the AI itself failed (no key, over cap, model error) — the caller records
+ * that on the campaign so the failure is visible instead of a silent 0 results.
+ */
 export async function planSearch(
   userId: string,
   request: string,
@@ -143,16 +148,13 @@ export async function planSearch(
           .join(' · ')}`
       : '';
 
-  try {
-    const text = await runAi(userId, {
-      system: target === 'brand' ? SYSTEM_BRAND : SYSTEM_CREATOR,
-      prompt: `사용자 요청: "${request}"${brandLine}`,
-      json: true,
-      maxTokens: 400,
-      temperature: 0.3,
-    });
-    return parsePlan(text, request);
-  } catch {
-    return null; // fall back to the raw query — never break the search
-  }
+  // runAi throws on real AI failure — let it propagate to the caller.
+  const text = await runAi(userId, {
+    system: target === 'brand' ? SYSTEM_BRAND : SYSTEM_CREATOR,
+    prompt: `사용자 요청: "${request}"${brandLine}`,
+    json: true,
+    maxTokens: 400,
+    temperature: 0.3,
+  });
+  return parsePlan(text, request);
 }

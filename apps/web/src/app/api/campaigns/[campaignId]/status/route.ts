@@ -3,6 +3,7 @@ import { type NextRequest } from 'next/server';
 import { type InstagramCreator } from '@/features/search/instagram';
 import { fail, ok, withErrorHandling } from '@/lib/api/response';
 import { isSupabaseConfigured } from '@/lib/env';
+import { aiErrorMessage } from '@/services/ai/errors';
 import { matchCreators, type BrandContext, type SearchTarget } from '@/services/ai/match';
 import {
   authorsFromPosts,
@@ -243,9 +244,16 @@ async function applyAiMatch(
         .eq('creator_id', c.id);
       if (error) console.error(`[status] ai verdict save failed (${c.username}): ${error.message}`);
     }
+    // Judging succeeded — clear any earlier AI warning (e.g. a transient plan slip).
+    await sb.from('campaigns').update({ ai_error: null }).eq('id', campaignId);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[status] AI matching skipped for campaign ${campaignId}: ${msg}`);
+    // Surface it: the search still succeeds, but the user learns judging was skipped.
+    await sb
+      .from('campaigns')
+      .update({ ai_error: aiErrorMessage(err) })
+      .eq('id', campaignId);
   }
 }
 

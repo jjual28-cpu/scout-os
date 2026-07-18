@@ -5,6 +5,7 @@ import { type InstagramCreator } from '@/features/search/instagram';
 import { ok, withErrorHandling } from '@/lib/api/response';
 import { getDiscoveryProvider, isSupabaseConfigured } from '@/lib/env';
 import { normalizeQuery } from '@/lib/normalize-query';
+import { aiErrorMessage } from '@/services/ai/errors';
 import { type BrandContext, type SearchTarget } from '@/services/ai/match';
 import { looksNatural, planSearch, type SearchPlan } from '@/services/ai/query';
 import {
@@ -214,16 +215,27 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     // first; a plain keyword ("골프") skips the AI entirely (no cost, no latency).
     let plan: SearchPlan | null = null;
     if (mode === 'keyword' && looksNatural(rawQuery)) {
-      plan = await planSearch(
-        userId,
-        rawQuery,
-        await brandFor(supabase, body.productId ?? null),
-        target,
-      );
-      if (plan) {
+      try {
+        plan = await planSearch(
+          userId,
+          rawQuery,
+          await brandFor(supabase, body.productId ?? null),
+          target,
+        );
+        if (plan) {
+          await supabase
+            .from('campaigns')
+            .update({ search_plan: plan })
+            .eq('id', created.id)
+            .eq('status', 'running');
+        }
+      } catch (err) {
+        // AI translation failed — don't fail the search, but record WHY so the
+        // user sees it. We fall back to the raw query (previous behaviour).
+        console.error(`[discover] planSearch failed (campaign ${created.id}): ${String(err)}`);
         await supabase
           .from('campaigns')
-          .update({ search_plan: plan })
+          .update({ ai_error: aiErrorMessage(err) })
           .eq('id', created.id)
           .eq('status', 'running');
       }
