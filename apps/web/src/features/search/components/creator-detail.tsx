@@ -225,6 +225,28 @@ export function CreatorDetail({ id }: { id: string }) {
     if (open) window.open(creator.profileUrl, '_blank', 'noopener,noreferrer');
   };
 
+  /**
+   * "DM 보내기" — 인스타는 콜드 DM 자동 발송을 막아둬서(약관·계정 정지 위험) 여기까지가
+   * 안전한 최대치다: DM을 복사하고, 그 셀럽 DM 창(ig.me 공식 메시지 링크)을 새 탭으로 열고,
+   * CRM 상태를 '연락함'으로 표시한다. 사용자는 붙여넣기(Ctrl+V)+엔터만 하면 된다.
+   */
+  const send = async () => {
+    const text = draft ?? '';
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard may be blocked; still open the DM window */
+    }
+    outreach.markContacted(id);
+    window.open(
+      `https://ig.me/m/${encodeURIComponent(creator.username)}`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+  };
+
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-8 sm:py-10">
       <Link
@@ -366,10 +388,10 @@ export function CreatorDetail({ id }: { id: string }) {
           className="border-input bg-background focus-visible:ring-ring mt-2 w-full resize-y rounded-lg border px-3 py-2 text-sm leading-relaxed outline-none focus-visible:ring-2"
         />
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          {/* Primary */}
-          <Button type="button" variant="default" onClick={() => copy(true)}>
-            <Instagram className="size-4" />
-            Instagram에서 연락하기
+          {/* Primary — 복사 + DM 창 열기 + 연락함 표시 */}
+          <Button type="button" variant="default" onClick={() => void send()}>
+            <Send className="size-4" />
+            DM 보내기
           </Button>
           {/* Secondary */}
           <Button
@@ -421,9 +443,12 @@ export function CreatorDetail({ id }: { id: string }) {
           </div>
         ) : null}
         <p className="text-muted-foreground mt-2 text-xs">
+          <b className="font-medium">DM 보내기</b>는 DM을 복사하고 그 셀럽의 인스타 DM 창을 열고
+          ‘연락함’으로 표시해요 — 붙여넣기(Ctrl/⌘+V) 후 보내면 끝. (인스타 정책상 자동 전송은
+          불가해요.)
+          <br />
           <b className="font-medium">AI 초안</b>은 이 크리에이터에 맞춰 만듭니다
-          {dmTemplate.trim() ? ' (설정의 내 DM 스타일 사용 · AI 구간만 채움)' : ''}.{' '}
-          <b className="font-medium">빠른 초안</b>은 즉시 기본 템플릿으로 만듭니다. 설정 → DM
+          {dmTemplate.trim() ? ' (설정의 내 DM 스타일 사용 · AI 구간만 채움)' : ''}. 설정 → DM
           스타일에서 나만의 틀을 저장할 수 있어요.
         </p>
       </section>
