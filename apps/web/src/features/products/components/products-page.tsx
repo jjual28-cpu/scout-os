@@ -1,6 +1,18 @@
 'use client';
 
-import { AlertCircle, Download, Package, Plus, Search, Trash2, Upload, X } from 'lucide-react';
+import {
+  AlertCircle,
+  Download,
+  Loader2,
+  Package,
+  Plus,
+  RefreshCw,
+  Search,
+  Sparkles,
+  Trash2,
+  Upload,
+  X,
+} from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { PageHeader } from '@/components/layout/page-header';
@@ -47,6 +59,8 @@ export function ProductsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [autofilling, setAutofilling] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const showToast = (m: string) => {
     setToast(m);
@@ -84,6 +98,29 @@ export function ProductsPage() {
     () => [...new Set(products.map((p) => p.category).filter(Boolean))],
     [products],
   );
+
+  const hasCafe24 = useMemo(() => products.some((p) => p.source === 'cafe24'), [products]);
+
+  // 카페24에서 가져온 상품들의 가격·상태·이미지를 최신으로 갱신한다.
+  const refreshCafe24 = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/cafe24/refresh', { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) {
+        showToast(json?.error?.message ?? '카페24 동기화에 실패했어요.');
+        return;
+      }
+      await reload();
+      const updated = json.data?.updated ?? 0;
+      showToast(updated > 0 ? `카페24 상품 ${updated}개를 갱신했어요.` : '변경된 상품이 없어요.');
+    } catch {
+      showToast('카페24 동기화에 실패했어요.');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const list = useMemo(() => {
     const filtered = products.filter((p) => {
@@ -134,6 +171,58 @@ export function ProductsPage() {
     if (ok) setDraft(null);
   };
 
+  // AI가 상품명을 읽고 카테고리·타겟·키워드를 채운다. 사용자가 이미 채운 값은
+  // 덮어쓰지 않고(빈 칸만 채움), 키워드는 기존과 합친다. 데일리 AI 캡에 카운트됨.
+  const autofill = async () => {
+    if (!draft || autofilling) return;
+    if (!draft.name.trim()) {
+      setFormError('상품명을 먼저 입력해 주세요.');
+      return;
+    }
+    setAutofilling(true);
+    setFormError(null);
+    try {
+      const res = await fetch('/api/ai/autofill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product: {
+            name: draft.name,
+            brand: draft.brand,
+            category: draft.category,
+            usp: draft.usp,
+            sellingPoints: draft.sellingPoints,
+          },
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setFormError(json?.error?.message ?? 'AI 채우기에 실패했어요. 잠시 후 다시 시도해 주세요.');
+        return;
+      }
+      const { category, target, keywords } = json.data as {
+        category: string;
+        target: string;
+        keywords: string[];
+      };
+      setDraft((d) => {
+        if (!d) return d;
+        const merged = [...new Set([...splitTokens(d.recommendedKeywords), ...(keywords ?? [])])];
+        return {
+          ...d,
+          category: d.category.trim() ? d.category : category || d.category,
+          target: d.target.trim() ? d.target : target || d.target,
+          recommendedKeywords: merged.join(', '),
+        };
+      });
+      showToast('AI가 카테고리·타겟·키워드를 채웠어요. 확인 후 저장하세요.');
+    } catch {
+      setFormError('AI 채우기 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setAutofilling(false);
+    }
+  };
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8 sm:py-10">
       <PageHeader
@@ -141,6 +230,12 @@ export function ProductsPage() {
         description="브랜드 상품을 등록하면 AI가 이 데이터로 키워드·셀럽을 추천합니다."
         actions={
           <div className="flex items-center gap-2">
+            {hasCafe24 ? (
+              <Button variant="ghost" onClick={() => void refreshCafe24()} disabled={syncing}>
+                <RefreshCw className={cn('size-4', syncing && 'animate-spin')} />
+                {syncing ? '동기화 중…' : '카페24 동기화'}
+              </Button>
+            ) : null}
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <Download className="size-4" />
               카페24에서 가져오기
@@ -243,6 +338,30 @@ export function ProductsPage() {
                 ← 목록으로
               </button>
               {formError ? <p className="text-destructive text-sm">{formError}</p> : null}
+
+              {/* 카페24 임포트 등으로 비어 있는 카테고리·타겟·키워드를 AI가 한 번에 채운다. */}
+              <div className="border-primary/20 bg-primary/[0.04] flex flex-wrap items-center gap-3 rounded-xl border p-3">
+                <Sparkles className="text-primary size-4 shrink-0" />
+                <span className="text-muted-foreground min-w-0 flex-1 text-xs">
+                  카테고리·추천 타겟·키워드를 AI가 채워줘요. 빈 칸만 채우고 저장 전에 확인할 수
+                  있어요.
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={() => void autofill()}
+                  disabled={autofilling}
+                >
+                  {autofilling ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="size-4" />
+                  )}
+                  {autofilling ? '채우는 중…' : 'AI로 채우기'}
+                </Button>
+              </div>
 
               <Section title="기본 정보">
                 <ImageField

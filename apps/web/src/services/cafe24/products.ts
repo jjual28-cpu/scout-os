@@ -83,4 +83,41 @@ export async function fetchProducts(
   const arr: any[] = Array.isArray(json?.products) ? json.products : [];
   return arr.map(normalizeProduct).filter((p): p is Cafe24Product => p !== null);
 }
+
+/**
+ * 특정 product_no 들의 현재 상태를 가져온다(동기화용). 카페24는 product_no 를
+ * 콤마로 최대 100개까지 필터할 수 있어, 100개씩 나눠 호출한다. 실패 시 throw.
+ */
+export async function fetchProductsByNo(
+  mallId: string,
+  accessToken: string,
+  productNos: number[],
+): Promise<Cafe24Product[]> {
+  const unique = [...new Set(productNos.filter((n) => Number.isFinite(n)))];
+  const out: Cafe24Product[] = [];
+  for (let i = 0; i < unique.length; i += 100) {
+    const batch = unique.slice(i, i + 100);
+    const url = new URL(`https://${mallId}.cafe24api.com/api/v2/admin/products`);
+    url.searchParams.set('product_no', batch.join(','));
+    url.searchParams.set('limit', '100');
+    url.searchParams.set(
+      'fields',
+      'product_no,product_name,price,retail_price,list_image,detail_image,selling,display',
+    );
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      const msg = json?.error?.message || json?.error || `카페24 상품 조회 오류 (${res.status})`;
+      throw new Error(typeof msg === 'string' ? msg : '카페24 상품 조회에 실패했습니다.');
+    }
+    const arr: any[] = Array.isArray(json?.products) ? json.products : [];
+    for (const p of arr) {
+      const n = normalizeProduct(p);
+      if (n) out.push(n);
+    }
+  }
+  return out;
+}
 /* eslint-enable @typescript-eslint/no-explicit-any */
