@@ -5,6 +5,7 @@ import { fail, ok, withErrorHandling } from '@/lib/api/response';
 import { isSupabaseConfigured } from '@/lib/env';
 import { aiErrorMessage } from '@/services/ai/errors';
 import { matchCreators, type BrandContext, type SearchTarget } from '@/services/ai/match';
+import { getPooled, upsertPool } from '@/services/apify/creator-pool';
 import {
   authorsFromPosts,
   getRunStatus,
@@ -16,6 +17,9 @@ import {
   stage3Input,
   startActorRun,
 } from '@/services/apify/instagram';
+
+/** Trending searches must not reuse cached profiles — recency has to be live. */
+const TREND_RE = /요즘|뜨는|트렌드|대세|핫한|떠오르|라이징/;
 
 export const dynamic = 'force-dynamic';
 // Only reads a finished dataset + saves rows — never waits on an Apify run.
@@ -429,6 +433,7 @@ export const POST = withErrorHandling(
         // Stage 2 — enriched profiles → save → judge → finish.
         const creators = profilesFromItems(items).slice(0, TARGET);
         await saveCreators(sb, userId, campaignId, query, creators, 0);
+        await upsertPool('instagram', creators);
         const { count } = await existingResults(sb, userId, campaignId);
         // Tell the AI these came from tagging a brand — that's the signal.
         await applyAiMatch(
@@ -448,6 +453,7 @@ export const POST = withErrorHandling(
       if (stage === 1) {
         const creators = profilesFromItems(items).slice(0, TARGET);
         await saveCreators(sb, userId, campaignId, query, creators, 0);
+        await upsertPool('instagram', creators);
         const { count } = await existingResults(sb, userId, campaignId);
 
         if (count >= Math.min(TARGET, SEARCH_MIN_SUFFICIENT)) {
@@ -475,10 +481,37 @@ export const POST = withErrorHandling(
           await markSucceeded(sb, campaignId, count);
           return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
         }
+
+        // Reuse fresh pooled profiles (no Apify); scrape only the rest.
+        // Trending searches skip the pool so 최근 활동 stays live.
+        let toScrape = toEnrich;
+        if (!TREND_RE.test(matchContext)) {
+          const { pooled, missing } = await getPooled('instagram', toEnrich);
+          if (pooled.length > 0) {
+            await saveCreators(
+              sb,
+              userId,
+              campaignId,
+              query,
+              pooled.slice(0, Math.max(TARGET - count, 0)),
+              count,
+            );
+          }
+          toScrape = missing;
+        }
+
+        // Everything came from the pool → judge + finish, no Apify run.
+        if (toScrape.length === 0) {
+          const { count: pooledCount } = await existingResults(sb, userId, campaignId);
+          await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null, target);
+          await markSucceeded(sb, campaignId, pooledCount);
+          return ok({ status: 'succeeded' as const, resultCount: pooledCount, progress: 100 });
+        }
+
         if (!(await claimStage(sb, campaignId, 2, c.apify_run_id, 3))) {
           return ok(runningBody(3));
         }
-        const started = await startActorRun(stage3Input(toEnrich));
+        const started = await startActorRun(stage3Input(toScrape));
         await attachRun(sb, campaignId, started);
         return ok(runningBody(3));
       }
@@ -486,14 +519,9 @@ export const POST = withErrorHandling(
       // Stage 3 — enriched profile details → finish.
       const { count: before } = await existingResults(sb, userId, campaignId);
       const room = Math.max(TARGET - before, 0);
-      await saveCreators(
-        sb,
-        userId,
-        campaignId,
-        query,
-        profilesFromItems(items).slice(0, room),
-        before,
-      );
+      const enriched = profilesFromItems(items);
+      await saveCreators(sb, userId, campaignId, query, enriched.slice(0, room), before);
+      await upsertPool('instagram', enriched); // feed the shared cache
       const { count } = await existingResults(sb, userId, campaignId);
       await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null, target);
       await markSucceeded(sb, campaignId, count);
