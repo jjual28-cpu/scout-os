@@ -5,6 +5,7 @@ import { type InstagramCreator } from '@/features/search/instagram';
 import { ok, withErrorHandling } from '@/lib/api/response';
 import { getDiscoveryProvider, isSupabaseConfigured } from '@/lib/env';
 import { normalizeQuery } from '@/lib/normalize-query';
+import { PLANS, toPlanKey } from '@/features/billing/plans';
 import { aiErrorMessage } from '@/services/ai/errors';
 import { type BrandContext, type SearchTarget } from '@/services/ai/match';
 import { looksNatural, planSearch, type SearchPlan } from '@/services/ai/query';
@@ -170,6 +171,18 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     }
   }
 
+  // 2.5) Plan limit — a NEW search costs Apify, so enforce the monthly cap here
+  //      (cache reuse above is free and never counts). Free = 1/month.
+  const gate = await checkSearchLimit(supabase, userId);
+  if (!gate.allowed) {
+    return ok({
+      configured: true,
+      campaignId: null,
+      status: 'failed' as const,
+      error: `${gate.planName} 플랜은 이번 달 검색 ${gate.limit}회를 모두 사용했어요. 설정에서 업그레이드하면 더 검색할 수 있어요.`,
+    });
+  }
+
   // 3) Create the running Campaign (query stored as the user typed it).
   const created = await createCampaign(supabase, userId, rawQuery, {
     title:
@@ -302,6 +315,31 @@ async function brandFor(
   if (!data) return null;
   const row = data as Record<string, string | null>;
   return { productName: row.name, category: row.category, target: row.target };
+}
+
+/** This month's search count vs the user's plan limit (free = 1/month). */
+async function checkSearchLimit(
+  supabase: Awaited<ReturnType<typeof getSupabase>>,
+  userId: string,
+): Promise<{ allowed: boolean; planName: string; limit: number }> {
+  const { data: sub } = await supabase
+    .from('subscriptions')
+    .select('plan')
+    .eq('user_id', userId)
+    .maybeSingle();
+  const plan = PLANS[toPlanKey((sub as { plan?: string } | null)?.plan)];
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const { count } = await supabase
+    .from('campaigns')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('created_at', monthStart);
+  return {
+    allowed: (count ?? 0) < plan.monthlySearches,
+    planName: plan.name,
+    limit: plan.monthlySearches,
+  };
 }
 
 /**

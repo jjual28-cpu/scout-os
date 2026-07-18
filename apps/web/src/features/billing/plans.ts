@@ -47,3 +47,11 @@ export function toPlanKey(value: unknown): PlanKey {
 export function formatPrice(won: number): string {
   return won === 0 ? '무료' : `${won.toLocaleString('ko-KR')}원`;
 }
+
+/**
+ * Toss customerKey for a user — derived identically on the client (card
+ * registration) and the server (charge), so they always match. Alphanumeric.
+ */
+export function customerKeyFor(userId: string): string {
+  return `scout_${userId.replace(/-/g, '')}`;
+}

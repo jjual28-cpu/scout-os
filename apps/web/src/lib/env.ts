@@ -81,6 +81,11 @@ export const env = {
 
   CRON_SECRET: optional(nonEmpty, process.env.CRON_SECRET),
 
+  // Toss Payments (정기결제/빌링). Secret key is SERVER-ONLY (charges cards);
+  // client key is public (frontend card-registration SDK). Undefined ⇒ 결제 비활성.
+  TOSS_SECRET_KEY: optional(nonEmpty, process.env.TOSS_SECRET_KEY),
+  NEXT_PUBLIC_TOSS_CLIENT_KEY: optional(nonEmpty, process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY),
+
   // Apify (server-only — NEVER prefix with NEXT_PUBLIC). Powers real Instagram
   // creator discovery. Undefined ⇒ /discover falls back to mock data.
   APIFY_API_TOKEN: optional(nonEmpty, process.env.APIFY_API_TOKEN),
@@ -120,6 +125,11 @@ export function isAiPlatformConfigured(): boolean {
 /** True when Apify is configured (server-only token present). */
 export function isApifyConfigured(): boolean {
   return Boolean(env.APIFY_API_TOKEN);
+}
+
+/** True when Toss Payments is configured (secret + public client key). */
+export function isTossConfigured(): boolean {
+  return Boolean(env.TOSS_SECRET_KEY && env.NEXT_PUBLIC_TOSS_CLIENT_KEY);
 }
 
 /**

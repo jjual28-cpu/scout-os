@@ -11,6 +11,8 @@ type SubState = {
   plan: Plan;
   /** Searches (campaigns) this calendar month. */
   used: number;
+  /** True when a paid plan is set to end at the current period. */
+  cancelAtPeriodEnd: boolean;
   hydrated: boolean;
   signedIn: boolean;
 };
@@ -28,6 +30,7 @@ export function useSubscription(): SubState {
   const [state, setState] = useState<SubState>({
     plan: PLANS.free,
     used: 0,
+    cancelAtPeriodEnd: false,
     hydrated: false,
     signedIn: false,
   });
@@ -36,7 +39,14 @@ export function useSubscription(): SubState {
     let active = true;
     (async () => {
       if (!isSupabaseConfigured()) {
-        if (active) setState({ plan: PLANS.free, used: 0, hydrated: true, signedIn: false });
+        if (active)
+          setState({
+            plan: PLANS.free,
+            used: 0,
+            cancelAtPeriodEnd: false,
+            hydrated: true,
+            signedIn: false,
+          });
         return;
       }
       try {
@@ -45,12 +55,23 @@ export function useSubscription(): SubState {
           data: { user },
         } = await sb.auth.getUser();
         if (!user) {
-          if (active) setState({ plan: PLANS.free, used: 0, hydrated: true, signedIn: false });
+          if (active)
+            setState({
+              plan: PLANS.free,
+              used: 0,
+              cancelAtPeriodEnd: false,
+              hydrated: true,
+              signedIn: false,
+            });
           return;
         }
 
         const [sub, searches] = await Promise.all([
-          sb.from('subscriptions').select('plan').eq('user_id', user.id).maybeSingle(),
+          sb
+            .from('subscriptions')
+            .select('plan,cancel_at_period_end')
+            .eq('user_id', user.id)
+            .maybeSingle(),
           sb
             .from('campaigns')
             .select('*', { count: 'exact', head: true })
@@ -59,15 +80,24 @@ export function useSubscription(): SubState {
         ]);
 
         if (!active) return;
-        const planKey = toPlanKey((sub.data as { plan?: string } | null)?.plan);
+        const subRow = sub.data as { plan?: string; cancel_at_period_end?: boolean } | null;
+        const planKey = toPlanKey(subRow?.plan);
         setState({
           plan: PLANS[planKey],
           used: searches.count ?? 0,
+          cancelAtPeriodEnd: Boolean(subRow?.cancel_at_period_end),
           hydrated: true,
           signedIn: true,
         });
       } catch {
-        if (active) setState({ plan: PLANS.free, used: 0, hydrated: true, signedIn: false });
+        if (active)
+          setState({
+            plan: PLANS.free,
+            used: 0,
+            cancelAtPeriodEnd: false,
+            hydrated: true,
+            signedIn: false,
+          });
       }
     })();
     return () => {

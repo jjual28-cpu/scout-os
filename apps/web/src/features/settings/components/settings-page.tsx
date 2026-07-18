@@ -1,13 +1,23 @@
 'use client';
 
 import { CheckCircle2, CreditCard, Loader2, Sparkles } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 import { SectionCard, StatusBadge } from '@/components/layout/blocks';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { useSubscription } from '@/features/billing/hooks/use-subscription';
-import { formatPrice, PLAN_ORDER, PLANS } from '@/features/billing/plans';
+import {
+  customerKeyFor,
+  formatPrice,
+  PLAN_ORDER,
+  PLANS,
+  type PlanKey,
+} from '@/features/billing/plans';
+import { loadToss } from '@/features/billing/toss-client';
+import { env } from '@/lib/env';
+import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 
 import { useAiUsage } from '../hooks/use-ai-usage';
@@ -17,8 +27,47 @@ type TestState = { kind: 'idle' | 'ok' | 'fail'; message?: string };
 export function SettingsPage() {
   const { usage, loading, reload } = useAiUsage();
   const sub = useSubscription();
+  const searchParams = useSearchParams();
+  const billingResult = searchParams.get('billing');
+  const tossClientKey = env.NEXT_PUBLIC_TOSS_CLIENT_KEY;
+  const [billingBusy, setBillingBusy] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [test, setTest] = useState<TestState>({ kind: 'idle' });
+
+  async function upgrade(plan: PlanKey) {
+    if (!tossClientKey || billingBusy) return;
+    setBillingBusy(plan);
+    try {
+      const {
+        data: { user },
+      } = await createClient().auth.getUser();
+      if (!user) {
+        setBillingBusy(null);
+        return;
+      }
+      const toss = await loadToss(tossClientKey);
+      const origin = window.location.origin;
+      await toss.requestBillingAuth('카드', {
+        customerKey: customerKeyFor(user.id),
+        successUrl: `${origin}/api/billing/callback?plan=${plan}&cycle=monthly`,
+        failUrl: `${origin}/settings?billing=fail`,
+      });
+      // requestBillingAuth navigates away; nothing after this runs on success.
+    } catch {
+      setBillingBusy(null);
+    }
+  }
+
+  async function cancelSub() {
+    if (billingBusy) return;
+    setBillingBusy('cancel');
+    try {
+      await fetch('/api/billing/cancel', { method: 'POST' });
+      window.location.href = '/settings?billing=canceled';
+    } catch {
+      setBillingBusy(null);
+    }
+  }
 
   const pct = usage.limit > 0 ? Math.min(100, Math.round((usage.used / usage.limit) * 100)) : 0;
   const remaining = Math.max(usage.limit - usage.used, 0);
@@ -115,13 +164,59 @@ export function SettingsPage() {
               })}
             </div>
 
-            <div>
-              <Button variant="outline" size="sm" disabled>
-                업그레이드 (준비 중)
-              </Button>
-              <p className="text-muted-foreground mt-2 text-xs">
-                결제는 준비 중이에요. 지금은 검색 횟수가 제한되지 않아요.
+            {billingResult === 'success' ? (
+              <p className="text-sm text-emerald-600">✓ 결제가 완료됐어요. 플랜이 적용됩니다.</p>
+            ) : billingResult === 'fail' ? (
+              <p className="text-destructive text-sm">
+                결제가 취소되었거나 실패했어요. 다시 시도해 주세요.
               </p>
+            ) : billingResult === 'canceled' ? (
+              <p className="text-muted-foreground text-sm">
+                구독 해지가 접수됐어요. 현재 주기까지는 그대로 이용할 수 있어요.
+              </p>
+            ) : null}
+
+            <div>
+              {!tossClientKey ? (
+                <p className="text-muted-foreground text-xs">
+                  결제는 준비 중이에요. 지금은 검색 횟수가 제한되지 않아요.
+                </p>
+              ) : !sub.signedIn ? (
+                <p className="text-muted-foreground text-xs">로그인하면 업그레이드할 수 있어요.</p>
+              ) : sub.plan.key === 'free' ? (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => void upgrade('basic')}
+                    disabled={Boolean(billingBusy)}
+                  >
+                    {billingBusy === 'basic' ? <Loader2 className="size-4 animate-spin" /> : null}
+                    베이직 · {formatPrice(PLANS.basic.priceMonthly)}/월
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => void upgrade('pro')}
+                    disabled={Boolean(billingBusy)}
+                  >
+                    {billingBusy === 'pro' ? <Loader2 className="size-4 animate-spin" /> : null}
+                    프로 · {formatPrice(PLANS.pro.priceMonthly)}/월
+                  </Button>
+                </div>
+              ) : sub.cancelAtPeriodEnd ? (
+                <p className="text-muted-foreground text-xs">
+                  구독이 현재 주기 종료 후 해지될 예정이에요.
+                </p>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void cancelSub()}
+                  disabled={Boolean(billingBusy)}
+                >
+                  {billingBusy === 'cancel' ? <Loader2 className="size-4 animate-spin" /> : null}
+                  구독 해지
+                </Button>
+              )}
             </div>
           </div>
         )}
