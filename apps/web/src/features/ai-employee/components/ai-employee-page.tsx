@@ -26,6 +26,7 @@ export function AiEmployeePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [launching, setLaunching] = useState<string | null>(null);
+  const [customKw, setCustomKw] = useState('');
   const reqId = useRef(0);
 
   const product = products.find((p) => p.id === productId) ?? null;
@@ -97,6 +98,12 @@ export function AiEmployeePage() {
       setLaunching(null);
       setError('검색을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.');
     }
+  }
+
+  function submitCustom() {
+    const kw = customKw.trim();
+    if (!kw || launching) return;
+    void launch(kw);
   }
 
   const KeywordChip = ({ kw }: { kw: string }) => (
@@ -179,6 +186,39 @@ export function AiEmployeePage() {
               <p className="text-muted-foreground mt-1.5 text-xs">
                 키워드를 누르면 그 주제의 셀럽을 바로 찾기 시작해요 (상품 정보가 함께 반영돼요).
               </p>
+
+              {/* 직접 입력 — 추천을 기다리지 않고 원하는 키워드로 바로 검색 */}
+              <div className="mt-3 flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="text-muted-foreground pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2" />
+                  <input
+                    value={customKw}
+                    onChange={(e) => setCustomKw(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        submitCustom();
+                      }
+                    }}
+                    disabled={Boolean(launching)}
+                    placeholder="직접 키워드 입력 (예: 구강청결제)"
+                    className="border-input bg-background focus-visible:ring-ring h-10 w-full rounded-lg border pl-8 pr-3 text-sm outline-none focus-visible:ring-2 disabled:opacity-50"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  onClick={submitCustom}
+                  disabled={!customKw.trim() || Boolean(launching)}
+                  className="shrink-0"
+                >
+                  {launching === customKw.trim() ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Search className="size-4" />
+                  )}
+                  찾기
+                </Button>
+              </div>
 
               {loading ? (
                 <div className="text-muted-foreground mt-4 flex items-center gap-2 text-sm">
