@@ -23,8 +23,12 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { cn, formatCompactNumber } from '@/lib/utils';
 
+import { useProducts } from '@/features/products/hooks/use-products';
+
 import { generateCreatorDm, generateCreatorFollowUpDm } from '../creator-dm';
+import { extractAiSlots, fillVariables, replaceAiSlots } from '../dm-template';
 import { useCreator } from '../hooks/use-creator';
+import { useDmTemplate } from '../hooks/use-dm-template';
 import { useOutreach } from '../hooks/use-outreach';
 import { CONTACT_STATUS_META, CONTACT_STATUS_ORDER } from '../status';
 
@@ -52,6 +56,12 @@ export function CreatorDetail({ id }: { id: string }) {
   const [copied, setCopied] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+
+  // DM 스타일 템플릿 + 어느 상품으로 보낼지(변수 {상품}/{브랜드} 채움).
+  const { template: dmTemplate } = useDmTemplate();
+  const { products } = useProducts();
+  const [dmProductId, setDmProductId] = useState<string>('');
+  const dmProduct = products.find((p) => p.id === dmProductId) ?? products[0] ?? null;
 
   // Notes: controlled + debounced autosave.
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
@@ -118,23 +128,71 @@ export function CreatorDetail({ id }: { id: string }) {
     setDraft(next);
     outreach.setDmDraft(id, next);
   };
-  /** AI-drafted DM — reads the creator's real bio/niche, not a template. */
+  const creatorPayload = {
+    displayName: creator.displayName,
+    username: creator.username,
+    biography: creator.biography,
+    category: creator.category,
+    followersCount: creator.followersCount,
+  };
+  const brandPayload = dmProduct
+    ? {
+        productName: dmProduct.name,
+        brand: dmProduct.brand,
+        category: dmProduct.category,
+        usp: dmProduct.usp,
+        sellingPoints: dmProduct.sellingPoints,
+        target: dmProduct.target,
+      }
+    : null;
+
+  /**
+   * AI 초안. 저장된 "DM 스타일" 템플릿이 있으면 그 틀을 쓰고 AI 구간만 이 셀럽에
+   * 맞게 채운다. 없으면 예전처럼 AI가 전체를 작성한다.
+   */
   const aiDraft = async () => {
     setAiLoading(true);
     setAiError(null);
     try {
+      const useTemplate = dmTemplate.trim().length > 0;
+
+      if (useTemplate) {
+        const vars = {
+          셀럽: creator.displayName || creator.username,
+          상품: dmProduct?.name ?? '',
+          브랜드: dmProduct?.brand ?? '',
+        };
+        const prepared = fillVariables(dmTemplate, vars);
+        const slots = extractAiSlots(prepared);
+        let texts: string[] = [];
+        if (slots.length > 0) {
+          const res = await fetch('/api/ai/dm-template', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ creator: creatorPayload, brand: brandPayload, slots }),
+          });
+          const json = (await res.json().catch(() => null)) as {
+            data?: { texts?: string[] };
+            error?: { message?: string };
+          } | null;
+          if (!res.ok) {
+            setAiError(
+              json?.error?.message ?? 'AI 초안 생성에 실패했어요. 잠시 후 다시 시도해 주세요.',
+            );
+            return;
+          }
+          texts = json?.data?.texts ?? [];
+        }
+        const assembled = replaceAiSlots(prepared, texts);
+        setDraft(assembled);
+        outreach.setDmDraft(id, assembled);
+        return;
+      }
+
       const res = await fetch('/api/ai/dm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          creator: {
-            displayName: creator.displayName,
-            username: creator.username,
-            biography: creator.biography,
-            category: creator.category,
-            followersCount: creator.followersCount,
-          },
-        }),
+        body: JSON.stringify({ creator: creatorPayload, brand: brandPayload }),
       });
       const json = (await res.json().catch(() => null)) as {
         data?: { text?: string };
@@ -273,8 +331,32 @@ export function CreatorDetail({ id }: { id: string }) {
       <section className="bg-card dark:border-border mt-6 rounded-2xl border border-slate-200/60 p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold">DM 초안</h2>
-          <span className="text-muted-foreground text-xs">{(draft ?? '').length}/250</span>
+          <span className="text-muted-foreground text-xs">
+            {(draft ?? '').length}
+            {dmTemplate.trim() ? '자' : '/250'}
+          </span>
         </div>
+
+        {/* DM 스타일 템플릿을 쓸 때 — 어떤 상품으로 보낼지({상품}/{브랜드} 채움) */}
+        {dmTemplate.trim() && products.length > 0 ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="text-muted-foreground inline-flex items-center gap-1 text-xs">
+              <Sparkles className="text-primary size-3.5" />내 DM 스타일 사용 · 상품
+            </span>
+            <select
+              value={dmProduct?.id ?? ''}
+              onChange={(e) => setDmProductId(e.target.value)}
+              className="border-input bg-background focus-visible:ring-ring h-8 rounded-lg border px-2 text-xs outline-none focus-visible:ring-2"
+            >
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name || '(이름 없음)'}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
         <textarea
           value={draft ?? ''}
           onChange={(e) => setDraft(e.target.value)}
@@ -339,9 +421,10 @@ export function CreatorDetail({ id }: { id: string }) {
           </div>
         ) : null}
         <p className="text-muted-foreground mt-2 text-xs">
-          <b className="font-medium">AI 초안</b>은 이 크리에이터의 소개·분야를 읽고 맞춤으로,
-          <b className="font-medium"> 빠른 초안</b>은 즉시 템플릿으로 만듭니다. ‘Instagram에서
-          연락하기’는 DM을 복사하고 프로필을 새 탭으로 엽니다.
+          <b className="font-medium">AI 초안</b>은 이 크리에이터에 맞춰 만듭니다
+          {dmTemplate.trim() ? ' (설정의 내 DM 스타일 사용 · AI 구간만 채움)' : ''}.{' '}
+          <b className="font-medium">빠른 초안</b>은 즉시 기본 템플릿으로 만듭니다. 설정 → DM
+          스타일에서 나만의 틀을 저장할 수 있어요.
         </p>
       </section>
 

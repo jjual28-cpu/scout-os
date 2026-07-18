@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, CreditCard, Loader2, Sparkles } from 'lucide-react';
+import { CheckCircle2, CreditCard, Loader2, MessageSquareText, Sparkles } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
@@ -16,6 +16,7 @@ import {
   type PlanKey,
 } from '@/features/billing/plans';
 import { loadToss } from '@/features/billing/toss-client';
+import { DmStyleEditor } from '@/features/search/components/dm-style-editor';
 import { env } from '@/lib/env';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
@@ -291,6 +292,10 @@ export function SettingsPage() {
             </Button>
           </div>
         )}
+      </SectionCard>
+
+      <SectionCard title="DM 스타일" icon={<MessageSquareText className="size-4" />}>
+        <DmStyleEditor />
       </SectionCard>
     </div>
   );

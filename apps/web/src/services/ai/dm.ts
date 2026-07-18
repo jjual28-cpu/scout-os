@@ -65,3 +65,83 @@ ${brandBlock}
     .replace(/^["']+|["']+$/g, '')
     .slice(0, 400);
 }
+
+const SLOT_SYSTEM = `당신은 인플루언서 마케팅 담당자입니다. 사용자가 만든 DM 템플릿의 "AI 구간"들을 그 크리에이터에 맞게 자연스럽게 채웁니다.
+
+원칙:
+- 한국어. 따뜻하고 정중하되 사무적이지 않게. 반말 금지.
+- 각 구간의 지시에 맞는 문장(들)만 씁니다. 인사말·서명·조건 같은 템플릿의 다른 부분은 절대 다시 쓰지 마세요 (그건 이미 템플릿에 있음).
+- 크리에이터의 실제 콘텐츠(소개글·카테고리)를 근거로, "복붙이 아님"이 드러나게. 없는 사실은 지어내지 말 것.
+- 지정된 개수만큼, 순서대로.
+
+오직 JSON 배열만 출력하세요. 설명·번호·따옴표 밖 텍스트 금지.
+형식: ["구간1 텍스트","구간2 텍스트"]`;
+
+/* eslint-disable @typescript-eslint/no-explicit-any -- model output is untyped JSON */
+/**
+ * DM 템플릿의 AI 구간들을 한 번의 AI 호출로 채운다. `slots`(지시 배열) 순서대로
+ * 텍스트 배열을 반환한다(길이 맞춰 패딩). 데일리 캡에 1회 카운트.
+ */
+export async function fillTemplateSlots(
+  userId: string,
+  creator: DmCreator,
+  brand: BrandContext | null,
+  slots: string[],
+): Promise<string[]> {
+  if (slots.length === 0) return [];
+
+  const brandBlock =
+    brand && (brand.productName || brand.brand || brand.category)
+      ? [
+          brand.brand ? `브랜드: ${brand.brand}` : null,
+          brand.productName ? `상품: ${brand.productName}` : null,
+          brand.category ? `카테고리: ${brand.category}` : null,
+          brand.usp ? `차별점: ${brand.usp}` : null,
+          brand.sellingPoints ? `판매 포인트: ${brand.sellingPoints}` : null,
+          brand.target ? `타겟 고객: ${brand.target}` : null,
+        ]
+          .filter(Boolean)
+          .join('\n')
+      : '(브랜드 정보 없음)';
+
+  const bio = (creator.biography ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  const slotList = slots.map((s, i) => `${i + 1}. ${s}`).join('\n');
+  const prompt = `[받는 크리에이터]
+이름: ${creator.displayName} (@${creator.username})
+소개: ${bio || '(없음)'}
+카테고리: ${creator.category ?? '(없음)'}
+팔로워: ${creator.followersCount ?? '?'}
+
+[보내는 브랜드]
+${brandBlock}
+
+[채울 AI 구간 ${slots.length}개 — 각 지시대로]
+${slotList}
+
+각 구간을 순서대로 채워 JSON 배열로만 답하세요.`;
+
+  const text = await runAi(userId, {
+    system: SLOT_SYSTEM,
+    prompt,
+    json: true,
+    maxTokens: 700,
+    temperature: 0.7,
+  });
+
+  const start = text.indexOf('[');
+  const end = text.lastIndexOf(']');
+  let arr: string[] = [];
+  if (start >= 0 && end > start) {
+    try {
+      const raw = JSON.parse(text.slice(start, end + 1));
+      if (Array.isArray(raw)) {
+        arr = raw.map((v: any) => (typeof v === 'string' ? v.trim() : ''));
+      }
+    } catch {
+      arr = [];
+    }
+  }
+  // 슬롯 개수에 맞춰 패딩/절단 (조립 시 자리 어긋남 방지).
+  return slots.map((_, i) => arr[i] ?? '');
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
