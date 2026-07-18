@@ -29,6 +29,7 @@ type NavItem = { title: string; href: string; icon: LucideIcon };
 
 const NAV: NavItem[] = [
   { title: '대시보드', href: '/home', icon: LayoutDashboard },
+  { title: 'AI 직원', href: '/ai-employee', icon: Sparkles },
   { title: '셀럽 찾기', href: '/discover', icon: Compass },
   { title: '캠페인', href: '/campaigns', icon: Megaphone },
   { title: '협업 관리', href: '/crm', icon: KanbanSquare },
@@ -50,19 +51,7 @@ type SoonItem = {
   bullets: string[];
 };
 
-const SOON: SoonItem[] = [
-  {
-    title: 'AI 직원',
-    icon: Sparkles,
-    order: 1,
-    summary: '상품을 고르면 키워드 추천부터 DM 초안까지 이어서 만들어 줍니다.',
-    bullets: [
-      '상품 분석 → 추천 키워드 생성 → 캠페인 자동 생성',
-      '이미 연락·답변·협업한 셀럽은 자동 제외',
-      '상품에 맞춘 DM 초안 작성',
-    ],
-  },
-];
+const SOON: SoonItem[] = [];
 
 /** Sidebar content column — placed by AppShell into both the desktop rail and the
  *  mobile drawer. `onNavigate` lets the mobile drawer close on selection. */
@@ -112,7 +101,7 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
           })}
         </div>
 
-        <div className="mt-6 space-y-0.5">
+        <div className={cn('mt-6 space-y-0.5', SOON.length === 0 && 'hidden')}>
           {SOON.map((item) => {
             const Icon = item.icon;
             return (
@@ -137,7 +126,9 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
       <div className="border-t border-white/10 p-3">
         <div className="flex items-center gap-2.5 px-2 py-1">
           <Avatar className="size-8">
-            <AvatarFallback className="bg-white/15 text-[11px] text-white">{initials}</AvatarFallback>
+            <AvatarFallback className="bg-white/15 text-[11px] text-white">
+              {initials}
+            </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-white">{name ?? '내 계정'}</p>
