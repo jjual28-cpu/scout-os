@@ -1,6 +1,14 @@
 'use client';
 
-import { ArrowRight, Loader2, Package, Search, Sparkles, TriangleAlert } from 'lucide-react';
+import {
+  ArrowRight,
+  ChevronDown,
+  Loader2,
+  Package,
+  Search,
+  Sparkles,
+  TriangleAlert,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -106,6 +114,18 @@ export function AiEmployeePage() {
     void launch(kw);
   }
 
+  /** AI가 알아서 — 이 상품에 가장 맞는 검색어(AI 1순위)로 바로 셀럽 검색을 시작한다. */
+  async function autoFind() {
+    if (!product || launching) return;
+    const term =
+      aiKeywords[0] || savedKeywords[0] || product.category.trim() || product.name.trim();
+    if (!term) {
+      setError('상품 정보가 부족해요. 상품에 카테고리를 채우면 AI가 더 잘 찾아요.');
+      return;
+    }
+    await launch(term);
+  }
+
   const KeywordChip = ({ kw }: { kw: string }) => (
     <button
       type="button"
@@ -130,7 +150,7 @@ export function AiEmployeePage() {
     <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-8 sm:py-10">
       <PageHeader
         title="AI 직원"
-        description="상품을 고르면 AI가 검색 키워드를 추천하고, 한 번의 클릭으로 셀럽을 찾아줍니다."
+        description="상품만 고르면 AI가 알아서 어울리는 셀럽을 찾아줍니다."
       />
 
       {!hydrated ? (
@@ -171,7 +191,7 @@ export function AiEmployeePage() {
             </select>
           </section>
 
-          {/* Step 2 — AI keywords */}
+          {/* Step 2 — AI가 알아서 셀럽 찾기 */}
           {product ? (
             <section className="bg-card dark:border-border rounded-2xl border border-slate-200/60 p-6">
               <div className="flex items-center gap-2">
@@ -180,65 +200,102 @@ export function AiEmployeePage() {
                 </span>
                 <h2 className="flex items-center gap-1.5 text-sm font-semibold">
                   <Sparkles className="text-primary size-4" />
-                  AI 추천 키워드
+                  AI가 어울리는 셀럽 찾기
                 </h2>
               </div>
               <p className="text-muted-foreground mt-1.5 text-xs">
-                키워드를 누르면 그 주제의 셀럽을 바로 찾기 시작해요 (상품 정보가 함께 반영돼요).
+                상품에 맞는 셀럽을 AI가 알아서 찾아드려요. 버튼만 누르면 검색이 시작돼요.
               </p>
 
-              {/* 직접 입력 — 추천을 기다리지 않고 원하는 키워드로 바로 검색 */}
-              <div className="mt-3 flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="text-muted-foreground pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2" />
-                  <input
-                    value={customKw}
-                    onChange={(e) => setCustomKw(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        submitCustom();
-                      }
-                    }}
-                    disabled={Boolean(launching)}
-                    placeholder="직접 키워드 입력 (예: 구강청결제)"
-                    className="border-input bg-background focus-visible:ring-ring h-10 w-full rounded-lg border pl-8 pr-3 text-sm outline-none focus-visible:ring-2 disabled:opacity-50"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  onClick={submitCustom}
-                  disabled={!customKw.trim() || Boolean(launching)}
-                  className="shrink-0"
-                >
-                  {launching === customKw.trim() ? (
+              {/* Primary — AI 자동 검색 */}
+              <Button
+                type="button"
+                size="lg"
+                className="mt-4 w-full"
+                onClick={() => void autoFind()}
+                disabled={Boolean(launching) || loading}
+              >
+                {launching ? (
+                  <>
                     <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Search className="size-4" />
-                  )}
-                  찾기
-                </Button>
-              </div>
+                    셀럽을 찾는 중…
+                  </>
+                ) : loading ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    AI가 상품을 분석하는 중…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="size-4" />
+                    AI가 어울리는 셀럽 찾기
+                  </>
+                )}
+              </Button>
+              {!loading && !launching && aiKeywords[0] ? (
+                <p className="text-muted-foreground mt-2 text-center text-xs">
+                  AI가 고른 검색어:{' '}
+                  <span className="text-foreground font-medium">{aiKeywords[0]}</span>
+                </p>
+              ) : null}
 
-              {loading ? (
-                <div className="text-muted-foreground mt-4 flex items-center gap-2 text-sm">
-                  <Loader2 className="size-4 animate-spin" />
-                  AI가 이 상품에 맞는 키워드를 뽑는 중…
+              {error ? (
+                <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-700 dark:text-amber-400">
+                  <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+                  <span>{error}</span>
                 </div>
-              ) : (
-                <div className="mt-4 space-y-4">
-                  {aiKeywords.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {aiKeywords.map((kw) => (
-                        <KeywordChip key={kw} kw={kw} />
-                      ))}
-                    </div>
-                  ) : null}
+              ) : null}
 
-                  {error ? (
-                    <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-700 dark:text-amber-400">
-                      <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
-                      <span>{error}</span>
+              {/* Secondary — 직접 검색어를 고르고 싶은 사람만 (접힘) */}
+              <details className="dark:border-border group mt-5 border-t border-slate-200/60 pt-4">
+                <summary className="text-muted-foreground hover:text-foreground flex cursor-pointer list-none items-center gap-1.5 text-xs font-medium">
+                  <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" />
+                  직접 검색어를 고르고 싶다면
+                </summary>
+
+                <div className="mt-3 space-y-4">
+                  {/* 직접 입력 */}
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Search className="text-muted-foreground pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2" />
+                      <input
+                        value={customKw}
+                        onChange={(e) => setCustomKw(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            submitCustom();
+                          }
+                        }}
+                        disabled={Boolean(launching)}
+                        placeholder="직접 키워드 입력 (예: 구강청결제)"
+                        className="border-input bg-background focus-visible:ring-ring h-10 w-full rounded-lg border pl-8 pr-3 text-sm outline-none focus-visible:ring-2 disabled:opacity-50"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={submitCustom}
+                      disabled={!customKw.trim() || Boolean(launching)}
+                      className="shrink-0"
+                    >
+                      {launching === customKw.trim() ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Search className="size-4" />
+                      )}
+                      찾기
+                    </Button>
+                  </div>
+
+                  {/* AI 추천 키워드 · 저장된 키워드 (선택) */}
+                  {aiKeywords.length > 0 ? (
+                    <div>
+                      <p className="text-muted-foreground mb-1.5 text-xs">AI 추천 키워드</p>
+                      <div className="flex flex-wrap gap-2">
+                        {aiKeywords.map((kw) => (
+                          <KeywordChip key={kw} kw={kw} />
+                        ))}
+                      </div>
                     </div>
                   ) : null}
 
@@ -252,14 +309,8 @@ export function AiEmployeePage() {
                       </div>
                     </div>
                   ) : null}
-
-                  {aiKeywords.length === 0 && savedKeywords.length === 0 && !error ? (
-                    <p className="text-muted-foreground text-sm">
-                      추천할 키워드가 없어요. 상품 정보(카테고리·타겟)를 채우면 더 정확해져요.
-                    </p>
-                  ) : null}
                 </div>
-              )}
+              </details>
             </section>
           ) : null}
         </div>
