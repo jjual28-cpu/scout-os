@@ -47,6 +47,21 @@ export default function LoginPage({
           회원가입
         </Link>
       </p>
+
+      <div className="text-muted-foreground mt-10 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs">
+        <Link href="/terms" className="hover:text-foreground">
+          이용약관
+        </Link>
+        <Link href="/privacy" className="hover:text-foreground">
+          개인정보처리방침
+        </Link>
+        <Link href="/refund" className="hover:text-foreground">
+          환불정책
+        </Link>
+        <Link href="/business" className="hover:text-foreground">
+          사업자정보
+        </Link>
+      </div>
     </div>
   );
 }
