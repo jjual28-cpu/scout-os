@@ -98,10 +98,14 @@ export function AiEmployeePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: keyword, productId, source: 'ai', target: 'creator' }),
       });
-      // Any resolved response → hand off to Discover, which opens the running
-      // (or mock) search. Mock mode returns configured:false and that's fine.
-      await res.json().catch(() => null);
-      router.push('/discover');
+      const json = (await res.json().catch(() => null)) as {
+        data?: { campaignId?: string | null };
+      } | null;
+      // 방금 시작한 검색을 Discover가 바로 열도록 campaign id 를 넘긴다. 안 넘기면
+      // Discover 가 이전에 보던 캠페인을 열어 "검색이 안 된 것"처럼 보인다.
+      // campaignId 가 없으면(모의/로그아웃) 그냥 Discover 로.
+      const campaignId = json?.data?.campaignId ?? null;
+      router.push(campaignId ? `/discover?campaign=${campaignId}` : '/discover');
     } catch {
       setLaunching(null);
       setError('검색을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.');
