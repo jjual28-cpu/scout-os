@@ -1,11 +1,13 @@
 'use client';
 
-import { CheckCircle2, Loader2, Sparkles } from 'lucide-react';
+import { CheckCircle2, CreditCard, Loader2, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 
 import { SectionCard, StatusBadge } from '@/components/layout/blocks';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
+import { useSubscription } from '@/features/billing/hooks/use-subscription';
+import { formatPrice, PLAN_ORDER, PLANS } from '@/features/billing/plans';
 import { cn } from '@/lib/utils';
 
 import { useAiUsage } from '../hooks/use-ai-usage';
@@ -14,11 +16,16 @@ type TestState = { kind: 'idle' | 'ok' | 'fail'; message?: string };
 
 export function SettingsPage() {
   const { usage, loading, reload } = useAiUsage();
+  const sub = useSubscription();
   const [busy, setBusy] = useState(false);
   const [test, setTest] = useState<TestState>({ kind: 'idle' });
 
   const pct = usage.limit > 0 ? Math.min(100, Math.round((usage.used / usage.limit) * 100)) : 0;
   const remaining = Math.max(usage.limit - usage.used, 0);
+  const searchPct =
+    sub.plan.monthlySearches > 0
+      ? Math.min(100, Math.round((sub.used / sub.plan.monthlySearches) * 100))
+      : 0;
 
   async function runTest() {
     setTest({ kind: 'idle' });
@@ -43,8 +50,82 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-8 sm:py-10">
-      <PageHeader title="설정" description="AI 사용량과 기본 작업 환경을 관리합니다." />
+    <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-8 sm:px-8 sm:py-10">
+      <PageHeader title="설정" description="플랜·AI 사용량과 기본 작업 환경을 관리합니다." />
+
+      <SectionCard
+        title="플랜"
+        icon={<CreditCard className="size-4" />}
+        action={<StatusBadge tone="primary">{sub.plan.name}</StatusBadge>}
+      >
+        {!sub.hydrated ? (
+          <p className="text-muted-foreground text-sm">불러오는 중…</p>
+        ) : (
+          <div className="space-y-5">
+            <div>
+              <div className="mb-1.5 flex items-baseline justify-between">
+                <span className="text-sm font-medium">이번 달 검색</span>
+                <span className="text-muted-foreground text-sm tabular-nums">
+                  {sub.used} / {sub.plan.monthlySearches}회
+                </span>
+              </div>
+              <div className="dark:bg-muted h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className={cn(
+                    'h-full rounded-full transition-all',
+                    searchPct >= 100 ? 'bg-destructive' : 'bg-primary',
+                  )}
+                  style={{ width: `${searchPct}%` }}
+                />
+              </div>
+              <p className="text-muted-foreground mt-1.5 text-xs">
+                현재 <span className="text-foreground font-medium">{sub.plan.name}</span>{' '}
+                플랜이에요.
+                {sub.signedIn ? '' : ' 로그인하면 내 플랜이 표시돼요.'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {PLAN_ORDER.map((k) => {
+                const p = PLANS[k];
+                const current = p.key === sub.plan.key;
+                return (
+                  <div
+                    key={k}
+                    className={cn(
+                      'rounded-xl border p-3',
+                      current
+                        ? 'border-primary bg-primary/5'
+                        : 'dark:border-border border-slate-200',
+                    )}
+                  >
+                    <p className="text-sm font-semibold">{p.name}</p>
+                    <p className="text-muted-foreground text-xs">{p.tagline}</p>
+                    <p className="mt-1.5 text-sm font-medium">
+                      {formatPrice(p.priceMonthly)}
+                      {p.priceMonthly > 0 ? (
+                        <span className="text-muted-foreground text-xs font-normal">/월</span>
+                      ) : null}
+                    </p>
+                    {current ? (
+                      <p className="text-primary mt-1 text-[11px] font-medium">현재 플랜</p>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div>
+              <Button variant="outline" size="sm" disabled>
+                업그레이드 (준비 중)
+              </Button>
+              <p className="text-muted-foreground mt-2 text-xs">
+                결제는 준비 중이에요. 지금은 검색 횟수가 제한되지 않아요.
+              </p>
+            </div>
+          </div>
+        )}
+      </SectionCard>
 
       <SectionCard
         title="AI 사용"
