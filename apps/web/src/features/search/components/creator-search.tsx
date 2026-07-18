@@ -279,6 +279,9 @@ export function CreatorSearch() {
   const [hideHandled, setHideHandled] = useState(true);
   /** Hide the accounts AI judged as not a real fit. On by default. */
   const [hideRejected, setHideRejected] = useState(true);
+  /** 제외 키워드 — 아이디/이름/소개/카테고리에 이 단어가 있으면 결과에서 숨긴다. */
+  const [excludeTerms, setExcludeTerms] = useState<string[]>([]);
+  const [excludeInput, setExcludeInput] = useState('');
 
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   /** Competitor/brand handle for the tagged entrance. */
@@ -646,6 +649,11 @@ export function CreatorSearch() {
       if (toggles.has('business') && !it.category) return false;
       if (toggles.has('bio') && !it.biography?.trim()) return false;
       if (toggles.has('email') && !it.reasons?.includes('연락처 공개')) return false;
+      if (excludeTerms.length) {
+        const hay =
+          `${it.handle} ${it.name} ${it.biography ?? ''} ${it.category ?? ''}`.toLowerCase();
+        if (excludeTerms.some((t) => hay.includes(t))) return false;
+      }
       return true;
     });
     const arr = [...filtered];
@@ -662,7 +670,7 @@ export function CreatorSearch() {
       );
     // 'recent' keeps the original discovery order
     return arr;
-  }, [items, buckets, toggles, sort, hideHandled, hideRejected, outreach.records]);
+  }, [items, buckets, toggles, sort, hideHandled, hideRejected, excludeTerms, outreach.records]);
 
   const summary = useMemo(() => summarizeResults(items), [items]);
 
@@ -678,6 +686,13 @@ export function CreatorSearch() {
       next.has(t) ? next.delete(t) : next.add(t);
       return next;
     });
+  const addExclude = (raw: string) => {
+    const t = raw.trim().replace(/,$/, '').trim().toLowerCase();
+    if (!t) return;
+    setExcludeTerms((prev) => (prev.includes(t) ? prev : [...prev, t]));
+    setExcludeInput('');
+  };
+  const removeExclude = (t: string) => setExcludeTerms((prev) => prev.filter((x) => x !== t));
   const onSelectChange = (id: string, on: boolean) =>
     setSelected((prev) => {
       const next = new Set(prev);
@@ -856,6 +871,44 @@ export function CreatorSearch() {
                 {t.label}
               </FilterChip>
             ))}
+          </div>
+          <div>
+            <p className="text-muted-foreground mb-1.5 text-[11px] leading-snug">
+              제외 키워드 — 아이디·이름·소개에 이 단어가 있으면 숨겨요 (예: 도매, 공구)
+            </p>
+            <div className="border-input bg-background focus-within:ring-ring flex flex-wrap items-center gap-1 rounded-lg border px-2 py-1.5 focus-within:ring-2">
+              {excludeTerms.map((t) => (
+                <span
+                  key={t}
+                  className="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
+                >
+                  {t}
+                  <button
+                    type="button"
+                    onClick={() => removeExclude(t)}
+                    aria-label={`${t} 제외 해제`}
+                  >
+                    <X className="size-3" />
+                  </button>
+                </span>
+              ))}
+              <input
+                value={excludeInput}
+                onChange={(e) => setExcludeInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ',') {
+                    e.preventDefault();
+                    addExclude(excludeInput);
+                  } else if (e.key === 'Backspace' && !excludeInput && excludeTerms.length) {
+                    removeExclude(excludeTerms[excludeTerms.length - 1]!);
+                  }
+                }}
+                onBlur={() => addExclude(excludeInput)}
+                placeholder={excludeTerms.length ? '' : '단어 입력 후 Enter'}
+                className="min-w-[80px] flex-1 bg-transparent text-sm outline-none"
+                aria-label="제외 키워드 입력"
+              />
+            </div>
           </div>
         </div>
       </div>
