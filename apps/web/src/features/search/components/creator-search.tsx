@@ -44,6 +44,7 @@ import { getLastViewedCampaign, setLastViewedCampaign } from '@/features/campaig
 import { getLatestCampaign, listResults } from '@/features/campaigns/services/campaign-service';
 import { type CampaignDraft, type CampaignResult } from '@/features/campaigns/types';
 import { useProducts } from '@/features/products/hooks/use-products';
+import { splitTokens } from '@/features/products/types';
 import { isSupabaseConfigured } from '@/lib/env';
 import { createClient } from '@/lib/supabase/client';
 
@@ -300,6 +301,15 @@ export function CreatorSearch() {
   const outreach = useOutreach();
   const products = useProducts();
   const { campaigns } = useCampaigns();
+
+  /** Competitor handles saved on the currently-selected product → one-click tagged search. */
+  const selectedCompetitors = useMemo(
+    () =>
+      splitTokens(
+        products.products.find((p) => p.id === selectedProductId)?.competitorHandles ?? '',
+      ),
+    [products.products, selectedProductId],
+  );
 
   // Global poller's view of in-flight searches → auto-refresh when ours finishes.
   const runSnap = useSyncExternalStore(
@@ -761,6 +771,24 @@ export function CreatorSearch() {
             찾기
           </Button>
         </div>
+        {selectedCompetitors.length > 0 ? (
+          <div className="mt-2.5">
+            <p className="text-muted-foreground mb-1.5 text-[11px]">이 상품에 저장된 경쟁사</p>
+            <div className="flex flex-wrap gap-1.5">
+              {selectedCompetitors.map((handle) => (
+                <button
+                  key={handle}
+                  type="button"
+                  disabled={phase === 'searching'}
+                  onClick={() => void runSearch(handle, false, 'tagged')}
+                  className="border-input bg-background hover:bg-muted inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors disabled:pointer-events-none disabled:opacity-50"
+                >
+                  <Tag className="size-3" />@{handle.replace(/^@/, '')}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <ChipRow

@@ -348,6 +348,13 @@ export function ProductsPage() {
                     placeholder="예: 뷰티, 메이크업 …"
                   />
                 </Field>
+                <Field label="경쟁사 인스타 계정 (Enter로 추가 · 태그 검색에 사용)" full>
+                  <TagInput
+                    value={draft.competitorHandles}
+                    onChange={(v) => set('competitorHandles', v)}
+                    placeholder="예: @brand_a, @brand_b …"
+                  />
+                </Field>
               </Section>
 
               <Section title="주의 문구">

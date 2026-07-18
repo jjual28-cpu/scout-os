@@ -40,6 +40,9 @@ export type Product = {
   target: string;
   /** Recommended keywords, comma-separated (edited as tags; used by AI Engine). */
   recommendedKeywords: string;
+  /** Competitor Instagram handles, comma-separated — one-click tagged search finds
+   *  creators who already tag these rivals (proven brand-collab accounts). */
+  competitorHandles: string;
   /** AI product analysis (filled by the AI Engine step; empty for now). */
   analysis?: string | null;
   /** Which engine produced the analysis (e.g. 'rule' | 'openai'). */
@@ -84,6 +87,7 @@ export function emptyProduct(id: string): Product {
     collabTerms: '',
     target: '',
     recommendedKeywords: '',
+    competitorHandles: '',
     analysis: null,
     analysisSource: null,
     analysisUpdatedAt: null,
