@@ -48,6 +48,10 @@ export type Product = {
   /** Which engine produced the analysis (e.g. 'rule' | 'openai'). */
   analysisSource?: string | null;
   analysisUpdatedAt?: string | null;
+  /** Where this product came from (e.g. 'cafe24'); null for hand-created. */
+  source?: string | null;
+  /** Origin product id at the source (카페24 product_no) — for dedup. */
+  sourceProductNo?: string | null;
   updatedAt?: string;
 };
 

@@ -34,6 +34,8 @@ function rowToProduct(r: any): Product {
     analysis: r.analysis ?? null,
     analysisSource: r.analysis_source ?? null,
     analysisUpdatedAt: r.analysis_updated_at ?? null,
+    source: r.source ?? null,
+    sourceProductNo: r.source_product_no ?? null,
     updatedAt: r.updated_at,
   };
 }
@@ -64,6 +66,8 @@ function productToRow(p: Product, uid: string) {
     analysis: p.analysis ?? null,
     analysis_source: p.analysisSource ?? null,
     analysis_updated_at: p.analysisUpdatedAt ?? null,
+    source: p.source ?? null,
+    source_product_no: p.sourceProductNo ?? null,
   };
 }
 
@@ -95,51 +99,42 @@ export function useProducts() {
   const mode = useRef<'local' | 'supabase'>('local');
   const userId = useRef<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      if (!isSupabaseConfigured()) {
-        if (active) {
-          mode.current = 'local';
-          setProducts(readLocal());
-          setHydrated(true);
-        }
+  const load = useCallback(async (): Promise<void> => {
+    if (!isSupabaseConfigured()) {
+      mode.current = 'local';
+      setProducts(readLocal());
+      setHydrated(true);
+      return;
+    }
+    try {
+      const sb = createClient();
+      const {
+        data: { user },
+      } = await sb.auth.getUser();
+      if (!user) {
+        mode.current = 'local';
+        setProducts(readLocal());
+        setHydrated(true);
         return;
       }
-      try {
-        const sb = createClient();
-        const {
-          data: { user },
-        } = await sb.auth.getUser();
-        if (!user) {
-          if (active) {
-            mode.current = 'local';
-            setProducts(readLocal());
-            setHydrated(true);
-          }
-          return;
-        }
-        mode.current = 'supabase';
-        userId.current = user.id;
-        const { data } = await sb
-          .from('products')
-          .select('*')
-          .order('updated_at', { ascending: false });
-        if (!active) return;
-        setProducts((data ?? []).map(rowToProduct));
-        setHydrated(true);
-      } catch {
-        if (active) {
-          mode.current = 'local';
-          setProducts(readLocal());
-          setHydrated(true);
-        }
-      }
-    })();
-    return () => {
-      active = false;
-    };
+      mode.current = 'supabase';
+      userId.current = user.id;
+      const { data } = await sb
+        .from('products')
+        .select('*')
+        .order('updated_at', { ascending: false });
+      setProducts((data ?? []).map(rowToProduct));
+      setHydrated(true);
+    } catch {
+      mode.current = 'local';
+      setProducts(readLocal());
+      setHydrated(true);
+    }
   }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const create = useCallback(async (product: Product): Promise<boolean> => {
     setError(null);
@@ -222,5 +217,14 @@ export function useProducts() {
     }
   }, []);
 
-  return { products, hydrated, error, clearError: () => setError(null), create, update, remove };
+  return {
+    products,
+    hydrated,
+    error,
+    clearError: () => setError(null),
+    create,
+    update,
+    remove,
+    reload: load,
+  };
 }

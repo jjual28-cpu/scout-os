@@ -86,6 +86,12 @@ export const env = {
   TOSS_SECRET_KEY: optional(nonEmpty, process.env.TOSS_SECRET_KEY),
   NEXT_PUBLIC_TOSS_CLIENT_KEY: optional(nonEmpty, process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY),
 
+  // 카페24 (server-only — NEVER prefix with NEXT_PUBLIC). App credentials from the
+  // Cafe24 Developer Center; used only in the OAuth flow that connects a brand's
+  // mall. Undefined ⇒ 카페24 임포트 비활성. The secret NEVER reaches the browser.
+  CAFE24_CLIENT_ID: optional(nonEmpty, process.env.CAFE24_CLIENT_ID),
+  CAFE24_CLIENT_SECRET: optional(nonEmpty, process.env.CAFE24_CLIENT_SECRET),
+
   // Apify (server-only — NEVER prefix with NEXT_PUBLIC). Powers real Instagram
   // creator discovery. Undefined ⇒ /discover falls back to mock data.
   APIFY_API_TOKEN: optional(nonEmpty, process.env.APIFY_API_TOKEN),
@@ -130,6 +136,11 @@ export function isApifyConfigured(): boolean {
 /** True when Toss Payments is configured (secret + public client key). */
 export function isTossConfigured(): boolean {
   return Boolean(env.TOSS_SECRET_KEY && env.NEXT_PUBLIC_TOSS_CLIENT_KEY);
+}
+
+/** True when 카페24 app credentials are configured (server-only). */
+export function isCafe24Configured(): boolean {
+  return Boolean(env.CAFE24_CLIENT_ID && env.CAFE24_CLIENT_SECRET);
 }
 
 /**

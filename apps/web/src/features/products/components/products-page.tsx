@@ -1,7 +1,7 @@
 'use client';
 
-import { AlertCircle, Package, Plus, Search, Trash2, Upload, X } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { AlertCircle, Download, Package, Plus, Search, Trash2, Upload, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 import { useProducts } from '../hooks/use-products';
+import { Cafe24ImportDialog } from './cafe24-import-dialog';
 import {
   COLLAB_TYPES,
   PRODUCT_STATUSES,
@@ -39,17 +40,38 @@ function uuid(): string {
 }
 
 export function ProductsPage() {
-  const { products, hydrated, error, clearError, create, update, remove } = useProducts();
+  const { products, hydrated, error, clearError, create, update, remove, reload } = useProducts();
   const [draft, setDraft] = useState<Product | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const showToast = (m: string) => {
     setToast(m);
     window.setTimeout(() => setToast(null), 2000);
   };
+
+  // 카페24 OAuth 왕복 후 돌아오면(?cafe24=…) 결과를 토스트로 알리고 다이얼로그를 연다.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const flag = params.get('cafe24');
+    if (!flag) return;
+    if (flag === 'connected') {
+      showToast('카페24 연동 완료! 가져올 상품을 선택하세요.');
+      setImportOpen(true);
+    } else if (
+      flag === 'fail' ||
+      flag === 'badmall' ||
+      flag === 'login' ||
+      flag === 'unavailable'
+    ) {
+      showToast('카페24 연동에 실패했어요. 다시 시도해 주세요.');
+    }
+    // 쿼리 정리 (새로고침 시 재실행 방지)
+    window.history.replaceState(null, '', '/products');
+  }, []);
 
   // Toolbar
   const [q, setQ] = useState('');
@@ -118,9 +140,15 @@ export function ProductsPage() {
         title="Products"
         description="브랜드 상품을 등록하면 AI가 이 데이터로 키워드·셀럽을 추천합니다."
         actions={
-          <Button onClick={startNew}>
-            <Plus className="size-4" />새 상품
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Download className="size-4" />
+              카페24에서 가져오기
+            </Button>
+            <Button onClick={startNew}>
+              <Plus className="size-4" />새 상품
+            </Button>
+          </div>
         }
       />
 
@@ -397,6 +425,19 @@ export function ProductsPage() {
           message="정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() => void doDelete()}
+        />
+      ) : null}
+
+      {importOpen ? (
+        <Cafe24ImportDialog
+          onClose={() => setImportOpen(false)}
+          onImported={(count) => {
+            setImportOpen(false);
+            void reload();
+            showToast(
+              count > 0 ? `카페24 상품 ${count}개를 가져왔어요.` : '가져올 새 상품이 없었어요.',
+            );
+          }}
         />
       ) : null}
 
