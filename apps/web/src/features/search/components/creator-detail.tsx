@@ -8,10 +8,13 @@ import {
   Copy,
   History,
   Instagram,
+  Loader2,
   MoreHorizontal,
   RefreshCw,
   Send,
   Sparkles,
+  TriangleAlert,
+  Wand2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
@@ -47,6 +50,8 @@ export function CreatorDetail({ id }: { id: string }) {
   const [draft, setDraft] = useState<string | null>(null);
   const [dmVariant, setDmVariant] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // Notes: controlled + debounced autosave.
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
@@ -112,6 +117,43 @@ export function CreatorDetail({ id }: { id: string }) {
     const next = generateCreatorFollowUpDm(dmInput, v);
     setDraft(next);
     outreach.setDmDraft(id, next);
+  };
+  /** AI-drafted DM — reads the creator's real bio/niche, not a template. */
+  const aiDraft = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await fetch('/api/ai/dm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          creator: {
+            displayName: creator.displayName,
+            username: creator.username,
+            biography: creator.biography,
+            category: creator.category,
+            followersCount: creator.followersCount,
+          },
+        }),
+      });
+      const json = (await res.json().catch(() => null)) as {
+        data?: { text?: string };
+        error?: { message?: string };
+      } | null;
+      const text = json?.data?.text?.trim();
+      if (!res.ok || !text) {
+        setAiError(
+          json?.error?.message ?? 'AI 초안 생성에 실패했어요. 잠시 후 다시 시도해 주세요.',
+        );
+        return;
+      }
+      setDraft(text);
+      outreach.setDmDraft(id, text);
+    } catch {
+      setAiError('AI 초안 생성 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setAiLoading(false);
+    }
   };
   const copy = async (open: boolean) => {
     const text = draft ?? '';
@@ -248,9 +290,18 @@ export function CreatorDetail({ id }: { id: string }) {
             Instagram에서 연락하기
           </Button>
           {/* Secondary */}
-          <Button type="button" variant="outline" onClick={genDraft}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void aiDraft()}
+            disabled={aiLoading}
+          >
+            {aiLoading ? <Loader2 className="size-4 animate-spin" /> : <Wand2 className="size-4" />}
+            AI 초안
+          </Button>
+          <Button type="button" variant="outline" onClick={genDraft} disabled={aiLoading}>
             <Sparkles className="size-4" />
-            초안 생성
+            빠른 초안
           </Button>
           <Button type="button" variant="outline" onClick={() => copy(false)}>
             {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
@@ -281,9 +332,16 @@ export function CreatorDetail({ id }: { id: string }) {
             </div>
           </details>
         </div>
+        {aiError ? (
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-700 dark:text-amber-400">
+            <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+            <span>{aiError}</span>
+          </div>
+        ) : null}
         <p className="text-muted-foreground mt-2 text-xs">
-          ‘Instagram에서 연락하기’는 DM을 복사하고 실제 프로필을 새 탭으로 엽니다. 전송은 직접 하신
-          뒤 ‘연락 완료’로 기록하세요.
+          <b className="font-medium">AI 초안</b>은 이 크리에이터의 소개·분야를 읽고 맞춤으로,
+          <b className="font-medium"> 빠른 초안</b>은 즉시 템플릿으로 만듭니다. ‘Instagram에서
+          연락하기’는 DM을 복사하고 프로필을 새 탭으로 엽니다.
         </p>
       </section>
 
