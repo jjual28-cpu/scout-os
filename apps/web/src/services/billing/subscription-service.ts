@@ -98,7 +98,10 @@ export async function activatePaidPlan(args: {
     throw err;
   }
 
-  await admin.from('subscriptions').upsert(
+  // Don't activate on a charge that didn't actually complete.
+  if (!result.ok) throw new Error('결제가 완료되지 않았습니다.');
+
+  const { error: upErr } = await admin.from('subscriptions').upsert(
     {
       user_id: userId,
       plan,
@@ -113,6 +116,9 @@ export async function activatePaidPlan(args: {
     },
     { onConflict: 'user_id' },
   );
+  // A silent upsert failure (e.g. missing migration) must NOT report success —
+  // otherwise the user is charged but the plan never activates.
+  if (upErr) throw new Error(`구독 활성화 실패: ${upErr.message}`);
 
   await logPayment(admin, {
     userId,
