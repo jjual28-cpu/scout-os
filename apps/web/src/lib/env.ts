@@ -92,6 +92,13 @@ export const env = {
   CAFE24_CLIENT_ID: optional(nonEmpty, process.env.CAFE24_CLIENT_ID),
   CAFE24_CLIENT_SECRET: optional(nonEmpty, process.env.CAFE24_CLIENT_SECRET),
 
+  // 인스타 Messaging (Meta). App secret·verify token 은 SERVER-ONLY. App ID 는
+  // OAuth 리다이렉트에 쓰여 public 도 둔다. 웹훅 서명검증에 app secret 사용.
+  INSTAGRAM_APP_ID: optional(nonEmpty, process.env.INSTAGRAM_APP_ID),
+  INSTAGRAM_APP_SECRET: optional(nonEmpty, process.env.INSTAGRAM_APP_SECRET),
+  INSTAGRAM_WEBHOOK_VERIFY_TOKEN: optional(nonEmpty, process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN),
+  NEXT_PUBLIC_INSTAGRAM_APP_ID: optional(nonEmpty, process.env.NEXT_PUBLIC_INSTAGRAM_APP_ID),
+
   // Apify (server-only — NEVER prefix with NEXT_PUBLIC). Powers real Instagram
   // creator discovery. Undefined ⇒ /discover falls back to mock data.
   APIFY_API_TOKEN: optional(nonEmpty, process.env.APIFY_API_TOKEN),
@@ -141,6 +148,13 @@ export function isTossConfigured(): boolean {
 /** True when 카페24 app credentials are configured (server-only). */
 export function isCafe24Configured(): boolean {
   return Boolean(env.CAFE24_CLIENT_ID && env.CAFE24_CLIENT_SECRET);
+}
+
+/** True when 인스타 Messaging(Meta) app credentials are configured (server-only). */
+export function isInstagramConfigured(): boolean {
+  return Boolean(
+    env.INSTAGRAM_APP_ID && env.INSTAGRAM_APP_SECRET && env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN,
+  );
 }
 
 /**

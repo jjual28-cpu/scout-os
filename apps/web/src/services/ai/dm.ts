@@ -66,6 +66,61 @@ ${brandBlock}
     .slice(0, 400);
 }
 
+const REPLY_SYSTEM = `당신은 인플루언서 마케팅 담당자입니다. 셀럽이 협업 제안 DM에 보낸 답장을 읽고, 브랜드 입장에서 보낼 다음 답장 초안을 씁니다.
+
+원칙:
+- 한국어. 따뜻하고 정중하되 사무적이지 않게. 반말 금지, 이모지 0~2개.
+- 상대 답장의 내용에 실제로 반응할 것(질문엔 답, 관심엔 감사, 조건 문의엔 브랜드 정보로).
+- 없는 사실(구체 수치·확정 약속)을 지어내지 말 것. 애매하면 "확인 후 안내드리겠다" 톤.
+- 300자 이내. 다음 행동(통화·상세 안내·자료 공유 등)을 자연스럽게 제안.
+
+오직 답장 본문만 출력하세요. 따옴표·설명·머리말 금지.`;
+
+/** 대화 한 줄. direction: 'in'=셀럽이 보냄, 'out'=내가 보냄. */
+export type ReplyTurn = { direction: 'in' | 'out'; text: string };
+
+/** 셀럽 답장에 대한 다음 답장 초안. 데일리 캡 1회. */
+export async function draftReply(
+  userId: string,
+  conversation: ReplyTurn[],
+  brand: BrandContext | null,
+): Promise<string> {
+  const brandLine =
+    brand && (brand.productName || brand.brand)
+      ? [
+          brand.brand ? `브랜드: ${brand.brand}` : null,
+          brand.productName ? `상품: ${brand.productName}` : null,
+          brand.sellingPoints ? `판매 포인트: ${brand.sellingPoints}` : null,
+        ]
+          .filter(Boolean)
+          .join('\n')
+      : '(브랜드 정보 없음)';
+
+  const convo = conversation
+    .slice(-12)
+    .map((t) => `${t.direction === 'in' ? '셀럽' : '나'}: ${t.text}`)
+    .join('\n');
+
+  const prompt = `[브랜드]
+${brandLine}
+
+[지금까지 대화]
+${convo}
+
+위 대화에서 셀럽의 마지막 답장에 이어 보낼 내 답장 초안을 써주세요.`;
+
+  const text = await runAi(userId, {
+    system: REPLY_SYSTEM,
+    prompt,
+    maxTokens: 400,
+    temperature: 0.7,
+  });
+  return text
+    .trim()
+    .replace(/^["']+|["']+$/g, '')
+    .slice(0, 400);
+}
+
 const SLOT_SYSTEM = `당신은 인플루언서 마케팅 담당자입니다. 사용자가 만든 DM 템플릿의 "AI 구간"들을 그 크리에이터에 맞게 자연스럽게 채웁니다.
 
 원칙:

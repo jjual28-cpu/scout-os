@@ -1,6 +1,13 @@
 'use client';
 
-import { CheckCircle2, CreditCard, Loader2, MessageSquareText, Sparkles } from 'lucide-react';
+import {
+  CheckCircle2,
+  CreditCard,
+  Instagram,
+  Loader2,
+  MessageSquareText,
+  Sparkles,
+} from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
@@ -16,6 +23,7 @@ import {
   type PlanKey,
 } from '@/features/billing/plans';
 import { loadToss } from '@/features/billing/toss-client';
+import { InstagramConnectCard } from '@/features/inbox/components/instagram-connect-card';
 import { DmStyleEditor } from '@/features/search/components/dm-style-editor';
 import { env } from '@/lib/env';
 import { createClient } from '@/lib/supabase/client';
@@ -296,6 +304,10 @@ export function SettingsPage() {
 
       <SectionCard title="DM 스타일" icon={<MessageSquareText className="size-4" />}>
         <DmStyleEditor />
+      </SectionCard>
+
+      <SectionCard title="인스타그램 연결" icon={<Instagram className="size-4" />}>
+        <InstagramConnectCard />
       </SectionCard>
     </div>
   );
