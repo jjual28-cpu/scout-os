@@ -48,6 +48,63 @@ function looksLikeSeller(c: InstagramCreator, seed: string): boolean {
   return SELLER_SIGNALS.some((w) => hay.includes(w));
 }
 
+/**
+ * 지역업체·로컬샵·시술/방문 서비스 신호. 뷰티 해시태그를 달아 검색에 딸려오지만
+ * 협업할 콘텐츠 셀럽이 아니라 '가게'다 (예: 울산눈썹문신, 세종피부관리, ○○셀렉트샵).
+ * 이름·아이디·소개 어디든 이 단어가 있으면 업체로 본다. target==='creator' 에서만 적용.
+ * (지역업체 자체를 찾는 검색은 target/의도가 다르므로 여기서 안 걸러짐)
+ */
+const BUSINESS_SIGNALS = [
+  // 뷰티 시술·로컬샵
+  '눈썹문신',
+  '반영구',
+  '속눈썹',
+  '왁싱',
+  '네일샵',
+  '네일아트',
+  '피부관리',
+  '피부과',
+  '에스테틱',
+  '태닝',
+  '두피',
+  '탈모',
+  '미용실',
+  '헤어샵',
+  '헤어살롱',
+  '바버샵',
+  '성형외과',
+  '클리닉',
+  '한의원',
+  '치과',
+  '의원',
+  '필라테스',
+  '요가원',
+  '공방',
+  // 판매·유통·리테일
+  '셀렉트샵',
+  '편집샵',
+  '소품샵',
+  '스마트스토어',
+  '도매',
+  '유통',
+  '쇼핑몰',
+  // 예약·방문 신호(주로 소개글)
+  '예약문의',
+  '예약제',
+  '시술문의',
+  '오시는길',
+  '영업시간',
+  '네이버예약',
+  '카톡예약',
+  '방문예약',
+  '상담문의',
+];
+/** 지역업체/로컬샵/방문서비스 판별 — 이름·아이디·소개 전체를 본다. */
+function looksLikeBusiness(c: InstagramCreator): boolean {
+  const hay = `${c.username} ${c.displayName} ${c.biography ?? ''}`.toLowerCase();
+  return BUSINESS_SIGNALS.some((w) => hay.includes(w));
+}
+
 export const dynamic = 'force-dynamic';
 // Only reads a finished dataset + saves rows — never waits on an Apify run.
 export const maxDuration = 60;
@@ -448,9 +505,11 @@ export const POST = withErrorHandling(
       // ── TikTok·YouTube — 단일 스테이지: 데이터셋 → 작성자/채널 정규화 → 저장 → 판정 → 완료 ──
       //    인스타 3단계 머신을 타지 않는다(별 분기). 플랫폼별 정규화 함수만 다르다.
       if (platform !== 'instagram') {
-        const creators = (
-          platform === 'youtube' ? creatorsFromYoutube(items) : creatorsFromTiktok(items)
-        ).slice(0, TARGET);
+        let creators =
+          platform === 'youtube' ? creatorsFromYoutube(items) : creatorsFromTiktok(items);
+        // 셀럽 검색이면 지역업체/로컬샵을 걸러낸다(틱톡·유튜브도 동일).
+        if (target === 'creator') creators = creators.filter((cr) => !looksLikeBusiness(cr));
+        creators = creators.slice(0, TARGET);
         await saveCreators(sb, userId, campaignId, query, creators, 0);
         const { count } = await existingResults(sb, userId, campaignId);
         await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null, target);
@@ -503,7 +562,7 @@ export const POST = withErrorHandling(
         // 줄면 아래 "충분" 조건에 안 걸려 해시태그→작성자(진짜 크리에이터)로 넘어간다.
         if (target === 'creator') {
           const seed = (plan?.searchTerm || query).toLowerCase();
-          creators = creators.filter((cr) => !looksLikeSeller(cr, seed));
+          creators = creators.filter((cr) => !looksLikeSeller(cr, seed) && !looksLikeBusiness(cr));
         }
         await saveCreators(sb, userId, campaignId, query, creators, 0);
         await upsertPool('instagram', creators);
@@ -540,13 +599,16 @@ export const POST = withErrorHandling(
         let toScrape = toEnrich;
         if (!TREND_RE.test(matchContext)) {
           const { pooled, missing } = await getPooled('instagram', toEnrich);
-          if (pooled.length > 0) {
+          // 셀럽 검색이면 풀에서 온 계정도 지역업체/로컬샵을 걸러낸다.
+          const cleanPooled =
+            target === 'creator' ? pooled.filter((cr) => !looksLikeBusiness(cr)) : pooled;
+          if (cleanPooled.length > 0) {
             await saveCreators(
               sb,
               userId,
               campaignId,
               query,
-              pooled.slice(0, Math.max(TARGET - count, 0)),
+              cleanPooled.slice(0, Math.max(TARGET - count, 0)),
               count,
             );
           }
@@ -573,7 +635,10 @@ export const POST = withErrorHandling(
       const { count: before } = await existingResults(sb, userId, campaignId);
       const room = Math.max(TARGET - before, 0);
       const enriched = profilesFromItems(items);
-      await saveCreators(sb, userId, campaignId, query, enriched.slice(0, room), before);
+      // 셀럽 검색이면 지역업체/로컬샵을 결과에서 빼고 저장(풀 캐시에는 원본을 남긴다).
+      const toSave =
+        target === 'creator' ? enriched.filter((cr) => !looksLikeBusiness(cr)) : enriched;
+      await saveCreators(sb, userId, campaignId, query, toSave.slice(0, room), before);
       await upsertPool('instagram', enriched); // feed the shared cache
       const { count } = await existingResults(sb, userId, campaignId);
       await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null, target);
