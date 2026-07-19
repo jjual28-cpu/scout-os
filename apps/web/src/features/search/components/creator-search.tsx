@@ -183,6 +183,24 @@ function inBucket(f: number, b: Bucket): boolean {
   return f >= 50_000;
 }
 
+/**
+ * 참여율 하한 — 이보다 낮으면 팔로워는 있어도 반응이 사실상 죽은 계정으로 본다.
+ * 인스타 평균 참여율은 규모와 무관하게 최소 1%대라, 0.5% 미만은 어느 크기든 낮은 편.
+ * (참여율을 알 수 있는 계정에만 적용 — ER=null이면 판단 불가라 숨기지 않음)
+ */
+const LOW_ER_THRESHOLD = 0.5;
+
+/** 팔로워 규모 밴드 — 원하는 인플루언서 등급만 결과에서 보기(마케팅 통용 구간). */
+type SizeBand = 'all' | 'nano' | 'micro' | 'mid' | 'macro';
+const SIZE_BANDS: { id: SizeBand; label: string; test: (f: number) => boolean }[] = [
+  { id: 'all', label: '전체', test: () => true },
+  { id: 'nano', label: '나노 1천~1만', test: (f) => f >= 1_000 && f < 10_000 },
+  { id: 'micro', label: '마이크로 1만~10만', test: (f) => f >= 10_000 && f < 100_000 },
+  { id: 'mid', label: '미들 10만~50만', test: (f) => f >= 100_000 && f < 500_000 },
+  { id: 'macro', label: '매크로 50만+', test: (f) => f >= 500_000 },
+];
+const SIZE_BAND_KEY = 'scout:size-band';
+
 function relativeTime(ts: number | null): string {
   if (!ts) return '';
   const s = Math.floor((Date.now() - ts) / 1000);
@@ -306,6 +324,26 @@ export function CreatorSearch() {
   const [hideFake, setHideFake] = useState(false);
   /** 국가 필터 — 전체 / 한국(한글 감지) / 해외. */
   const [region, setRegion] = useState<'all' | 'kr' | 'foreign'>('all');
+  /** 참여율 낮은(죽은) 계정 자동 숨김 — 기본 ON. ER을 아는 계정에만 적용. */
+  const [hideLowEngagement, setHideLowEngagement] = useState(true);
+  /** 팔로워 규모 밴드 — 원하는 등급만 결과에서 본다. localStorage로 기억. */
+  const [sizeBand, setSizeBand] = useState<SizeBand>('all');
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(SIZE_BAND_KEY);
+      if (v && SIZE_BANDS.some((b) => b.id === v)) setSizeBand(v as SizeBand);
+    } catch {
+      /* storage blocked — just use 전체 */
+    }
+  }, []);
+  const chooseSizeBand = (b: SizeBand) => {
+    setSizeBand(b);
+    try {
+      localStorage.setItem(SIZE_BAND_KEY, b);
+    } catch {
+      /* preference not remembered — harmless */
+    }
+  };
 
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   /** Competitor/brand handle for the tagged entrance. */
@@ -702,8 +740,16 @@ export function CreatorSearch() {
       }
       if (hideVisualReject && it.visualVerdict === 'reject') return false;
       if (hideFake && it.fakeSuspect) return false;
+      // 참여율 낮은(죽은) 계정 자동 제외 — ER을 아는 계정에만 적용(모르면 통과).
+      if (hideLowEngagement && it.engagementRate != null && it.engagementRate < LOW_ER_THRESHOLD)
+        return false;
       if (region === 'kr' && !it.koreanLikely) return false;
       if (region === 'foreign' && it.koreanLikely) return false;
+      // 팔로워 규모 밴드 — 선택한 등급만.
+      if (sizeBand !== 'all') {
+        const band = SIZE_BANDS.find((b) => b.id === sizeBand);
+        if (band && !band.test(it.followersCount ?? 0)) return false;
+      }
       return true;
     });
     const arr = [...filtered];
@@ -737,7 +783,9 @@ export function CreatorSearch() {
     hideRejected,
     hideVisualReject,
     hideFake,
+    hideLowEngagement,
     region,
+    sizeBand,
     excludeTerms,
     outreach.records,
   ]);
@@ -749,6 +797,13 @@ export function CreatorSearch() {
   );
   /** 가짜 팔로워 의심 계정 수 (있으면 숨김 칩 노출). */
   const fakeCount = useMemo(() => items.filter((it) => it.fakeSuspect).length, [items]);
+  /** 참여율 낮은(죽은) 계정 수 (있으면 숨김 칩 노출). */
+  const lowEngagementCount = useMemo(
+    () =>
+      items.filter((it) => it.engagementRate != null && it.engagementRate < LOW_ER_THRESHOLD)
+        .length,
+    [items],
+  );
   /** 한국 추정 셀럽 수 (한글 감지). 국가 필터·문구 노출 판단용. */
   const koreanCount = useMemo(() => items.filter((it) => it.koreanLikely).length, [items]);
   /** 한국·해외가 섞여 있을 때만 국가 구분이 의미 있음(둘 다 1명 이상). */
@@ -1043,6 +1098,21 @@ export function CreatorSearch() {
       <div>
         <RailLabel icon={<SlidersHorizontal className="size-3.5" />}>필터</RailLabel>
         <div className="space-y-2">
+          {/* 팔로워 규모 지정 — 원하는 인플루언서 등급만 결과에서 본다(선택 기억됨). */}
+          <div>
+            <p className="text-muted-foreground mb-1.5 text-[11px]">팔로워 규모</p>
+            <div className="flex flex-wrap gap-1.5">
+              {SIZE_BANDS.map((b) => (
+                <FilterChip
+                  key={b.id}
+                  active={sizeBand === b.id}
+                  onClick={() => chooseSizeBand(b.id)}
+                >
+                  {b.label}
+                </FilterChip>
+              ))}
+            </div>
+          </div>
           <div className="flex flex-wrap gap-1.5">
             {BUCKETS.map((b) => (
               <FilterChip key={b.id} active={buckets.has(b.id)} onClick={() => toggleBucket(b.id)}>
@@ -1366,11 +1436,13 @@ export function CreatorSearch() {
               Scout OS는{' '}
               <span className="text-foreground font-medium">판매자·정보성 계정을 걸러내고</span>,
               팔로워 대비 <span className="text-foreground font-medium">참여율로 진짜 영향력</span>
-              을 판단하며, <span className="text-foreground font-medium">가짜 팔로워</span>를
-              표시하고, <span className="text-foreground font-medium">한국·해외 셀럽까지 구분</span>
-              해 골라냈어요.
+              을 판단하며,{' '}
+              <span className="text-foreground font-medium">가짜 팔로워·죽은 계정</span>을 걸러내고,{' '}
+              <span className="text-foreground font-medium">한국·해외 셀럽까지 구분</span>해
+              골라냈어요.
               {aiRejectedCount > 0 ? ` · 업체·부적합 ${aiRejectedCount}곳 제외` : ''}
               {fakeCount > 0 ? ` · 가짜 의심 ${fakeCount}명` : ''}
+              {lowEngagementCount > 0 ? ` · 참여율 낮은 ${lowEngagementCount}명 제외` : ''}
               {regionMixed
                 ? ` · 한국 ${koreanCount}명 / 해외 ${items.length - koreanCount}명 구분`
                 : ''}
@@ -1420,6 +1492,15 @@ export function CreatorSearch() {
               <FilterChip active={hideFake} onClick={() => setHideFake((v) => !v)}>
                 <TriangleAlert className="size-3.5" />
                 가짜 팔로워 의심 {fakeCount}명 {hideFake ? '숨김' : '표시 중'}
+              </FilterChip>
+            ) : null}
+            {lowEngagementCount > 0 ? (
+              <FilterChip
+                active={hideLowEngagement}
+                onClick={() => setHideLowEngagement((v) => !v)}
+              >
+                <TrendingUp className="size-3.5" />
+                참여율 낮은 {lowEngagementCount}명 {hideLowEngagement ? '숨김' : '표시 중'}
               </FilterChip>
             ) : null}
             {/* 국가 필터 — 한글 감지로 한국/해외 추정. 외국 셀럽을 원하는 경우도 있어 3택. */}
