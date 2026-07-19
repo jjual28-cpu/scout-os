@@ -21,6 +21,31 @@ import {
 /** Trending searches must not reuse cached profiles — recency has to be live. */
 const TREND_RE = /요즘|뜨는|트렌드|대세|핫한|떠오르|라이징/;
 
+/**
+ * 크리에이터 검색에서 Stage 1(계정 이름 검색)이 데려오는 "판매자/브랜드" 계정을
+ * 걸러낸다. 셀럽은 아이디에 제품명을 안 넣지만, 그 제품을 파는 브랜드/샵은 넣는다
+ * (예: 검색어 '샴푸' → @ts_shampoo_official, 샴푸의 제이팝). 이런 계정은 협찬받을
+ * 셀럽이 아니므로 제외하고, 그러면 자연히 해시태그→작성자 단계로 넘어가 진짜
+ * 크리에이터를 찾는다. `target === 'brand'` 검색에는 적용하지 않는다.
+ */
+const SELLER_SIGNALS = [
+  '공식',
+  'official',
+  '스토어',
+  'store',
+  '브랜드',
+  '유통',
+  '도매',
+  '쇼핑몰',
+  'mall',
+];
+function looksLikeSeller(c: InstagramCreator, seed: string): boolean {
+  const hay = `${c.username} ${c.displayName}`.toLowerCase();
+  // 계정 이름에 검색어(제품명)가 그대로 들어감 → 그 제품 파는 계정일 확률이 매우 높다.
+  if (seed && seed.length >= 2 && seed.length <= 12 && hay.includes(seed)) return true;
+  return SELLER_SIGNALS.some((w) => hay.includes(w));
+}
+
 export const dynamic = 'force-dynamic';
 // Only reads a finished dataset + saves rows — never waits on an Apify run.
 export const maxDuration = 60;
@@ -448,10 +473,16 @@ export const POST = withErrorHandling(
         return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
       }
 
-      // ── Keyword mode (unchanged) ───────────────────────────────────────────
-      // Stage 1 — profile search results.
+      // ── Keyword mode ───────────────────────────────────────────────────────
+      // Stage 1 — profile (account-name) search results.
       if (stage === 1) {
-        const creators = profilesFromItems(items).slice(0, TARGET);
+        let creators = profilesFromItems(items).slice(0, TARGET);
+        // 셀럽 찾기: 이름 검색이 데려온 판매자/브랜드 계정을 걸러낸다. 걸러서 수가
+        // 줄면 아래 "충분" 조건에 안 걸려 해시태그→작성자(진짜 크리에이터)로 넘어간다.
+        if (target === 'creator') {
+          const seed = (plan?.searchTerm || query).toLowerCase();
+          creators = creators.filter((cr) => !looksLikeSeller(cr, seed));
+        }
         await saveCreators(sb, userId, campaignId, query, creators, 0);
         await upsertPool('instagram', creators);
         const { count } = await existingResults(sb, userId, campaignId);
