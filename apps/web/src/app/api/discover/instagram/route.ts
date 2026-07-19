@@ -16,6 +16,7 @@ import {
   taggedActor,
   taggedInput,
 } from '@/services/apify/instagram';
+import { tiktokActorId, tiktokInput } from '@/services/apify/tiktok';
 
 // Env is read and Apify/Supabase clients are created only per request.
 export const dynamic = 'force-dynamic';
@@ -49,6 +50,8 @@ const bodySchema = z.object({
   mode: z.enum(['keyword', 'tagged']).optional(),
   /** 'creator' — 협업할 셀럽. 'brand' — 제품 파는 브랜드 공식 계정. */
   target: z.enum(['creator', 'brand']).optional(),
+  /** 검색 플랫폼. tiktok 은 단일 스테이지(해시태그→작성자)로 처리된다. */
+  platform: z.enum(['instagram', 'tiktok']).optional(),
 });
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- DB rows are loosely typed here */
@@ -120,6 +123,8 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   // "이 브랜드를 태그한 계정"은 본질적으로 크리에이터 찾기다 — 브랜드가 경쟁사를
   // 태그하는 일은 거의 없어서 tagged+brand 는 켜봐야 빈 결과다.
   const target: SearchTarget = mode === 'tagged' ? 'creator' : (body.target ?? 'creator');
+  // 검색 플랫폼. tiktok 은 단일 스테이지(해시태그→작성자)로 처리된다(태그 모드 없음).
+  const platform: 'instagram' | 'tiktok' = body.platform === 'tiktok' ? 'tiktok' : 'instagram';
   // 여러 키워드: 그 키워드들을 stage 2 해시태그로 삼아 한 검색에서 모두 훑는다.
   const multiKeywords =
     mode === 'keyword'
@@ -159,7 +164,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   const qNorm = normalizeQuery(rawQuery);
 
   // 1) Same-query run already in flight → reuse it, never start a second Actor.
-  const running = await findRunning(supabase, userId, qNorm, target, mode);
+  const running = await findRunning(supabase, userId, qNorm, target, mode, platform);
   if (running) {
     return ok({
       configured: true,
@@ -171,7 +176,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
   // 2) 24h cache — reuse a succeeded campaign that actually has results.
   if (!body.force) {
-    const cached = await findCached(supabase, userId, qNorm, target, mode);
+    const cached = await findCached(supabase, userId, qNorm, target, mode, platform);
     if (cached) {
       return ok({
         configured: true,
@@ -212,6 +217,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     source: body.source ?? 'manual',
     mode,
     target,
+    platform,
   });
   if (!created) {
     return ok({
@@ -251,7 +257,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
         .update({ search_plan: plan })
         .eq('id', created.id)
         .eq('status', 'running');
-    } else if (mode === 'keyword' && looksNatural(rawQuery)) {
+    } else if (platform === 'instagram' && mode === 'keyword' && looksNatural(rawQuery)) {
       try {
         plan = await planSearch(
           userId,
@@ -281,9 +287,14 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     const started =
       mode === 'tagged'
         ? await startActorRun(taggedInput([rawQuery]), taggedActor())
-        : await startActorRun(
-            stage1Input(plan?.searchTerm || rawQuery, body.limit ?? DEFAULT_LIMIT),
-          );
+        : platform === 'tiktok'
+          ? await startActorRun(
+              tiktokInput(isMulti ? multiKeywords : [rawQuery], body.limit ?? DEFAULT_LIMIT),
+              tiktokActorId(),
+            )
+          : await startActorRun(
+              stage1Input(plan?.searchTerm || rawQuery, body.limit ?? DEFAULT_LIMIT),
+            );
     await supabase
       .from('campaigns')
       .update({
@@ -379,12 +390,13 @@ async function findRunning(
   qNorm: string,
   target: SearchTarget,
   mode: 'keyword' | 'tagged',
+  platform: string = PLATFORM,
 ): Promise<string | null> {
   const { data } = await supabase
     .from('campaigns')
     .select('id')
     .eq('user_id', userId)
-    .eq('platform', PLATFORM)
+    .eq('platform', platform)
     .eq('query_norm', qNorm)
     .eq('search_target', target)
     .eq('search_mode', mode)
@@ -400,13 +412,14 @@ async function findCached(
   qNorm: string,
   target: SearchTarget,
   mode: 'keyword' | 'tagged',
+  platform: string = PLATFORM,
 ): Promise<string | null> {
   const since = new Date(Date.now() - CACHE_WINDOW_MS).toISOString();
   const { data } = await supabase
     .from('campaigns')
     .select('id,created_at,completed_at')
     .eq('user_id', userId)
-    .eq('platform', PLATFORM)
+    .eq('platform', platform)
     .eq('query_norm', qNorm)
     .eq('search_target', target)
     .eq('search_mode', mode)
@@ -441,6 +454,8 @@ type CampaignMetaInput = {
   mode: 'keyword' | 'tagged';
   /** What the user is hunting — flips the AI's verdict on every candidate. */
   target: SearchTarget;
+  /** 검색 플랫폼 (instagram | tiktok). */
+  platform: string;
 };
 
 /**
@@ -462,7 +477,7 @@ async function createCampaign(
       user_id: userId,
       query,
       title: meta.title,
-      platform: PLATFORM,
+      platform: meta.platform,
       status: 'running',
       result_count: 0,
       product_id: meta.productId,
@@ -490,6 +505,7 @@ async function createCampaign(
       normalizeQuery(query),
       meta.target,
       meta.mode,
+      meta.platform,
     );
     if (existing) return { id: existing, reused: true };
   }

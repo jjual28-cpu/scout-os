@@ -60,9 +60,15 @@ import { DiscoverCard } from './discover-card';
 /** A stored campaign_results snapshot → the same card shape the live search uses.
  *  Carries the AI verdict through so Discover can filter/rank/explain by fit. */
 function snapshotToOpportunity(s: CampaignResult): DiscoverOpportunity {
+  // 저장 스냅샷엔 platform 컬럼이 없으므로 external_id 접두어로 판별(tiktok:/youtube:/…).
+  const platform: InstagramCreator['platform'] = s.externalId.startsWith('tiktok:')
+    ? 'tiktok'
+    : s.externalId.startsWith('youtube:')
+      ? 'youtube'
+      : 'instagram';
   const creator: InstagramCreator = {
     id: s.externalId,
-    platform: 'instagram',
+    platform,
     username: s.username,
     displayName: s.displayName,
     profileUrl: s.profileUrl,
@@ -105,8 +111,8 @@ const POPULAR = [
 
 const PLATFORMS = [
   { id: 'instagram', label: 'Instagram', icon: Instagram, enabled: true },
+  { id: 'tiktok', label: 'TikTok', icon: Music2, enabled: true },
   { id: 'youtube', label: 'YouTube', icon: Youtube, enabled: false },
-  { id: 'tiktok', label: 'TikTok', icon: Music2, enabled: false },
 ] as const;
 
 type Phase = 'idle' | 'searching' | 'done';
@@ -579,6 +585,8 @@ export function CreatorSearch() {
       mode,
       target: mode === 'tagged' ? 'creator' : target,
     };
+    // 틱톡은 태그 모드가 없어 keyword 검색만. (플랫폼 미지정=인스타)
+    if (platform === 'tiktok' && mode === 'keyword') body.platform = 'tiktok';
     if (keywords && keywords.length > 1) body.keywords = keywords;
     if (meta) {
       if (meta.title) body.title = meta.title;

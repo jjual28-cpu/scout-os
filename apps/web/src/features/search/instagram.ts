@@ -2,7 +2,7 @@ import { formatCompactNumber } from '@/lib/utils';
 
 import { type DiscoverOpportunity } from './discover-mock';
 import { recommendReasons } from './recommend';
-import { type SearchResultType } from './types';
+import { type SearchPlatform, type SearchResultType } from './types';
 
 /**
  * Normalized Instagram creator — the shape the `/api/discover/instagram` route
@@ -11,7 +11,8 @@ import { type SearchResultType } from './types';
  */
 export type InstagramCreator = {
   id: string;
-  platform: 'instagram';
+  /** 소셜 플랫폼 — 인스타 외 틱톡/유튜브도 같은 파이프라인을 탄다. */
+  platform: SearchPlatform;
   username: string;
   displayName: string;
   profileUrl: string;
@@ -88,7 +89,7 @@ export function toDiscoverOpportunity(creator: InstagramCreator): DiscoverOpport
     name: creator.displayName || creator.username,
     handle: creator.username,
     type,
-    platform: 'instagram',
+    platform: creator.platform,
     reason,
     opportunityScore: scoreFor(creator),
     recommendedAction: '제품 시딩 후 협업 제안하기',

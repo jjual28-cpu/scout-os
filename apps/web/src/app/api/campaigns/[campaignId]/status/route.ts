@@ -17,6 +17,7 @@ import {
   stage3Input,
   startActorRun,
 } from '@/services/apify/instagram';
+import { creatorsFromTiktok } from '@/services/apify/tiktok';
 
 /** Trending searches must not reuse cached profiles — recency has to be live. */
 const TREND_RE = /요즘|뜨는|트렌드|대세|핫한|떠오르|라이징/;
@@ -87,7 +88,7 @@ type Sb = Awaited<ReturnType<typeof getSupabase>>;
 function creatorToRow(c: InstagramCreator, userId: string) {
   return {
     user_id: userId,
-    platform: 'instagram',
+    platform: c.platform,
     external_id: c.id,
     username: c.username,
     display_name: c.displayName,
@@ -361,7 +362,7 @@ export const POST = withErrorHandling(
     const { data: row } = await sb
       .from('campaigns')
       .select(
-        'id,query,status,error,result_count,apify_run_id,apify_dataset_id,apify_stage,started_at,product_id,search_mode,search_target,search_plan',
+        'id,query,status,error,result_count,apify_run_id,apify_dataset_id,apify_stage,started_at,product_id,search_mode,search_target,search_plan,platform',
       )
       .eq('id', campaignId)
       .eq('user_id', userId)
@@ -438,8 +439,21 @@ export const POST = withErrorHandling(
     /** What the AI should judge fit against — the intent, not "…찾아줘". */
     const matchContext = plan?.intent || query;
 
+    const platform: string = c.platform ?? 'instagram';
+
     try {
       const items = await readDataset(datasetId);
+
+      // ── TikTok — 단일 스테이지: 영상 데이터셋 → 작성자 정규화 → 저장 → 판정 → 완료 ──
+      //    인스타 3단계 머신을 타지 않는다(별 분기). 유튜브도 나중에 여기 추가.
+      if (platform !== 'instagram') {
+        const creators = creatorsFromTiktok(items).slice(0, TARGET);
+        await saveCreators(sb, userId, campaignId, query, creators, 0);
+        const { count } = await existingResults(sb, userId, campaignId);
+        await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null, target);
+        await markSucceeded(sb, campaignId, count);
+        return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
+      }
 
       // ── Tagged mode — the same 3-stage machine, two stages long ─────────────
       //    1 = posts tagging the brand → author usernames
