@@ -8,6 +8,7 @@ import {
   Music2,
   Package,
   Search,
+  ShoppingCart,
   Sparkles,
   TriangleAlert,
   Youtube,
@@ -109,7 +110,8 @@ export function AiEmployeePage() {
         query: keyword,
         productId,
         source: 'ai',
-        target: 'creator',
+        // 상품으로 찾을 땐 그 상품을 공동구매로 팔아줄 '공구 셀러'가 목표다.
+        target: 'gonggu',
       };
       // 틱톡·유튜브만 platform 전송(미지정=인스타). 태그 모드 없는 단일 스테이지 검색.
       if (platform !== 'instagram') body.platform = platform;
@@ -235,6 +237,18 @@ export function AiEmployeePage() {
               <p className="text-muted-foreground mt-1.5 text-xs">
                 상품에 맞는 셀럽을 AI가 알아서 찾아드려요. 버튼만 누르면 검색이 시작돼요.
               </p>
+
+              {/* 안내 — 상품 검색은 공구 셀러 대상임을 명확히 */}
+              <div className="border-primary/20 bg-primary/[0.05] mt-2.5 flex items-start gap-2 rounded-lg border p-2.5 text-xs">
+                <ShoppingCart className="text-primary mt-px size-3.5 shrink-0" />
+                <span className="text-foreground/80 leading-snug">
+                  <span className="text-foreground font-medium">
+                    공구 셀럽 위주로 상품 검색을 합니다.
+                  </span>{' '}
+                  상품을 공동구매로 팔아줄 셀러(소개글에 공구 일정·주문 안내가 있는 계정)를 중심으로
+                  찾아요.
+                </span>
+              </div>
 
               {/* 플랫폼 선택 — 어느 SNS에서 셀럽을 찾을지 (인스타/틱톡/유튜브) */}
               <div className="mt-4">
