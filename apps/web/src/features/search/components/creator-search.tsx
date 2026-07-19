@@ -1136,6 +1136,16 @@ export function CreatorSearch() {
               ) : null}
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={visualOpen ? 'default' : 'outline'}
+                onClick={() => setVisualOpen((v) => !v)}
+                className={visualOpen ? '' : 'border-primary/40 text-primary'}
+              >
+                <Sparkles className="size-4" />
+                비주얼로 보기
+              </Button>
               <Button type="button" variant="outline" size="sm" onClick={startNewSearch}>
                 <Search className="size-4" />
                 다른 검색 시작
@@ -1146,6 +1156,50 @@ export function CreatorSearch() {
               </Button>
             </div>
           </div>
+
+          {/* 비주얼 판정 패널 — 결과 바로 위(잘 보이게). 제품 관련 시각 기준으로 사진 판정(옵션·비용) */}
+          {visualOpen ? (
+            <div className="border-primary/30 bg-primary/[0.05] mb-5 rounded-xl border p-4">
+              <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
+                <Sparkles className="text-primary size-4" />
+                비주얼로 셀럽 찾기
+              </p>
+              <p className="text-muted-foreground mb-2.5 text-xs leading-snug">
+                제품에 맞는 <span className="text-foreground font-medium">시각 조건</span>을 쓰면,
+                상위 후보들의 프로필·게시물{' '}
+                <span className="text-foreground font-medium">사진</span>을 AI가 보고 얼마나 맞는지
+                점수를 매겨요. (사진 판정이라 AI 사용량이 늘어요)
+              </p>
+              <div className="flex gap-2">
+                <input
+                  value={visualCriteria}
+                  onChange={(e) => setVisualCriteria(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void runVisual();
+                    }
+                  }}
+                  disabled={visualLoading}
+                  placeholder="예: 머리 길고 윤기나는 여성"
+                  className="border-input bg-background focus-visible:ring-ring h-10 flex-1 rounded-lg border px-3 text-sm outline-none focus-visible:ring-2 disabled:opacity-50"
+                />
+                <Button
+                  type="button"
+                  onClick={() => void runVisual()}
+                  disabled={visualLoading || !visualCriteria.trim()}
+                  className="shrink-0"
+                >
+                  {visualLoading ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="size-4" />
+                  )}
+                  {visualLoading ? '판정 중…' : '비주얼 판정'}
+                </Button>
+              </div>
+            </div>
+          ) : null}
 
           {/* Reused an existing campaign — say so, and offer the fresh path */}
           {cached ? (
@@ -1216,72 +1270,21 @@ export function CreatorSearch() {
                 비주얼 부적합 {hideVisualReject ? '숨김' : '표시 중'}
               </FilterChip>
             ) : null}
-            <div className="ml-auto flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setVisualOpen((v) => !v)}
+            <div className="ml-auto flex items-center gap-1.5">
+              <ArrowUpDown className="text-muted-foreground size-3.5" />
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value as SortKey)}
+                className="border-input bg-background focus-visible:ring-ring rounded-lg border px-2.5 py-1.5 text-sm outline-none focus-visible:ring-2"
               >
-                <Sparkles className="size-4" />
-                비주얼로 보기
-              </Button>
-              <div className="flex items-center gap-1.5">
-                <ArrowUpDown className="text-muted-foreground size-3.5" />
-                <select
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value as SortKey)}
-                  className="border-input bg-background focus-visible:ring-ring rounded-lg border px-2.5 py-1.5 text-sm outline-none focus-visible:ring-2"
-                >
-                  {SORTS.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                {SORTS.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
-
-          {/* 비주얼 판정 패널 — 제품 관련 시각 기준으로 사진을 AI가 판정 (옵션·비용) */}
-          {visualOpen ? (
-            <div className="border-primary/20 bg-primary/[0.04] mb-5 rounded-xl border p-3">
-              <p className="text-muted-foreground mb-2 text-xs leading-snug">
-                제품에 맞는 <span className="text-foreground font-medium">시각 조건</span>을 쓰면,
-                상위 후보들의 프로필·게시물{' '}
-                <span className="text-foreground font-medium">사진</span>을 AI가 보고 얼마나 맞는지
-                점수를 매겨요. (사진 판정이라 AI 사용량이 늘어요)
-              </p>
-              <div className="flex gap-2">
-                <input
-                  value={visualCriteria}
-                  onChange={(e) => setVisualCriteria(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      void runVisual();
-                    }
-                  }}
-                  disabled={visualLoading}
-                  placeholder="예: 머리 길고 윤기나는 여성"
-                  className="border-input bg-background focus-visible:ring-ring h-10 flex-1 rounded-lg border px-3 text-sm outline-none focus-visible:ring-2 disabled:opacity-50"
-                />
-                <Button
-                  type="button"
-                  onClick={() => void runVisual()}
-                  disabled={visualLoading || !visualCriteria.trim()}
-                  className="shrink-0"
-                >
-                  {visualLoading ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="size-4" />
-                  )}
-                  {visualLoading ? '판정 중…' : '비주얼 판정'}
-                </Button>
-              </div>
-            </div>
-          ) : null}
 
           {visible.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
