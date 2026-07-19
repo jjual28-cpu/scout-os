@@ -101,7 +101,7 @@ export function AiEmployeePage() {
     })();
   }, [product]);
 
-  async function launch(keyword: string) {
+  async function launch(keyword: string, keywords?: string[]) {
     if (launching) return;
     setLaunching(keyword);
     try {
@@ -113,6 +113,8 @@ export function AiEmployeePage() {
       };
       // 틱톡·유튜브만 platform 전송(미지정=인스타). 태그 모드 없는 단일 스테이지 검색.
       if (platform !== 'instagram') body.platform = platform;
+      // 여러 키워드가 있으면 한 검색에서 모두 훑는다(수집 다양성↑).
+      if (keywords && keywords.length > 1) body.keywords = keywords.slice(0, 6);
       const res = await fetch('/api/discover/instagram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -138,16 +140,19 @@ export function AiEmployeePage() {
     void launch(kw);
   }
 
-  /** AI가 알아서 — 이 상품에 가장 맞는 검색어(AI 1순위)로 바로 셀럽 검색을 시작한다. */
+  /** AI가 알아서 — AI가 뽑은 여러 키워드를 한 검색에서 모두 훑는다(수집 다양성↑). */
   async function autoFind() {
     if (!product || launching) return;
-    const term =
-      aiKeywords[0] || savedKeywords[0] || product.category.trim() || product.name.trim();
+    const pool = (aiKeywords.length ? aiKeywords : savedKeywords)
+      .map((k) => k.trim())
+      .filter(Boolean);
+    const keywords = pool.slice(0, 5);
+    const term = keywords[0] || product.category.trim() || product.name.trim();
     if (!term) {
       setError('상품 정보가 부족해요. 상품에 카테고리를 채우면 AI가 더 잘 찾아요.');
       return;
     }
-    await launch(term);
+    await launch(term, keywords.length > 1 ? keywords : undefined);
   }
 
   const KeywordChip = ({ kw }: { kw: string }) => (
@@ -284,10 +289,13 @@ export function AiEmployeePage() {
                   </>
                 )}
               </Button>
-              {!loading && !launching && aiKeywords[0] ? (
+              {!loading && !launching && aiKeywords.length > 0 ? (
                 <p className="text-muted-foreground mt-2 text-center text-xs">
                   AI가 고른 검색어:{' '}
-                  <span className="text-foreground font-medium">{aiKeywords[0]}</span>
+                  <span className="text-foreground font-medium">
+                    {aiKeywords.slice(0, 5).join(', ')}
+                  </span>
+                  {aiKeywords.length > 1 ? ' — 한 번에 검색해요' : ''}
                 </p>
               ) : null}
 
