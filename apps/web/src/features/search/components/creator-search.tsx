@@ -73,6 +73,9 @@ function snapshotToOpportunity(s: CampaignResult): DiscoverOpportunity {
     postsCount: s.postsCount,
     isVerified: s.isVerified,
     category: s.category,
+    lastPostAt: s.lastPostAt ?? null,
+    recentAvgLikes: s.recentAvgLikes ?? null,
+    recentAvgComments: s.recentAvgComments ?? null,
     rawData: null,
   };
   return {
@@ -156,10 +159,11 @@ const TOGGLES: { id: Toggle; label: string }[] = [
   { id: 'bio', label: 'Bio 있음' },
   { id: 'email', label: 'Email 있음' },
 ];
-type SortKey = 'recommended' | 'visual' | 'followers' | 'recent' | 'posts';
+type SortKey = 'recommended' | 'visual' | 'engagement' | 'followers' | 'recent' | 'posts';
 const SORTS: { id: SortKey; label: string }[] = [
   { id: 'recommended', label: 'AI 추천순' },
   { id: 'visual', label: '비주얼 적합순' },
+  { id: 'engagement', label: '참여율순' },
   { id: 'followers', label: '팔로워순' },
   { id: 'recent', label: '최근 발견순' },
   { id: 'posts', label: '게시물순' },
@@ -203,9 +207,9 @@ function durationLabel(startedAt: string | null, completedAt: string | null): st
 }
 
 const STAGES = [
-  { n: 1, label: '프로필 수집' },
-  { n: 2, label: '게시물 분석' },
-  { n: 3, label: '상세 분석' },
+  { n: 1, label: '후보 수집' },
+  { n: 2, label: '게시물·활동 분석' },
+  { n: 3, label: '업체 거르고 진짜 영향력 판단' },
 ] as const;
 
 /** Stage 1 → 2 → 3 tracker: done = check, current = emphasized, pending = muted. */
@@ -291,6 +295,8 @@ export function CreatorSearch() {
   const [visualCriteria, setVisualCriteria] = useState('');
   const [visualLoading, setVisualLoading] = useState(false);
   const [hideVisualReject, setHideVisualReject] = useState(false);
+  /** 가짜 팔로워 의심 계정 숨김. */
+  const [hideFake, setHideFake] = useState(false);
 
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   /** Competitor/brand handle for the tagged entrance. */
@@ -657,18 +663,21 @@ export function CreatorSearch() {
       if (toggles.has('verified') && !it.isVerified) return false;
       if (toggles.has('business') && !it.category) return false;
       if (toggles.has('bio') && !it.biography?.trim()) return false;
-      if (toggles.has('email') && !it.reasons?.includes('연락처 공개')) return false;
+      if (toggles.has('email') && !it.email) return false;
       if (excludeTerms.length) {
         const hay =
           `${it.handle} ${it.name} ${it.biography ?? ''} ${it.category ?? ''}`.toLowerCase();
         if (excludeTerms.some((t) => hay.includes(t))) return false;
       }
       if (hideVisualReject && it.visualVerdict === 'reject') return false;
+      if (hideFake && it.fakeSuspect) return false;
       return true;
     });
     const arr = [...filtered];
     if (sort === 'followers') arr.sort((a, b) => (b.followersCount ?? 0) - (a.followersCount ?? 0));
     else if (sort === 'posts') arr.sort((a, b) => (b.postsCount ?? 0) - (a.postsCount ?? 0));
+    else if (sort === 'engagement')
+      arr.sort((a, b) => (b.engagementRate ?? -1) - (a.engagementRate ?? -1));
     else if (sort === 'visual')
       // 비주얼 판정 점수 우선(판정 안 된 건 뒤로), 그다음 AI 점수.
       arr.sort(
@@ -694,6 +703,7 @@ export function CreatorSearch() {
     hideHandled,
     hideRejected,
     hideVisualReject,
+    hideFake,
     excludeTerms,
     outreach.records,
   ]);
@@ -703,8 +713,17 @@ export function CreatorSearch() {
     () => items.filter((it) => it.visualVerdict != null).length,
     [items],
   );
+  /** 가짜 팔로워 의심 계정 수 (있으면 숨김 칩 노출). */
+  const fakeCount = useMemo(() => items.filter((it) => it.fakeSuspect).length, [items]);
 
   const summary = useMemo(() => summarizeResults(items), [items]);
+  /** 표시 중 결과의 평균 참여율(%). 없으면 null. */
+  const avgEngagement = useMemo(() => {
+    const ers = items
+      .map((it) => it.engagementRate)
+      .filter((n): n is number => typeof n === 'number');
+    return ers.length ? Math.round((ers.reduce((s, x) => s + x, 0) / ers.length) * 10) / 10 : null;
+  }, [items]);
 
   const toggleBucket = (b: Bucket) =>
     setBuckets((prev) => {
@@ -1232,6 +1251,24 @@ export function CreatorSearch() {
             </div>
           ) : null}
 
+          {/* 포지셔닝 — 우리는 그냥 키워드 검색이 아니라는 걸 결과에서 분명히 보여준다 */}
+          <div className="border-primary/20 bg-primary/[0.04] mb-5 rounded-xl border p-3.5">
+            <p className="text-primary flex items-center gap-1.5 text-sm font-semibold">
+              <Sparkles className="size-4" />
+              단순 키워드 검색이 아니에요
+            </p>
+            <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
+              Scout OS는{' '}
+              <span className="text-foreground font-medium">판매자·정보성 계정을 걸러내고</span>,
+              팔로워 대비 <span className="text-foreground font-medium">참여율로 진짜 영향력</span>
+              을 판단하며, <span className="text-foreground font-medium">가짜 팔로워</span>를 표시해
+              골라냈어요.
+              {aiRejectedCount > 0 ? ` · 업체·부적합 ${aiRejectedCount}곳 제외` : ''}
+              {fakeCount > 0 ? ` · 가짜 의심 ${fakeCount}명` : ''}
+              {avgEngagement != null ? ` · 평균 참여율 ${avgEngagement}%` : ''}
+            </p>
+          </div>
+
           {/* AI Summary */}
           {summary.length > 0 ? (
             <div className="border-primary/20 bg-primary/[0.04] mb-5 rounded-2xl border p-5">
@@ -1268,6 +1305,12 @@ export function CreatorSearch() {
               <FilterChip active={hideVisualReject} onClick={() => setHideVisualReject((v) => !v)}>
                 <Sparkles className="size-3.5" />
                 비주얼 부적합 {hideVisualReject ? '숨김' : '표시 중'}
+              </FilterChip>
+            ) : null}
+            {fakeCount > 0 ? (
+              <FilterChip active={hideFake} onClick={() => setHideFake((v) => !v)}>
+                <TriangleAlert className="size-3.5" />
+                가짜 팔로워 의심 {fakeCount}명 {hideFake ? '숨김' : '표시 중'}
               </FilterChip>
             ) : null}
             <div className="ml-auto flex items-center gap-1.5">

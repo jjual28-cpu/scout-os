@@ -5,10 +5,12 @@ import {
   BookmarkCheck,
   CalendarDays,
   Instagram,
+  Mail,
   MessageSquarePlus,
   MoreHorizontal,
   Send,
   Sparkles,
+  TriangleAlert,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -94,6 +96,45 @@ export function DiscoverCard({
       ) : null}
 
       <OpportunityBody result={item} profileHref={instagramUrl} />
+
+      {/* 진짜 영향력 신호 — 참여율 · 가짜 팔로워 의심 · 연락처(이메일) */}
+      {item.engagementRate != null || item.fakeSuspect || item.email ? (
+        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+          {item.engagementRate != null ? (
+            <span
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium',
+                item.engagementRate >= 3
+                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                  : 'dark:bg-muted bg-slate-100 text-slate-600 dark:text-slate-300',
+              )}
+              title="팔로워 대비 최근 반응(좋아요+댓글) — 진짜 영향력 지표"
+            >
+              참여율 {item.engagementRate}%
+            </span>
+          ) : null}
+          {item.fakeSuspect ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 font-medium text-rose-600 dark:text-rose-400"
+              title="팔로워는 많은데 반응이 비정상적으로 적음 — 가짜 팔로워 의심"
+            >
+              <TriangleAlert className="size-3" />
+              가짜 팔로워 의심
+            </span>
+          ) : null}
+          {item.email ? (
+            <a
+              href={`mailto:${item.email}`}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-primary/10 text-primary hover:bg-primary/15 inline-flex max-w-full items-center gap-1 truncate rounded-full px-2 py-0.5 font-medium"
+              title="소개글에서 찾은 이메일 — 협업 연락 채널"
+            >
+              <Mail className="size-3 shrink-0" />
+              <span className="truncate">{item.email}</span>
+            </a>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* AI 적합도 — why this account is (or isn't) a real fit for the brand. */}
       {item.aiVerdict ? (

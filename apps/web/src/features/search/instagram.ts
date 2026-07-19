@@ -41,6 +41,33 @@ function scoreFor(creator: InstagramCreator): number {
 }
 
 /**
+ * 참여율(%) = (최근 평균 좋아요 + 댓글) ÷ 팔로워 × 100. 협업 가치를 실제로 가르는
+ * 지표 — 팔로워보다 "진짜 영향력"을 본다. 최근 게시물 데이터가 없으면 null.
+ */
+export function engagementRate(c: InstagramCreator): number | null {
+  const f = c.followersCount ?? 0;
+  if (f <= 0) return null;
+  if (c.recentAvgLikes == null && c.recentAvgComments == null) return null;
+  const eng = (c.recentAvgLikes ?? 0) + (c.recentAvgComments ?? 0);
+  return Math.round((eng / f) * 1000) / 10; // 소수 첫째자리 %
+}
+
+/**
+ * 가짜 팔로워 의심 — 팔로워는 많은데 반응(참여율)이 비정상적으로 낮은 계정.
+ * 보수적으로 판단(오탐 최소화): 2만 이상인데 참여율 0.8% 미만.
+ */
+export function isFakeSuspect(c: InstagramCreator, er: number | null): boolean {
+  return er != null && (c.followersCount ?? 0) >= 20_000 && er < 0.8;
+}
+
+/** 소개글에서 이메일 추출(있으면). 협업 연락 채널로 쓴다. */
+export function extractEmail(bio: string | null): string | null {
+  if (!bio) return null;
+  const m = bio.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  return m ? m[0] : null;
+}
+
+/**
  * Map a normalized creator onto the existing discover-card shape so real data
  * renders through the SAME card as the mock feed (no card redesign).
  */
@@ -55,6 +82,7 @@ export function toDiscoverOpportunity(creator: InstagramCreator): DiscoverOpport
         creator.postsCount != null ? ` · 게시물 ${formatCompactNumber(creator.postsCount)}` : ''
       }`;
 
+  const er = engagementRate(creator);
   return {
     id: creator.id,
     name: creator.displayName || creator.username,
@@ -73,5 +101,8 @@ export function toDiscoverOpportunity(creator: InstagramCreator): DiscoverOpport
     category: creator.category,
     postsCount: creator.postsCount,
     biography: creator.biography,
+    engagementRate: er,
+    fakeSuspect: isFakeSuspect(creator, er),
+    email: extractEmail(creator.biography),
   };
 }

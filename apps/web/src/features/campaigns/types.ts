@@ -76,6 +76,10 @@ export type CampaignResult = {
   postsCount: number | null;
   isVerified: boolean;
   category: string | null;
+  /** 최근 활동(참여율 계산·트렌드 판정에 쓰임). 저장 스냅샷에 담겨 있다. */
+  lastPostAt?: string | null;
+  recentAvgLikes?: number | null;
+  recentAvgComments?: number | null;
   /** 0~100 fit score. null when AI hasn't judged this result. */
   aiScore?: number | null;
   aiVerdict?: AiVerdict | null;

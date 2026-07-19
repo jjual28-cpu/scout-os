@@ -19,6 +19,12 @@ export type DiscoverOpportunity = SearchResult & {
   visualScore?: number | null;
   visualVerdict?: 'fit' | 'maybe' | 'reject' | null;
   visualReason?: string | null;
+  /** 참여율(%) — 팔로워 대비 반응. null ⇒ 최근 활동 데이터 없음. */
+  engagementRate?: number | null;
+  /** 팔로워는 많은데 참여율이 비정상적으로 낮음 = 가짜 팔로워 의심. */
+  fakeSuspect?: boolean;
+  /** 소개글에서 뽑은 이메일(있으면). 협업 연락 채널. */
+  email?: string | null;
 };
 
 export type DiscoverCategory = {
