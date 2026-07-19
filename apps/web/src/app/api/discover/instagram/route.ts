@@ -30,6 +30,8 @@ const CACHE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const bodySchema = z.object({
   query: z.string().trim().max(100).optional(),
   hashtag: z.string().trim().max(100).optional(),
+  /** 여러 키워드로 한 번에 — 그 키워드들의 해시태그를 모두 훑어 수집 다양성↑. */
+  keywords: z.array(z.string().trim().min(1).max(40)).max(6).optional(),
   limit: z.number().int().min(1).max(30).optional(),
   refresh: z.boolean().optional(),
   /** 최신 결과로 재검색 — ignore the 24h cache and start a new run. */
@@ -118,7 +120,16 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   // "이 브랜드를 태그한 계정"은 본질적으로 크리에이터 찾기다 — 브랜드가 경쟁사를
   // 태그하는 일은 거의 없어서 tagged+brand 는 켜봐야 빈 결과다.
   const target: SearchTarget = mode === 'tagged' ? 'creator' : (body.target ?? 'creator');
-  let rawQuery = (body.query ?? body.hashtag ?? '').trim();
+  // 여러 키워드: 그 키워드들을 stage 2 해시태그로 삼아 한 검색에서 모두 훑는다.
+  const multiKeywords =
+    mode === 'keyword'
+      ? (body.keywords ?? [])
+          .map((k) => k.trim())
+          .filter(Boolean)
+          .slice(0, 6)
+      : [];
+  const isMulti = multiKeywords.length > 1;
+  let rawQuery = isMulti ? multiKeywords.join(', ') : (body.query ?? body.hashtag ?? '').trim();
 
   // In tagged mode the query IS the brand handle — normalise it up front so the
   // campaign, the cache key and the actor input all agree on one form.
@@ -227,7 +238,20 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     // "신생 바디케어 브랜드 찾아줘" → Instagram understands none of that. Translate
     // first; a plain keyword ("골프") skips the AI entirely (no cost, no latency).
     let plan: SearchPlan | null = null;
-    if (mode === 'keyword' && looksNatural(rawQuery)) {
+    // 여러 키워드: AI 번역 없이 그 키워드들을 바로 stage2 해시태그로. (stage1 이름검색은
+    // 첫 키워드로, stage2에서 모든 키워드 해시태그 게시물 작성자를 모은다.)
+    if (isMulti) {
+      plan = {
+        searchTerm: multiKeywords[0]!,
+        hashtags: multiKeywords.map((k) => k.replace(/[#\s]+/g, '')).filter(Boolean),
+        intent: multiKeywords.join(', '),
+      };
+      await supabase
+        .from('campaigns')
+        .update({ search_plan: plan })
+        .eq('id', created.id)
+        .eq('status', 'running');
+    } else if (mode === 'keyword' && looksNatural(rawQuery)) {
       try {
         plan = await planSearch(
           userId,

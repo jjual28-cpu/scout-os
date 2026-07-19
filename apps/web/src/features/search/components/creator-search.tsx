@@ -301,6 +301,19 @@ export function CreatorSearch() {
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   /** Competitor/brand handle for the tagged entrance. */
   const [rival, setRival] = useState('');
+  /** 여러 키워드로 한 번에 찾기 — 칩 입력. */
+  const [multiKw, setMultiKw] = useState<string[]>([]);
+  const [multiInput, setMultiInput] = useState('');
+  const addMultiKw = (raw: string) => {
+    const t = raw.trim().replace(/,$/, '').trim();
+    if (!t) return;
+    setMultiKw((prev) => (prev.includes(t) || prev.length >= 6 ? prev : [...prev, t]));
+    setMultiInput('');
+  };
+  const runMultiSearch = () => {
+    if (phase === 'searching' || multiKw.length < 2) return;
+    void runSearch(multiKw.join(', '), false, 'keyword', multiKw);
+  };
   /**
    * Who this search is for. Most users hunt creators, so that's the default —
    * but someone who hunts brands does it every time, so the last choice sticks.
@@ -537,7 +550,12 @@ export function CreatorSearch() {
    * Start a search. The POST returns a campaignId within ~1s — it never waits for
    * Apify. `force` = 최신 결과로 재검색 (ignores the 24h cache).
    */
-  async function runSearch(raw: string, force = false, mode: SearchMode = 'keyword') {
+  async function runSearch(
+    raw: string,
+    force = false,
+    mode: SearchMode = 'keyword',
+    keywords?: string[],
+  ) {
     const q = raw.trim();
     if (!q) return;
     if (phase === 'searching') return; // a run is already in flight
@@ -560,6 +578,7 @@ export function CreatorSearch() {
       mode,
       target: mode === 'tagged' ? 'creator' : target,
     };
+    if (keywords && keywords.length > 1) body.keywords = keywords;
     if (meta) {
       if (meta.title) body.title = meta.title;
       if (meta.brand) body.brand = meta.brand;
@@ -893,6 +912,57 @@ export function CreatorSearch() {
         variant="soft"
         onPick={(c) => void runSearch(c)}
       />
+
+      {/* 여러 키워드로 한 번에 — 여러 분야를 한 검색에서 모아 수집 다양성↑ */}
+      <div>
+        <RailLabel icon={<SlidersHorizontal className="size-3.5" />}>여러 키워드로 찾기</RailLabel>
+        <p className="text-muted-foreground mb-2 text-[11px] leading-snug">
+          2개 이상 넣으면 그 분야들을 <span className="text-foreground">한 번에</span> 훑어 더 많은
+          셀럽을 찾아요.
+        </p>
+        <div className="border-input bg-background focus-within:ring-ring mb-2 flex flex-wrap items-center gap-1 rounded-lg border px-2 py-1.5 focus-within:ring-2">
+          {multiKw.map((t) => (
+            <span
+              key={t}
+              className="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
+            >
+              {t}
+              <button
+                type="button"
+                onClick={() => setMultiKw((prev) => prev.filter((x) => x !== t))}
+                aria-label={`${t} 삭제`}
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          ))}
+          <input
+            value={multiInput}
+            onChange={(e) => setMultiInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault();
+                addMultiKw(multiInput);
+              } else if (e.key === 'Backspace' && !multiInput && multiKw.length) {
+                setMultiKw((prev) => prev.slice(0, -1));
+              }
+            }}
+            onBlur={() => addMultiKw(multiInput)}
+            placeholder={multiKw.length ? '' : '예: 뷰티, 메이크업, 헤어'}
+            className="min-w-[80px] flex-1 bg-transparent text-sm outline-none"
+          />
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          className="w-full"
+          onClick={runMultiSearch}
+          disabled={phase === 'searching' || multiKw.length < 2}
+        >
+          <Search className="size-4" />
+          {multiKw.length >= 2 ? `${multiKw.length}개 키워드로 찾기` : '키워드 2개 이상'}
+        </Button>
+      </div>
 
       {/* Search sessions — click restores the Campaign from the DB, never re-runs Apify */}
       {sessions.length > 0 ? (
