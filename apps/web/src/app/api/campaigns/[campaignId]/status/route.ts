@@ -18,6 +18,7 @@ import {
   startActorRun,
 } from '@/services/apify/instagram';
 import { creatorsFromTiktok } from '@/services/apify/tiktok';
+import { creatorsFromYoutube } from '@/services/apify/youtube';
 
 /** Trending searches must not reuse cached profiles — recency has to be live. */
 const TREND_RE = /요즘|뜨는|트렌드|대세|핫한|떠오르|라이징/;
@@ -444,10 +445,12 @@ export const POST = withErrorHandling(
     try {
       const items = await readDataset(datasetId);
 
-      // ── TikTok — 단일 스테이지: 영상 데이터셋 → 작성자 정규화 → 저장 → 판정 → 완료 ──
-      //    인스타 3단계 머신을 타지 않는다(별 분기). 유튜브도 나중에 여기 추가.
+      // ── TikTok·YouTube — 단일 스테이지: 데이터셋 → 작성자/채널 정규화 → 저장 → 판정 → 완료 ──
+      //    인스타 3단계 머신을 타지 않는다(별 분기). 플랫폼별 정규화 함수만 다르다.
       if (platform !== 'instagram') {
-        const creators = creatorsFromTiktok(items).slice(0, TARGET);
+        const creators = (
+          platform === 'youtube' ? creatorsFromYoutube(items) : creatorsFromTiktok(items)
+        ).slice(0, TARGET);
         await saveCreators(sb, userId, campaignId, query, creators, 0);
         const { count } = await existingResults(sb, userId, campaignId);
         await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null, target);

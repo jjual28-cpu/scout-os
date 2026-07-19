@@ -109,6 +109,8 @@ export const env = {
   APIFY_TAGGED_ACTOR: process.env.APIFY_TAGGED_ACTOR ?? 'apify~instagram-tagged-scraper',
   /** 틱톡 해시태그 스크레이퍼 — 영상+작성자(아이디·팔로워·소개)를 준다. */
   APIFY_TIKTOK_ACTOR: process.env.APIFY_TIKTOK_ACTOR ?? 'clockworks~tiktok-hashtag-scraper',
+  /** 유튜브 스크레이퍼 — 키워드 검색으로 채널(구독자·소개)을 준다. */
+  APIFY_YOUTUBE_ACTOR: process.env.APIFY_YOUTUBE_ACTOR ?? 'streamers~youtube-scraper',
 
   // Discovery provider (server-only). Selects how /discover sources creators:
   //   'worker' — enqueue a job for the local Playwright worker (packages/worker)

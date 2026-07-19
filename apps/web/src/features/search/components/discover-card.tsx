@@ -97,9 +97,17 @@ export function DiscoverCard({
 
       <OpportunityBody result={item} profileHref={instagramUrl} />
 
-      {/* 진짜 영향력 신호 — 참여율 · 가짜 팔로워 의심 · 연락처(이메일) */}
-      {item.engagementRate != null || item.fakeSuspect || item.email ? (
+      {/* 진짜 영향력 신호 — 한국/해외 · 참여율 · 가짜 팔로워 의심 · 연락처(이메일) */}
+      {item.koreanLikely || item.engagementRate != null || item.fakeSuspect || item.email ? (
         <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+          {item.koreanLikely ? (
+            <span
+              className="dark:bg-muted inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600 dark:text-slate-300"
+              title="이름·소개에 한글 — 한국 크리에이터 추정"
+            >
+              🇰🇷 한국
+            </span>
+          ) : null}
           {item.engagementRate != null ? (
             <span
               className={cn(

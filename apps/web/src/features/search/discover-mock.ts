@@ -27,6 +27,8 @@ export type DiscoverOpportunity = SearchResult & {
   fakeSuspect?: boolean;
   /** 소개글에서 뽑은 이메일(있으면). 협업 연락 채널. */
   email?: string | null;
+  /** 한국 크리에이터 추정(이름·소개에 한글). 글로벌 결과에서 한국/해외 구분용. */
+  koreanLikely?: boolean;
 };
 
 export type DiscoverCategory = {

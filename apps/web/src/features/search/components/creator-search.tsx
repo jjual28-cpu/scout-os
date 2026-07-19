@@ -112,7 +112,7 @@ const POPULAR = [
 const PLATFORMS = [
   { id: 'instagram', label: 'Instagram', icon: Instagram, enabled: true },
   { id: 'tiktok', label: 'TikTok', icon: Music2, enabled: true },
-  { id: 'youtube', label: 'YouTube', icon: Youtube, enabled: false },
+  { id: 'youtube', label: 'YouTube', icon: Youtube, enabled: true },
 ] as const;
 
 type Phase = 'idle' | 'searching' | 'done';
@@ -304,6 +304,8 @@ export function CreatorSearch() {
   const [hideVisualReject, setHideVisualReject] = useState(false);
   /** 가짜 팔로워 의심 계정 숨김. */
   const [hideFake, setHideFake] = useState(false);
+  /** 국가 필터 — 전체 / 한국(한글 감지) / 해외. */
+  const [region, setRegion] = useState<'all' | 'kr' | 'foreign'>('all');
 
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   /** Competitor/brand handle for the tagged entrance. */
@@ -585,8 +587,9 @@ export function CreatorSearch() {
       mode,
       target: mode === 'tagged' ? 'creator' : target,
     };
-    // 틱톡은 태그 모드가 없어 keyword 검색만. (플랫폼 미지정=인스타)
-    if (platform === 'tiktok' && mode === 'keyword') body.platform = 'tiktok';
+    // 틱톡·유튜브는 태그 모드가 없어 keyword 검색만. (플랫폼 미지정=인스타)
+    if ((platform === 'tiktok' || platform === 'youtube') && mode === 'keyword')
+      body.platform = platform;
     if (keywords && keywords.length > 1) body.keywords = keywords;
     if (meta) {
       if (meta.title) body.title = meta.title;
@@ -699,6 +702,8 @@ export function CreatorSearch() {
       }
       if (hideVisualReject && it.visualVerdict === 'reject') return false;
       if (hideFake && it.fakeSuspect) return false;
+      if (region === 'kr' && !it.koreanLikely) return false;
+      if (region === 'foreign' && it.koreanLikely) return false;
       return true;
     });
     const arr = [...filtered];
@@ -732,6 +737,7 @@ export function CreatorSearch() {
     hideRejected,
     hideVisualReject,
     hideFake,
+    region,
     excludeTerms,
     outreach.records,
   ]);
@@ -743,6 +749,24 @@ export function CreatorSearch() {
   );
   /** 가짜 팔로워 의심 계정 수 (있으면 숨김 칩 노출). */
   const fakeCount = useMemo(() => items.filter((it) => it.fakeSuspect).length, [items]);
+  /** 한국 추정 셀럽 수 (한글 감지). 국가 필터·문구 노출 판단용. */
+  const koreanCount = useMemo(() => items.filter((it) => it.koreanLikely).length, [items]);
+  /** 한국·해외가 섞여 있을 때만 국가 구분이 의미 있음(둘 다 1명 이상). */
+  const regionMixed = koreanCount > 0 && koreanCount < items.length;
+  /** 결과가 어느 플랫폼에서 왔는지(헤더 표기). 스냅샷은 external_id 접두어로 판별됨. */
+  const resultPlatformLabel = useMemo(() => {
+    const first = items[0]?.platform;
+    if (!first) return 'Instagram';
+    const label: Record<string, string> = {
+      instagram: 'Instagram',
+      tiktok: 'TikTok',
+      youtube: 'YouTube',
+      blog: 'Blog',
+    };
+    return items.every((it) => it.platform === first)
+      ? (label[first] ?? 'Instagram')
+      : '여러 플랫폼';
+  }, [items]);
 
   const summary = useMemo(() => summarizeResults(items), [items]);
   /** 표시 중 결과의 평균 참여율(%). 없으면 null. */
@@ -1217,7 +1241,7 @@ export function CreatorSearch() {
                 <h2 className="truncate text-xl font-semibold tracking-tight">{keyword}</h2>
               </div>
               <p className="text-muted-foreground mt-1 text-sm">
-                Instagram · 셀럽{' '}
+                {resultPlatformLabel} · 셀럽{' '}
                 <span className="text-foreground font-medium">{visible.length}명</span>
                 {visible.length !== items.length ? ` / ${items.length}명` : ''} ·{' '}
                 {relativeTime(searchedAt)}
@@ -1340,10 +1364,14 @@ export function CreatorSearch() {
               Scout OS는{' '}
               <span className="text-foreground font-medium">판매자·정보성 계정을 걸러내고</span>,
               팔로워 대비 <span className="text-foreground font-medium">참여율로 진짜 영향력</span>
-              을 판단하며, <span className="text-foreground font-medium">가짜 팔로워</span>를 표시해
-              골라냈어요.
+              을 판단하며, <span className="text-foreground font-medium">가짜 팔로워</span>를
+              표시하고, <span className="text-foreground font-medium">한국·해외 셀럽까지 구분</span>
+              해 골라냈어요.
               {aiRejectedCount > 0 ? ` · 업체·부적합 ${aiRejectedCount}곳 제외` : ''}
               {fakeCount > 0 ? ` · 가짜 의심 ${fakeCount}명` : ''}
+              {regionMixed
+                ? ` · 한국 ${koreanCount}명 / 해외 ${items.length - koreanCount}명 구분`
+                : ''}
               {avgEngagement != null ? ` · 평균 참여율 ${avgEngagement}%` : ''}
             </p>
           </div>
@@ -1392,6 +1420,33 @@ export function CreatorSearch() {
                 가짜 팔로워 의심 {fakeCount}명 {hideFake ? '숨김' : '표시 중'}
               </FilterChip>
             ) : null}
+            {/* 국가 필터 — 한글 감지로 한국/해외 추정. 외국 셀럽을 원하는 경우도 있어 3택. */}
+            <div
+              className="dark:border-border inline-flex items-center overflow-hidden rounded-full border border-slate-200/70 text-xs"
+              title="이름·소개의 한글을 감지해 한국/해외 셀럽을 구분합니다 (추정). 틱톡 등 글로벌 결과에서 원하는 국적만 골라보세요."
+            >
+              {(
+                [
+                  ['all', '전체'],
+                  ['kr', '🇰🇷 한국'],
+                  ['foreign', '🌐 해외'],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setRegion(id)}
+                  className={cn(
+                    'px-2.5 py-1 transition-colors',
+                    region === id
+                      ? 'bg-primary text-primary-foreground font-medium'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <div className="ml-auto flex items-center gap-1.5">
               <ArrowUpDown className="text-muted-foreground size-3.5" />
               <select

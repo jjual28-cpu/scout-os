@@ -69,6 +69,16 @@ export function extractEmail(bio: string | null): string | null {
 }
 
 /**
+ * 한국 크리에이터 "추정" — 이름·소개글에 한글이 있으면 한국계로 본다. 글로벌 플랫폼
+ * (특히 틱톡)에서 외국 계정을 걸러내는 데 쓴다. 측정이 아니라 텍스트 기반 추정 —
+ * 소개를 영어로만 쓴 한국 크리에이터는 놓칠 수 있음(그래서 옵션·'추정' 표기).
+ */
+const HANGUL_RE = /[가-힣]/;
+export function looksKorean(c: InstagramCreator): boolean {
+  return HANGUL_RE.test(`${c.displayName ?? ''} ${c.biography ?? ''}`);
+}
+
+/**
  * Map a normalized creator onto the existing discover-card shape so real data
  * renders through the SAME card as the mock feed (no card redesign).
  */
@@ -105,5 +115,6 @@ export function toDiscoverOpportunity(creator: InstagramCreator): DiscoverOpport
     engagementRate: er,
     fakeSuspect: isFakeSuspect(creator, er),
     email: extractEmail(creator.biography),
+    koreanLikely: looksKorean(creator),
   };
 }

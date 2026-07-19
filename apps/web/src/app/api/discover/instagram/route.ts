@@ -17,6 +17,7 @@ import {
   taggedInput,
 } from '@/services/apify/instagram';
 import { tiktokActorId, tiktokInput } from '@/services/apify/tiktok';
+import { youtubeActorId, youtubeInput } from '@/services/apify/youtube';
 
 // Env is read and Apify/Supabase clients are created only per request.
 export const dynamic = 'force-dynamic';
@@ -50,8 +51,8 @@ const bodySchema = z.object({
   mode: z.enum(['keyword', 'tagged']).optional(),
   /** 'creator' — 협업할 셀럽. 'brand' — 제품 파는 브랜드 공식 계정. */
   target: z.enum(['creator', 'brand']).optional(),
-  /** 검색 플랫폼. tiktok 은 단일 스테이지(해시태그→작성자)로 처리된다. */
-  platform: z.enum(['instagram', 'tiktok']).optional(),
+  /** 검색 플랫폼. tiktok·youtube 는 단일 스테이지(키워드→작성자/채널)로 처리된다. */
+  platform: z.enum(['instagram', 'tiktok', 'youtube']).optional(),
 });
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- DB rows are loosely typed here */
@@ -123,8 +124,9 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   // "이 브랜드를 태그한 계정"은 본질적으로 크리에이터 찾기다 — 브랜드가 경쟁사를
   // 태그하는 일은 거의 없어서 tagged+brand 는 켜봐야 빈 결과다.
   const target: SearchTarget = mode === 'tagged' ? 'creator' : (body.target ?? 'creator');
-  // 검색 플랫폼. tiktok 은 단일 스테이지(해시태그→작성자)로 처리된다(태그 모드 없음).
-  const platform: 'instagram' | 'tiktok' = body.platform === 'tiktok' ? 'tiktok' : 'instagram';
+  // 검색 플랫폼. tiktok·youtube 는 단일 스테이지(키워드→작성자/채널)로 처리된다(태그 모드 없음).
+  const platform: 'instagram' | 'tiktok' | 'youtube' =
+    body.platform === 'tiktok' ? 'tiktok' : body.platform === 'youtube' ? 'youtube' : 'instagram';
   // 여러 키워드: 그 키워드들을 stage 2 해시태그로 삼아 한 검색에서 모두 훑는다.
   const multiKeywords =
     mode === 'keyword'
@@ -292,9 +294,14 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
               tiktokInput(isMulti ? multiKeywords : [rawQuery], body.limit ?? DEFAULT_LIMIT),
               tiktokActorId(),
             )
-          : await startActorRun(
-              stage1Input(plan?.searchTerm || rawQuery, body.limit ?? DEFAULT_LIMIT),
-            );
+          : platform === 'youtube'
+            ? await startActorRun(
+                youtubeInput(isMulti ? multiKeywords : [rawQuery], body.limit ?? DEFAULT_LIMIT),
+                youtubeActorId(),
+              )
+            : await startActorRun(
+                stage1Input(plan?.searchTerm || rawQuery, body.limit ?? DEFAULT_LIMIT),
+              );
     await supabase
       .from('campaigns')
       .update({
