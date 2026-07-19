@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Search,
   SearchX,
+  ShoppingCart,
   SlidersHorizontal,
   Sparkles,
   Store,
@@ -131,13 +132,14 @@ type SearchMode = 'keyword' | 'tagged';
  * and each rejects what the other wants. The server judges by this, so getting
  * it wrong throws away precisely the results the user came for.
  */
-type SearchTarget = 'creator' | 'brand';
+type SearchTarget = 'creator' | 'brand' | 'gonggu';
 
 const TARGET_KEY = 'scout:search-target';
 
 function readStoredTarget(): SearchTarget | null {
   try {
-    return localStorage.getItem(TARGET_KEY) === 'brand' ? 'brand' : 'creator';
+    const v = localStorage.getItem(TARGET_KEY);
+    return v === 'brand' || v === 'gonggu' ? v : 'creator';
   } catch {
     return null; // storage blocked (private mode / embedded) — just use the default
   }
@@ -1770,6 +1772,12 @@ function SearchField({
 
 const TARGETS: { id: SearchTarget; label: string; icon: typeof UserRound; hint: string }[] = [
   { id: 'creator', label: '셀럽 찾기', icon: UserRound, hint: '협업 제안할 크리에이터를 찾아요' },
+  {
+    id: 'gonggu',
+    label: '공구전문',
+    icon: ShoppingCart,
+    hint: '공동구매를 돌리는 셀러를 찾아요 (소개글의 공구 일정·주문 안내로 판별)',
+  },
   { id: 'brand', label: '브랜드 찾기', icon: Store, hint: '제품을 파는 브랜드 계정을 찾아요' },
 ];
 
@@ -1793,7 +1801,7 @@ function TargetToggle({
       <div
         role="group"
         aria-label="검색 대상"
-        className="bg-card grid grid-cols-2 gap-0.5 rounded-full border p-1"
+        className="bg-card grid grid-cols-3 gap-0.5 rounded-full border p-1"
       >
         {TARGETS.map((t) => {
           const active = target === t.id;

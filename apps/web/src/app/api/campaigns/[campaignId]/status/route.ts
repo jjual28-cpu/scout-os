@@ -487,7 +487,10 @@ export const POST = withErrorHandling(
     const query: string = c.query;
     const mode: 'keyword' | 'tagged' = c.search_mode === 'tagged' ? 'tagged' : 'keyword';
     /** Chosen when the search started — decides which way the AI judges. */
-    const target: SearchTarget = c.search_target === 'brand' ? 'brand' : 'creator';
+    // gonggu(공구셀러)는 판매자처럼 보이므로 creator용 업체/판매자 필터를 타면 안 된다
+    // (그 필터는 target==='creator'에서만 돌아, gonggu/brand는 자연히 제외됨).
+    const target: SearchTarget =
+      c.search_target === 'brand' ? 'brand' : c.search_target === 'gonggu' ? 'gonggu' : 'creator';
     // AI's translation of a natural-language request (null for plain keywords).
     const plan = (c.search_plan ?? null) as {
       searchTerm?: string;

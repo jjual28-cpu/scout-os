@@ -40,11 +40,51 @@ export type CreatorMatch = {
 };
 
 /**
- * What the user is hunting for. The two are near-opposites: a creator search
- * rejects brand accounts, a brand search rejects everything BUT them. Judging
- * one by the other's rules throws away exactly what was wanted.
+ * What the user is hunting for. Near-opposites: creator 검색은 브랜드/판매자를
+ * 걸러내고, brand 검색은 그것만 남기고, gonggu 검색은 '공동구매로 파는 셀러'를
+ * 찾는다(해시태그가 아니라 소개글 패턴으로 판별). 목적을 잘못 고르면 원하는 걸
+ * 정확히 버린다.
  */
-export type SearchTarget = 'creator' | 'brand';
+export type SearchTarget = 'creator' | 'brand' | 'gonggu';
+
+/**
+ * 공동구매(공구) 셀러 신호 — 소개글 기반. 공구 셀러는 #공동구매 같은 해시태그를
+ * 잘 안 쓰고, 대신 프로필에 이렇게 티가 난다:
+ *  - 공구/오픈카톡/주문서/폼/스마트스토어 같은 판매·주문 표현
+ *  - 날짜별 공구 일정 (예: "7/10~17 바디워시 · 7/18~21 립밤") → M/D 날짜가 2개 이상
+ */
+const GONGGU_WORDS = [
+  '공구',
+  '공동구매',
+  '공구일정',
+  '공구문의',
+  '공구마감',
+  '오픈카톡',
+  '오픈채팅',
+  '카톡문의',
+  '주문서',
+  '주문폼',
+  '네이버폼',
+  '폼주소',
+  '스마트스토어',
+  '재오픈',
+  '리오더',
+  '마감임박',
+  '프로필링크',
+  'dm문의',
+  '디엠문의',
+];
+export function looksLikeGonggu(bio: string | null): boolean {
+  if (!bio) return false;
+  const b = bio.toLowerCase();
+  if (GONGGU_WORDS.some((w) => b.includes(w))) return true;
+  // 날짜형 공구 일정: "M/D" 패턴이 2개 이상이면 판매 캘린더로 본다.
+  const md = b.match(/\d{1,2}\s*\/\s*\d{1,2}/g);
+  if (md && md.length >= 2) return true;
+  const kd = b.match(/\d{1,2}월\s*\d{1,2}일/g);
+  if (kd && kd.length >= 2) return true;
+  return false;
+}
 
 const COMMON_TAIL = `점수 기준: 90+ 매우 적합 / 70~89 적합 / 40~69 애매 / 40 미만 부적합
 verdict: fit(추천) | maybe(애매) | reject(제외)
@@ -110,8 +150,31 @@ fit 으로 볼 것 (이번 검색의 목표):
 
 ${COMMON_TAIL}`;
 
+const SYSTEM_GONGGU = `당신은 공동구매(공구) 셀러 발굴 전문가입니다. 인스타그램 계정 중 "제품을 공동구매로 파는 셀러/호스트"를 골라냅니다.
+
+중요: 이들은 보통 #공동구매 같은 해시태그를 잘 안 씁니다. 대신 프로필(소개글)과 콘텐츠에서 이렇게 티가 납니다:
+- 소개글에 '공구 일정'을 날짜로 적어둠 (예: "7/10~17 바디워시 · 7/18~21 립밤")
+- 공구·공동구매·오픈카톡·오픈채팅·주문서·주문폼·네이버폼·스마트스토어·카톡문의·DM문의·재오픈·마감임박 같은 표현
+- 특정 제품들을 주기적으로 홍보/판매, 프로필 링크로 주문 유도
+각 후보에 '공구 신호: 있음/없음'을 표시해 두었으니 핵심 단서로 쓰세요.
+
+fit 으로 볼 것 (이번 검색 목표):
+- 위 신호가 보이는 공구 셀러/호스트 (규모 작아도 구매 전환 팬층이 있으면 가치 큼)
+- 여러 제품을 주기적으로 공구하는 계정. '공구 신호: 있음'이면 강하게 우대.
+
+반드시 reject 할 것:
+- 협업/광고만 받는 순수 콘텐츠 크리에이터 (직접 판매하지 않음)
+- 브랜드·쇼핑몰 공식 계정 (셀러가 아니라 제조·판매사 본사)
+- 정보성·뉴스·짤·검색 주제와 무관한 계정
+- 스팸, 팔로워 장사, 소개가 비어 정체불명인 계정
+
+'공구 신호: 없음'이어도 소개·콘텐츠로 공구 셀러가 분명하면 fit 가능(과도하게 reject하지 말 것).
+
+${COMMON_TAIL}`;
+
 function brandBlock(brand: BrandContext | null, query: string, target: SearchTarget): string {
-  const noun = target === 'brand' ? '브랜드 계정' : '크리에이터';
+  const noun =
+    target === 'brand' ? '브랜드 계정' : target === 'gonggu' ? '공구 셀러' : '크리에이터';
 
   if (!brand || !(brand.productName || brand.brand || brand.category)) {
     return `[내 상품 정보 없음]
@@ -134,6 +197,12 @@ function brandBlock(brand: BrandContext | null, query: string, target: SearchTar
 ${lines.join('\n')}
 검색 의도: "${query}"
 → 이 상품과 같은 분야의 브랜드 계정인지 판단하세요. 상품 자체를 파는 계정일 필요는 없습니다.`;
+  }
+  if (target === 'gonggu') {
+    return `[공동구매로 팔 상품]
+${lines.join('\n')}
+검색 의도: "${query}"
+→ 이 계정이 '이 상품을 공동구매로 팔 만한 공구 셀러'인지 판단하세요. 같은 분야(뷰티·리빙·육아 등) 제품을 공구로 파는 셀러면 fit.`;
   }
   return `[협업을 제안할 브랜드]
 ${lines.join('\n')}
@@ -158,7 +227,7 @@ function activityLine(c: InstagramCreator, now: number): string | null {
   return `   최근 활동: ${parts.join(' · ')}`;
 }
 
-function candidateBlock(creators: InstagramCreator[]): string {
+function candidateBlock(creators: InstagramCreator[], target: SearchTarget): string {
   const now = Date.now();
   return creators
     .map((c, i) => {
@@ -169,6 +238,10 @@ function candidateBlock(creators: InstagramCreator[]): string {
         `   소개: ${bio || '(없음)'}`,
         `   카테고리: ${c.category ?? '(없음)'}`,
         `   팔로워: ${c.followersCount ?? '?'} · 게시물: ${c.postsCount ?? '?'}${c.isVerified ? ' · 인증됨' : ''}`,
+        // 공구 검색일 때만 소개글 공구 신호를 표시해 판정을 돕는다.
+        target === 'gonggu'
+          ? `   공구 신호: ${looksLikeGonggu(c.biography) ? '있음' : '없음'}`
+          : null,
         activityLine(c, now),
       ]
         .filter(Boolean)
@@ -233,10 +306,11 @@ export async function matchCreators(
   const prompt = `${brandBlock(brand, query, target)}
 
 [후보 ${creators.length}개]
-${candidateBlock(creators)}`;
+${candidateBlock(creators, target)}`;
 
   const text = await runAi(userId, {
-    system: target === 'brand' ? SYSTEM_BRAND : SYSTEM_CREATOR,
+    system:
+      target === 'brand' ? SYSTEM_BRAND : target === 'gonggu' ? SYSTEM_GONGGU : SYSTEM_CREATOR,
     prompt,
     json: true,
     // ~24 candidates × a short verdict each; leaves room without runaway cost.
