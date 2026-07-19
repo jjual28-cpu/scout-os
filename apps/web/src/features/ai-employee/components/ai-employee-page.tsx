@@ -3,11 +3,14 @@
 import {
   ArrowRight,
   ChevronDown,
+  Instagram,
   Loader2,
+  Music2,
   Package,
   Search,
   Sparkles,
   TriangleAlert,
+  Youtube,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -25,11 +28,20 @@ import { cn } from '@/lib/utils';
  * together the pieces (product data, AI planning, the campaign search, and the
  * per-creator AI DM in Discover) so the user doesn't have to wire them by hand.
  */
+/** 검색 플랫폼 — 셀럽 찾기 페이지와 동일한 3택. instagram 기본. */
+const PLATFORMS = [
+  { id: 'instagram', label: 'Instagram', icon: Instagram },
+  { id: 'tiktok', label: 'TikTok', icon: Music2 },
+  { id: 'youtube', label: 'YouTube', icon: Youtube },
+] as const;
+type PlatformId = (typeof PLATFORMS)[number]['id'];
+
 export function AiEmployeePage() {
   const { products, hydrated } = useProducts();
   const router = useRouter();
 
   const [productId, setProductId] = useState<string>('');
+  const [platform, setPlatform] = useState<PlatformId>('instagram');
   const [aiKeywords, setAiKeywords] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,10 +105,18 @@ export function AiEmployeePage() {
     if (launching) return;
     setLaunching(keyword);
     try {
+      const body: Record<string, unknown> = {
+        query: keyword,
+        productId,
+        source: 'ai',
+        target: 'creator',
+      };
+      // 틱톡·유튜브만 platform 전송(미지정=인스타). 태그 모드 없는 단일 스테이지 검색.
+      if (platform !== 'instagram') body.platform = platform;
       const res = await fetch('/api/discover/instagram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: keyword, productId, source: 'ai', target: 'creator' }),
+        body: JSON.stringify(body),
       });
       const json = (await res.json().catch(() => null)) as {
         data?: { campaignId?: string | null };
@@ -210,6 +230,34 @@ export function AiEmployeePage() {
               <p className="text-muted-foreground mt-1.5 text-xs">
                 상품에 맞는 셀럽을 AI가 알아서 찾아드려요. 버튼만 누르면 검색이 시작돼요.
               </p>
+
+              {/* 플랫폼 선택 — 어느 SNS에서 셀럽을 찾을지 (인스타/틱톡/유튜브) */}
+              <div className="mt-4">
+                <p className="text-muted-foreground mb-1.5 text-xs">어디에서 찾을까요?</p>
+                <div className="flex flex-wrap gap-2">
+                  {PLATFORMS.map((p) => {
+                    const Icon = p.icon;
+                    const active = platform === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setPlatform(p.id)}
+                        disabled={Boolean(launching)}
+                        className={cn(
+                          'inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50',
+                          active
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-input bg-background hover:border-primary/50 hover:bg-primary/5',
+                        )}
+                      >
+                        <Icon className="size-4" />
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
               {/* Primary — AI 자동 검색 */}
               <Button

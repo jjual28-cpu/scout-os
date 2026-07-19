@@ -894,9 +894,11 @@ export function CreatorSearch() {
 
       {/* The high-signal entrance: whoever tags a brand already does brand work. */}
       <div>
-        <RailLabel icon={<Tag className="size-3.5" />}>경쟁사 태그로 찾기</RailLabel>
+        <RailLabel icon={<Tag className="size-3.5" />}>경쟁 브랜드로 셀럽 찾기</RailLabel>
         <p className="text-muted-foreground mb-2 text-[11px] leading-snug">
-          이 브랜드를 태그한 셀럽을 찾아요. 이미 브랜드 협업을 하는 계정이라 적중률이 높아요.
+          경쟁 브랜드의 인스타 아이디를 넣으면,{' '}
+          <span className="text-foreground">그 브랜드를 홍보(태그)해 본 셀럽</span>을 찾아드려요.
+          이미 협찬 경험이 있어 제안 성공률이 높아요. (경쟁 브랜드를 찾는 게 아니에요)
         </p>
         <div className="flex gap-1.5">
           <input
