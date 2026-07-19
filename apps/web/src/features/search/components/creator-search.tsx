@@ -1589,15 +1589,21 @@ export function CreatorSearch() {
           description="브랜드에 맞는 셀럽을 검색하고, 결과를 캠페인으로 저장하세요."
         />
 
+        {/* 검색 목적 — 무엇을 찾을지가 검색의 전부를 결정하므로 맨 위에 크게. */}
+        <div className="mb-6">
+          <p className="text-muted-foreground mb-2 text-xs font-medium">무엇을 찾을까요?</p>
+          <TargetToggle
+            target={target}
+            onSelect={chooseTarget}
+            disabled={phase === 'searching'}
+            prominent
+          />
+        </div>
+
         <div className="gap-8 lg:grid lg:grid-cols-[300px_minmax(0,1fr)]">
           {/* ── Search Rail ── */}
           <aside className="lg:sticky lg:top-[76px] lg:self-start">
             <div className="space-y-3">
-              <TargetToggle
-                target={target}
-                onSelect={chooseTarget}
-                disabled={phase === 'searching'}
-              />
               <SearchField
                 value={input}
                 size="md"
@@ -1790,12 +1796,57 @@ function TargetToggle({
   target,
   onSelect,
   disabled,
+  prominent,
 }: {
   target: SearchTarget;
   onSelect: (t: SearchTarget) => void;
   disabled?: boolean;
+  /** 큰 카드형(전체 너비) — 검색 위 상단에 눈에 띄게 배치할 때. */
+  prominent?: boolean;
 }) {
   const hint = TARGETS.find((t) => t.id === target)?.hint ?? '';
+
+  // 상단 배치용 큰 3택 카드 — 아이콘·라벨·설명을 카드 안에 크게.
+  if (prominent) {
+    return (
+      <div role="group" aria-label="검색 대상" className="grid gap-2.5 sm:grid-cols-3">
+        {TARGETS.map((t) => {
+          const active = target === t.id;
+          const Icon = t.icon;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              aria-pressed={active}
+              disabled={disabled}
+              onClick={() => onSelect(t.id)}
+              className={cn(
+                'flex flex-col items-start gap-1.5 rounded-2xl border p-4 text-left transition-all',
+                active
+                  ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                  : 'dark:border-border bg-card hover:border-primary/50 hover:bg-primary/5 border-slate-200/70',
+                disabled && 'pointer-events-none opacity-50',
+              )}
+            >
+              <span className="flex items-center gap-2">
+                <Icon className={cn('size-5', active ? '' : 'text-primary')} />
+                <span className="text-base font-bold">{t.label}</span>
+              </span>
+              <span
+                className={cn(
+                  'text-xs leading-snug',
+                  active ? 'text-primary-foreground/85' : 'text-muted-foreground',
+                )}
+              >
+                {t.hint}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-1.5">
       <div
