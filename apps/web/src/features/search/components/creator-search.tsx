@@ -83,6 +83,7 @@ function snapshotToOpportunity(s: CampaignResult): DiscoverOpportunity {
     aiScore: s.aiScore ?? null,
     aiVerdict: s.aiVerdict ?? null,
     aiReason: s.aiReason ?? null,
+    aiAudience: s.aiAudience ?? null,
     visualScore: s.visualScore ?? null,
     visualVerdict: s.visualVerdict ?? null,
     visualReason: s.visualReason ?? null,

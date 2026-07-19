@@ -35,6 +35,8 @@ export type CreatorMatch = {
   score: number; // 0~100
   verdict: MatchVerdict;
   reason: string;
+  /** 주 시청자층 AI 추정 (예: "20~30대 여성·뷰티"). 측정값 아님. 없으면 ''. */
+  audience?: string;
 };
 
 /**
@@ -47,9 +49,10 @@ export type SearchTarget = 'creator' | 'brand';
 const COMMON_TAIL = `점수 기준: 90+ 매우 적합 / 70~89 적합 / 40~69 애매 / 40 미만 부적합
 verdict: fit(추천) | maybe(애매) | reject(제외)
 reason: 한국어 한 줄(35자 이내), 판단 근거를 구체적으로. "관련 있음" 같은 뻔한 말 금지.
+audience: 이 계정의 주 시청자층 추정 한 줄 (예: "20~30대 여성·뷰티"). 소개글·콘텐츠 근거로만 추정하고, 근거 없으면 빈 문자열 "". 사실처럼 단정하지 말 것(추정임).
 
 오직 JSON 배열만 출력하세요. 설명 금지.
-형식: [{"username":"...","score":85,"verdict":"fit","reason":"..."}]
+형식: [{"username":"...","score":85,"verdict":"fit","reason":"...","audience":"20~30대 여성·뷰티"}]
 모든 후보를 빠짐없이 포함하세요.`;
 
 const SYSTEM_CREATOR = `당신은 인플루언서 마케팅 전문가입니다. 브랜드가 협업할 인스타그램 셀럽 후보를 심사합니다.
@@ -202,7 +205,8 @@ function parseMatches(text: string): CreatorMatch[] {
             ? 'maybe'
             : 'reject';
     const reason = typeof r?.reason === 'string' ? r.reason.trim().slice(0, 80) : '';
-    out.push({ username, score, verdict, reason });
+    const audience = typeof r?.audience === 'string' ? r.audience.trim().slice(0, 40) : '';
+    out.push({ username, score, verdict, reason, audience });
   }
   return out;
 }

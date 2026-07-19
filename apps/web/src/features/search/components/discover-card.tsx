@@ -184,6 +184,11 @@ export function DiscoverCard({
           {item.aiReason ? (
             <p className="text-foreground/80 mt-1 text-xs leading-snug">{item.aiReason}</p>
           ) : null}
+          {item.aiAudience ? (
+            <p className="text-muted-foreground mt-1 text-[11px] leading-snug">
+              👥 추정 시청자층: {item.aiAudience} <span className="opacity-60">(AI 추정)</span>
+            </p>
+          ) : null}
         </div>
       ) : null}
 

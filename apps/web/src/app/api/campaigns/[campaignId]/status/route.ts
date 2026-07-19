@@ -267,7 +267,12 @@ async function applyAiMatch(
       if (!m) continue;
       const { error } = await sb
         .from('campaign_results')
-        .update({ ai_score: m.score, ai_verdict: m.verdict, ai_reason: m.reason })
+        .update({
+          ai_score: m.score,
+          ai_verdict: m.verdict,
+          ai_reason: m.reason,
+          ai_audience: m.audience || null,
+        })
         .eq('user_id', userId)
         .eq('campaign_id', campaignId)
         .eq('creator_id', c.id);

@@ -85,6 +85,8 @@ export type CampaignResult = {
   aiVerdict?: AiVerdict | null;
   /** One-line reason shown on the card. */
   aiReason?: string | null;
+  /** 주 시청자층 AI 추정 (예: "20~30대 여성·뷰티"). 측정값 아님. */
+  aiAudience?: string | null;
   /** 비주얼(이미지) 판정 — 옵션. null이면 아직 사진 판정 안 함. */
   visualScore?: number | null;
   visualVerdict?: AiVerdict | null;

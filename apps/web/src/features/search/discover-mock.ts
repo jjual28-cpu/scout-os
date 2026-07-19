@@ -15,6 +15,8 @@ export type DiscoverOpportunity = SearchResult & {
   aiScore?: number | null;
   aiVerdict?: 'fit' | 'maybe' | 'reject' | null;
   aiReason?: string | null;
+  /** 주 시청자층 AI 추정 (측정값 아님). */
+  aiAudience?: string | null;
   /** 비주얼(이미지) 판정 — 옵션. Undefined ⇒ 사진 판정 안 함. */
   visualScore?: number | null;
   visualVerdict?: 'fit' | 'maybe' | 'reject' | null;

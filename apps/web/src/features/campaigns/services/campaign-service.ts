@@ -140,7 +140,7 @@ export async function listResults(
   const { data } = await sb
     .from('campaign_results')
     .select(
-      'creator_snapshot,rank,ai_score,ai_verdict,ai_reason,visual_score,visual_verdict,visual_reason',
+      'creator_snapshot,rank,ai_score,ai_verdict,ai_reason,ai_audience,visual_score,visual_verdict,visual_reason',
     )
     .eq('campaign_id', campaignId)
     .eq('user_id', userId)
@@ -155,6 +155,7 @@ export async function listResults(
         aiScore: r.ai_score ?? null,
         aiVerdict: r.ai_verdict ?? null,
         aiReason: r.ai_reason ?? null,
+        aiAudience: r.ai_audience ?? null,
         visualScore: r.visual_score ?? null,
         visualVerdict: r.visual_verdict ?? null,
         visualReason: r.visual_reason ?? null,
