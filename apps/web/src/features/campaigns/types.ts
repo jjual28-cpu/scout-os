@@ -81,6 +81,10 @@ export type CampaignResult = {
   aiVerdict?: AiVerdict | null;
   /** One-line reason shown on the card. */
   aiReason?: string | null;
+  /** 비주얼(이미지) 판정 — 옵션. null이면 아직 사진 판정 안 함. */
+  visualScore?: number | null;
+  visualVerdict?: AiVerdict | null;
+  visualReason?: string | null;
 };
 
 /** A campaign "draft" carried into /discover for 다시 검색 / 복제 prefill. */

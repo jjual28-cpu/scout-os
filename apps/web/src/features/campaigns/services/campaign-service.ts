@@ -139,7 +139,9 @@ export async function listResults(
   // AI hasn't judged (null score) fall back to rank so nothing disappears.
   const { data } = await sb
     .from('campaign_results')
-    .select('creator_snapshot,rank,ai_score,ai_verdict,ai_reason')
+    .select(
+      'creator_snapshot,rank,ai_score,ai_verdict,ai_reason,visual_score,visual_verdict,visual_reason',
+    )
     .eq('campaign_id', campaignId)
     .eq('user_id', userId)
     .order('ai_score', { ascending: false, nullsFirst: false })
@@ -153,6 +155,9 @@ export async function listResults(
         aiScore: r.ai_score ?? null,
         aiVerdict: r.ai_verdict ?? null,
         aiReason: r.ai_reason ?? null,
+        visualScore: r.visual_score ?? null,
+        visualVerdict: r.visual_verdict ?? null,
+        visualReason: r.visual_reason ?? null,
       } satisfies CampaignResult;
     })
     .filter((r) => r && r.externalId);

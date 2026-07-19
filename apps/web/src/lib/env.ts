@@ -73,6 +73,8 @@ export const env = {
   // never reaches the browser. Undefined ⇒ AI features report "not configured".
   OPENROUTER_API_KEY: optional(nonEmpty, process.env.OPENROUTER_API_KEY),
   OPENROUTER_MODEL: process.env.OPENROUTER_MODEL ?? 'google/gemini-2.5-flash-lite',
+  /** Vision-capable model for image-based (외모/머릿결 등) 셀럽 판정. */
+  OPENROUTER_VISION_MODEL: process.env.OPENROUTER_VISION_MODEL ?? 'google/gemini-2.5-flash',
   /** Per-user AI calls allowed per day (Asia/Seoul). Guards the shared key. */
   AI_DAILY_LIMIT: ((): number => {
     const n = Number.parseInt(process.env.AI_DAILY_LIMIT ?? '', 10);

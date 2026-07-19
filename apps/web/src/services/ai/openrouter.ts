@@ -20,15 +20,31 @@ type GenArgs = {
   json?: boolean;
   maxTokens?: number;
   temperature?: number;
+  /** Image URLs for a vision call. When present, the user message is multimodal. */
+  images?: string[];
 };
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- OpenRouter JSON is untyped external data */
 
+type TextPart = { type: 'text'; text: string };
+type ImagePart = { type: 'image_url'; image_url: { url: string } };
+type UserContent = string | (TextPart | ImagePart)[];
+
 /** Call OpenRouter chat completions and return the text. Throws AppError on failure. */
 export async function callOpenRouter(apiKey: string, args: GenArgs): Promise<string> {
-  const messages: { role: 'system' | 'user'; content: string }[] = [];
+  const messages: { role: 'system' | 'user'; content: UserContent }[] = [];
   if (args.system) messages.push({ role: 'system', content: args.system });
-  messages.push({ role: 'user', content: args.prompt });
+
+  // Vision: OpenRouter/OpenAI multimodal content = [text, image_url...]. Plain
+  // text calls keep the simple string content (unchanged behaviour).
+  const imgs = (args.images ?? []).filter((u) => typeof u === 'string' && u.trim());
+  if (imgs.length > 0) {
+    const content: (TextPart | ImagePart)[] = [{ type: 'text', text: args.prompt }];
+    for (const url of imgs) content.push({ type: 'image_url', image_url: { url } });
+    messages.push({ role: 'user', content });
+  } else {
+    messages.push({ role: 'user', content: args.prompt });
+  }
 
   const body: Record<string, unknown> = {
     model: args.model || env.OPENROUTER_MODEL,

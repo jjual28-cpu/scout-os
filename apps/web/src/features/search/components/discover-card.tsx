@@ -146,6 +146,57 @@ export function DiscoverCard({
         </div>
       ) : null}
 
+      {/* 비주얼(이미지) 적합도 — 사진을 보고 판정한 옵션 결과 */}
+      {item.visualVerdict ? (
+        <div
+          className={cn(
+            'mt-2 rounded-lg border p-2.5',
+            item.visualVerdict === 'fit'
+              ? 'border-fuchsia-500/25 bg-fuchsia-500/[0.06]'
+              : item.visualVerdict === 'reject'
+                ? 'dark:border-border border-slate-200/70 bg-slate-50/70'
+                : 'border-amber-500/20 bg-amber-500/[0.06]',
+          )}
+        >
+          <div className="flex items-center gap-1.5">
+            <Sparkles
+              className={cn(
+                'size-3.5',
+                item.visualVerdict === 'fit'
+                  ? 'text-fuchsia-600'
+                  : item.visualVerdict === 'reject'
+                    ? 'text-slate-400'
+                    : 'text-amber-600',
+              )}
+            />
+            <span
+              className={cn(
+                'text-[11px] font-semibold',
+                item.visualVerdict === 'fit'
+                  ? 'text-fuchsia-600 dark:text-fuchsia-400'
+                  : item.visualVerdict === 'reject'
+                    ? 'text-slate-500'
+                    : 'text-amber-700 dark:text-amber-500',
+              )}
+            >
+              {item.visualVerdict === 'fit'
+                ? '비주얼 적합'
+                : item.visualVerdict === 'reject'
+                  ? '비주얼 부적합'
+                  : '비주얼 보류'}
+            </span>
+            {typeof item.visualScore === 'number' ? (
+              <span className="text-muted-foreground text-[11px] tabular-nums">
+                {item.visualScore}
+              </span>
+            ) : null}
+          </div>
+          {item.visualReason ? (
+            <p className="text-foreground/80 mt-1 text-xs leading-snug">{item.visualReason}</p>
+          ) : null}
+        </div>
+      ) : null}
+
       {/* 발견일 + 최근 연락 상태 */}
       <div className="text-muted-foreground mt-4 flex items-center justify-between gap-2 text-xs">
         <span className="flex items-center gap-1.5">

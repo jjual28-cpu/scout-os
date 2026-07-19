@@ -24,6 +24,8 @@ export type RunAiArgs = {
   json?: boolean;
   maxTokens?: number;
   temperature?: number;
+  /** Image URLs for a vision call (multimodal). Needs a vision-capable model. */
+  images?: string[];
 };
 
 export async function runAi(userId: string, args: RunAiArgs): Promise<string> {

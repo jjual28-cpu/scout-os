@@ -15,6 +15,10 @@ export type DiscoverOpportunity = SearchResult & {
   aiScore?: number | null;
   aiVerdict?: 'fit' | 'maybe' | 'reject' | null;
   aiReason?: string | null;
+  /** 비주얼(이미지) 판정 — 옵션. Undefined ⇒ 사진 판정 안 함. */
+  visualScore?: number | null;
+  visualVerdict?: 'fit' | 'maybe' | 'reject' | null;
+  visualReason?: string | null;
 };
 
 export type DiscoverCategory = {

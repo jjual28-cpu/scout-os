@@ -80,6 +80,9 @@ function snapshotToOpportunity(s: CampaignResult): DiscoverOpportunity {
     aiScore: s.aiScore ?? null,
     aiVerdict: s.aiVerdict ?? null,
     aiReason: s.aiReason ?? null,
+    visualScore: s.visualScore ?? null,
+    visualVerdict: s.visualVerdict ?? null,
+    visualReason: s.visualReason ?? null,
   };
 }
 
@@ -153,9 +156,10 @@ const TOGGLES: { id: Toggle; label: string }[] = [
   { id: 'bio', label: 'Bio 있음' },
   { id: 'email', label: 'Email 있음' },
 ];
-type SortKey = 'recommended' | 'followers' | 'recent' | 'posts';
+type SortKey = 'recommended' | 'visual' | 'followers' | 'recent' | 'posts';
 const SORTS: { id: SortKey; label: string }[] = [
   { id: 'recommended', label: 'AI 추천순' },
+  { id: 'visual', label: '비주얼 적합순' },
   { id: 'followers', label: '팔로워순' },
   { id: 'recent', label: '최근 발견순' },
   { id: 'posts', label: '게시물순' },
@@ -282,6 +286,11 @@ export function CreatorSearch() {
   /** 제외 키워드 — 아이디/이름/소개/카테고리에 이 단어가 있으면 결과에서 숨긴다. */
   const [excludeTerms, setExcludeTerms] = useState<string[]>([]);
   const [excludeInput, setExcludeInput] = useState('');
+  /** 비주얼(이미지) 판정 — 옵션. 조건 입력 + 실행 상태 + 부적합 숨김. */
+  const [visualOpen, setVisualOpen] = useState(false);
+  const [visualCriteria, setVisualCriteria] = useState('');
+  const [visualLoading, setVisualLoading] = useState(false);
+  const [hideVisualReject, setHideVisualReject] = useState(false);
 
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   /** Competitor/brand handle for the tagged entrance. */
@@ -654,11 +663,18 @@ export function CreatorSearch() {
           `${it.handle} ${it.name} ${it.biography ?? ''} ${it.category ?? ''}`.toLowerCase();
         if (excludeTerms.some((t) => hay.includes(t))) return false;
       }
+      if (hideVisualReject && it.visualVerdict === 'reject') return false;
       return true;
     });
     const arr = [...filtered];
     if (sort === 'followers') arr.sort((a, b) => (b.followersCount ?? 0) - (a.followersCount ?? 0));
     else if (sort === 'posts') arr.sort((a, b) => (b.postsCount ?? 0) - (a.postsCount ?? 0));
+    else if (sort === 'visual')
+      // 비주얼 판정 점수 우선(판정 안 된 건 뒤로), 그다음 AI 점수.
+      arr.sort(
+        (a, b) =>
+          (b.visualScore ?? -1) - (a.visualScore ?? -1) || (b.aiScore ?? -1) - (a.aiScore ?? -1),
+      );
     else if (sort === 'recommended')
       // AI fit leads; unjudged results fall back to the old rule-based order so
       // a search without AI still ranks sensibly.
@@ -670,7 +686,23 @@ export function CreatorSearch() {
       );
     // 'recent' keeps the original discovery order
     return arr;
-  }, [items, buckets, toggles, sort, hideHandled, hideRejected, excludeTerms, outreach.records]);
+  }, [
+    items,
+    buckets,
+    toggles,
+    sort,
+    hideHandled,
+    hideRejected,
+    hideVisualReject,
+    excludeTerms,
+    outreach.records,
+  ]);
+
+  /** 비주얼 판정된 결과가 하나라도 있는지 (판정순·부적합숨김 UI 노출 여부). */
+  const visualJudgedCount = useMemo(
+    () => items.filter((it) => it.visualVerdict != null).length,
+    [items],
+  );
 
   const summary = useMemo(() => summarizeResults(items), [items]);
 
@@ -693,6 +725,35 @@ export function CreatorSearch() {
     setExcludeInput('');
   };
   const removeExclude = (t: string) => setExcludeTerms((prev) => prev.filter((x) => x !== t));
+
+  /** 옵션 비주얼 판정 — 상위 후보 사진을 비전 AI가 보고 조건에 맞는지 점수. */
+  const runVisual = async () => {
+    if (!campaignId || visualLoading || !visualCriteria.trim()) return;
+    setVisualLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/visual`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ criteria: visualCriteria.trim() }),
+      });
+      const json = (await res.json().catch(() => null)) as {
+        data?: { judged?: number; fit?: number };
+        error?: { message?: string };
+      } | null;
+      if (!res.ok) {
+        setError(json?.error?.message ?? '비주얼 판정에 실패했어요. 잠시 후 다시 시도해 주세요.');
+        return;
+      }
+      await openCampaign(campaignId); // reload results with visual_*
+      setSort('visual');
+      setVisualOpen(false);
+    } catch {
+      setError('비주얼 판정 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setVisualLoading(false);
+    }
+  };
   const onSelectChange = (id: string, on: boolean) =>
     setSelected((prev) => {
       const next = new Set(prev);
@@ -1136,7 +1197,7 @@ export function CreatorSearch() {
           ) : null}
 
           {/* Sort + hidden toggle */}
-          <div className="mb-5 flex flex-wrap items-center gap-2">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
             {aiRejectedCount > 0 ? (
               <FilterChip active={!hideRejected} onClick={() => setHideRejected((v) => !v)}>
                 <Sparkles className="size-3.5" />
@@ -1149,21 +1210,78 @@ export function CreatorSearch() {
                 이미 연락한 {hiddenHandledCount}명 {hideHandled ? '숨김' : '표시 중'}
               </FilterChip>
             ) : null}
-            <div className="ml-auto flex items-center gap-1.5">
-              <ArrowUpDown className="text-muted-foreground size-3.5" />
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value as SortKey)}
-                className="border-input bg-background focus-visible:ring-ring rounded-lg border px-2.5 py-1.5 text-sm outline-none focus-visible:ring-2"
+            {visualJudgedCount > 0 ? (
+              <FilterChip active={hideVisualReject} onClick={() => setHideVisualReject((v) => !v)}>
+                <Sparkles className="size-3.5" />
+                비주얼 부적합 {hideVisualReject ? '숨김' : '표시 중'}
+              </FilterChip>
+            ) : null}
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setVisualOpen((v) => !v)}
               >
-                {SORTS.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
+                <Sparkles className="size-4" />
+                비주얼로 보기
+              </Button>
+              <div className="flex items-center gap-1.5">
+                <ArrowUpDown className="text-muted-foreground size-3.5" />
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as SortKey)}
+                  className="border-input bg-background focus-visible:ring-ring rounded-lg border px-2.5 py-1.5 text-sm outline-none focus-visible:ring-2"
+                >
+                  {SORTS.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
+
+          {/* 비주얼 판정 패널 — 제품 관련 시각 기준으로 사진을 AI가 판정 (옵션·비용) */}
+          {visualOpen ? (
+            <div className="border-primary/20 bg-primary/[0.04] mb-5 rounded-xl border p-3">
+              <p className="text-muted-foreground mb-2 text-xs leading-snug">
+                제품에 맞는 <span className="text-foreground font-medium">시각 조건</span>을 쓰면,
+                상위 후보들의 프로필·게시물{' '}
+                <span className="text-foreground font-medium">사진</span>을 AI가 보고 얼마나 맞는지
+                점수를 매겨요. (사진 판정이라 AI 사용량이 늘어요)
+              </p>
+              <div className="flex gap-2">
+                <input
+                  value={visualCriteria}
+                  onChange={(e) => setVisualCriteria(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void runVisual();
+                    }
+                  }}
+                  disabled={visualLoading}
+                  placeholder="예: 머리 길고 윤기나는 여성"
+                  className="border-input bg-background focus-visible:ring-ring h-10 flex-1 rounded-lg border px-3 text-sm outline-none focus-visible:ring-2 disabled:opacity-50"
+                />
+                <Button
+                  type="button"
+                  onClick={() => void runVisual()}
+                  disabled={visualLoading || !visualCriteria.trim()}
+                  className="shrink-0"
+                >
+                  {visualLoading ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="size-4" />
+                  )}
+                  {visualLoading ? '판정 중…' : '비주얼 판정'}
+                </Button>
+              </div>
+            </div>
+          ) : null}
 
           {visible.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
