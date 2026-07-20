@@ -315,12 +315,8 @@ export function CreatorSearch() {
   const [visualCriteria, setVisualCriteria] = useState('');
   const [visualLoading, setVisualLoading] = useState(false);
   const [hideVisualReject, setHideVisualReject] = useState(false);
-  /** 가짜 팔로워 의심 계정 숨김. */
-  const [hideFake, setHideFake] = useState(false);
   /** 국가 필터 — 전체 / 한국(한글 감지) / 해외. */
   const [region, setRegion] = useState<'all' | 'kr' | 'foreign'>('all');
-  /** 참여율 낮은(죽은) 계정 자동 숨김 — 기본 ON. ER을 아는 계정에만 적용. */
-  const [hideLowEngagement, setHideLowEngagement] = useState(true);
   /** 팔로워 규모 밴드 — 원하는 등급만 결과에서 본다. localStorage로 기억. */
   const [sizeBand, setSizeBand] = useState<SizeBand>('all');
   useEffect(() => {
@@ -739,9 +735,9 @@ export function CreatorSearch() {
         if (excludeTerms.some((t) => hay.includes(t))) return false;
       }
       if (hideVisualReject && it.visualVerdict === 'reject') return false;
-      if (hideFake && it.fakeSuspect) return false;
-      // 참여율 낮은(죽은) 계정 자동 제외 — 규모별 기준으로 판정된 플래그 사용.
-      if (hideLowEngagement && it.lowEngagement) return false;
+      // 가짜 팔로워 의심·참여율 낮은 계정은 항상 자동 제외(사용자 토글 없음).
+      if (it.fakeSuspect) return false;
+      if (it.lowEngagement) return false;
       if (region === 'kr' && !it.koreanLikely) return false;
       if (region === 'foreign' && it.koreanLikely) return false;
       // 팔로워 규모 밴드 — 선택한 등급만.
@@ -781,8 +777,6 @@ export function CreatorSearch() {
     hideHandled,
     hideRejected,
     hideVisualReject,
-    hideFake,
-    hideLowEngagement,
     region,
     sizeBand,
     excludeTerms,
@@ -1435,7 +1429,7 @@ export function CreatorSearch() {
               <span className="text-foreground font-medium">한국·해외 셀럽까지 구분</span>해
               골라냈어요.
               {aiRejectedCount > 0 ? ` · 업체·부적합 ${aiRejectedCount}곳 제외` : ''}
-              {fakeCount > 0 ? ` · 가짜 의심 ${fakeCount}명` : ''}
+              {fakeCount > 0 ? ` · 가짜 의심 ${fakeCount}명 제외` : ''}
               {lowEngagementCount > 0 ? ` · 참여율 낮은 ${lowEngagementCount}명 제외` : ''}
               {regionMixed
                 ? ` · 한국 ${koreanCount}명 / 해외 ${items.length - koreanCount}명 구분`
@@ -1482,21 +1476,7 @@ export function CreatorSearch() {
                 비주얼 부적합 {hideVisualReject ? '숨김' : '표시 중'}
               </FilterChip>
             ) : null}
-            {fakeCount > 0 ? (
-              <FilterChip active={hideFake} onClick={() => setHideFake((v) => !v)}>
-                <TriangleAlert className="size-3.5" />
-                가짜 팔로워 의심 {fakeCount}명 {hideFake ? '숨김' : '표시 중'}
-              </FilterChip>
-            ) : null}
-            {lowEngagementCount > 0 ? (
-              <FilterChip
-                active={hideLowEngagement}
-                onClick={() => setHideLowEngagement((v) => !v)}
-              >
-                <TrendingUp className="size-3.5" />
-                참여율 낮은 {lowEngagementCount}명 {hideLowEngagement ? '숨김' : '표시 중'}
-              </FilterChip>
-            ) : null}
+            {/* 가짜 팔로워·저참여 계정은 토글 없이 항상 자동 제외 (배너에 제외 수만 표기). */}
             {/* 국가 필터 — 한글 감지로 한국/해외 추정. 외국 셀럽을 원하는 경우도 있어 3택. */}
             <div
               className="dark:border-border inline-flex items-center overflow-hidden rounded-full border border-slate-200/70 text-xs"
