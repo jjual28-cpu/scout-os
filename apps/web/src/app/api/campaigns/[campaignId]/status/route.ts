@@ -112,16 +112,27 @@ function looksLikeRetail(c: InstagramCreator): boolean {
 }
 
 /**
+/** 협업/공구 가치가 없는 초소형·빈 계정 최소 기준. 팔로워 37·게시물 1 같은
+ *  방금 만든/버려진 계정을 걸러낸다. 값을 '아는' 경우에만 적용(모르면 통과). */
+const MIN_FOLLOWERS = 500;
+const MIN_POSTS = 3;
+function tooSmall(c: InstagramCreator): boolean {
+  if (c.followersCount != null && c.followersCount < MIN_FOLLOWERS) return true;
+  if (c.postsCount != null && c.postsCount < MIN_POSTS) return true;
+  return false;
+}
+
+/**
  * 목적별 결과 제외 판정 — 수집된 후보를 저장 전에 거른다.
- *  - 게시물이 0개면 크리에이터도 셀러도 아니다(빈 계정). 모든 목적에서 제외.
- *  - creator: 로컬 매장 + 리테일/판매 계정 제외
- *  - gonggu : 로컬 매장만 제외(리테일/셀러는 찾는 대상이라 살림)
- *  - brand  : 브랜드 계정 자체가 목표라 거르지 않음
+ *  - creator/gonggu: 초소형·빈 계정(tooSmall) 제외 + 로컬 시술매장 제외.
+ *    creator는 리테일/판매 계정도 제외(gonggu는 셀러가 목표라 살림).
+ *  - brand : 신생 브랜드는 팔로워가 적을 수 있어 크기·업체 필터를 적용하지 않음.
  */
 function rejectForTarget(c: InstagramCreator, target: SearchTarget): boolean {
-  if (c.postsCount === 0) return true;
-  if (target === 'creator') return looksLikeLocalBiz(c) || looksLikeRetail(c);
-  if (target === 'gonggu') return looksLikeLocalBiz(c);
+  if (target === 'brand') return false;
+  if (tooSmall(c)) return true;
+  if (looksLikeLocalBiz(c)) return true;
+  if (target === 'creator' && looksLikeRetail(c)) return true;
   return false;
 }
 
