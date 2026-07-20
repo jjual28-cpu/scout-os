@@ -25,6 +25,8 @@ export type DiscoverOpportunity = SearchResult & {
   engagementRate?: number | null;
   /** 팔로워는 많은데 참여율이 비정상적으로 낮음 = 가짜 팔로워 의심. */
   fakeSuspect?: boolean;
+  /** 규모 대비 참여율이 낮은(사실상 죽은) 계정. 규모별 기준으로 판정. */
+  lowEngagement?: boolean;
   /** 소개글에서 뽑은 이메일(있으면). 협업 연락 채널. */
   email?: string | null;
   /** 한국 크리에이터 추정(이름·소개에 한글). 글로벌 결과에서 한국/해외 구분용. */

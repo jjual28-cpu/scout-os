@@ -185,13 +185,6 @@ function inBucket(f: number, b: Bucket): boolean {
   return f >= 50_000;
 }
 
-/**
- * 참여율 하한 — 이보다 낮으면 팔로워는 있어도 반응이 사실상 죽은 계정으로 본다.
- * 인스타 평균 참여율은 규모와 무관하게 최소 1%대라, 0.5% 미만은 어느 크기든 낮은 편.
- * (참여율을 알 수 있는 계정에만 적용 — ER=null이면 판단 불가라 숨기지 않음)
- */
-const LOW_ER_THRESHOLD = 0.5;
-
 /** 팔로워 규모 밴드 — 원하는 인플루언서 등급만 결과에서 보기(마케팅 통용 구간). */
 type SizeBand = 'all' | 'nano' | 'micro' | 'mid' | 'macro';
 const SIZE_BANDS: { id: SizeBand; label: string; test: (f: number) => boolean }[] = [
@@ -747,9 +740,8 @@ export function CreatorSearch() {
       }
       if (hideVisualReject && it.visualVerdict === 'reject') return false;
       if (hideFake && it.fakeSuspect) return false;
-      // 참여율 낮은(죽은) 계정 자동 제외 — ER을 아는 계정에만 적용(모르면 통과).
-      if (hideLowEngagement && it.engagementRate != null && it.engagementRate < LOW_ER_THRESHOLD)
-        return false;
+      // 참여율 낮은(죽은) 계정 자동 제외 — 규모별 기준으로 판정된 플래그 사용.
+      if (hideLowEngagement && it.lowEngagement) return false;
       if (region === 'kr' && !it.koreanLikely) return false;
       if (region === 'foreign' && it.koreanLikely) return false;
       // 팔로워 규모 밴드 — 선택한 등급만.
@@ -805,12 +797,7 @@ export function CreatorSearch() {
   /** 가짜 팔로워 의심 계정 수 (있으면 숨김 칩 노출). */
   const fakeCount = useMemo(() => items.filter((it) => it.fakeSuspect).length, [items]);
   /** 참여율 낮은(죽은) 계정 수 (있으면 숨김 칩 노출). */
-  const lowEngagementCount = useMemo(
-    () =>
-      items.filter((it) => it.engagementRate != null && it.engagementRate < LOW_ER_THRESHOLD)
-        .length,
-    [items],
-  );
+  const lowEngagementCount = useMemo(() => items.filter((it) => it.lowEngagement).length, [items]);
   /** 한국 추정 셀럽 수 (한글 감지). 국가 필터·문구 노출 판단용. */
   const koreanCount = useMemo(() => items.filter((it) => it.koreanLikely).length, [items]);
   /** 한국·해외가 섞여 있을 때만 국가 구분이 의미 있음(둘 다 1명 이상). */

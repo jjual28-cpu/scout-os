@@ -51,3 +51,9 @@ Thumbs.db
 # Misc
 *.pem
 .vercel
+
+# 영업 자료(바이너리) — 저장소에 넣지 않음
+ScoutOS_영업제안서*
+*.pptx
+*.mp4
+*.gif

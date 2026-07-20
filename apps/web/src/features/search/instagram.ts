@@ -54,11 +54,35 @@ export function engagementRate(c: InstagramCreator): number | null {
 }
 
 /**
- * 가짜 팔로워 의심 — 팔로워는 많은데 반응(참여율)이 비정상적으로 낮은 계정.
- * 보수적으로 판단(오탐 최소화): 2만 이상인데 참여율 0.8% 미만.
+ * 규모별 "건강한 참여율" 하한(%). 큰 계정일수록 참여율이 자연히 낮으므로 기준도
+ * 낮아진다. (평평한 기준을 쓰면 메가셀럽이 저참여로 오판되고, 팔로워 몇십 명짜리
+ * 계정은 좋아요 몇 개만으로 참여율이 수백%가 되어 되레 통과한다.)
+ */
+function lowErThreshold(followers: number): number {
+  if (followers < 10_000) return 1.0;
+  if (followers < 100_000) return 0.6;
+  if (followers < 1_000_000) return 0.3;
+  return 0.15;
+}
+
+/**
+ * 참여율 낮은(사실상 죽은) 계정 — 규모 대비 반응이 낮을 때. 팔로워가 너무 적으면
+ * (1천 미만) 참여율이 불안정해 판단하지 않는다(오탐 방지).
+ */
+export function isLowEngagement(c: InstagramCreator, er: number | null): boolean {
+  const f = c.followersCount ?? 0;
+  if (er == null || f < 1_000) return false;
+  return er < lowErThreshold(f);
+}
+
+/**
+ * 가짜 팔로워 의심 — 팔로워는 큰데 참여율이 규모 기준의 절반에도 못 미치는 계정만.
+ * 매우 보수적(5만 이상 + 규모기준×0.5 미만)이라 정상 메가셀럽은 걸리지 않는다.
  */
 export function isFakeSuspect(c: InstagramCreator, er: number | null): boolean {
-  return er != null && (c.followersCount ?? 0) >= 20_000 && er < 0.8;
+  const f = c.followersCount ?? 0;
+  if (er == null || f < 50_000) return false;
+  return er < lowErThreshold(f) * 0.5;
 }
 
 /** 소개글에서 이메일 추출(있으면). 협업 연락 채널로 쓴다. */
@@ -114,6 +138,7 @@ export function toDiscoverOpportunity(creator: InstagramCreator): DiscoverOpport
     biography: creator.biography,
     engagementRate: er,
     fakeSuspect: isFakeSuspect(creator, er),
+    lowEngagement: isLowEngagement(creator, er),
     email: extractEmail(creator.biography),
     koreanLikely: looksKorean(creator),
   };
