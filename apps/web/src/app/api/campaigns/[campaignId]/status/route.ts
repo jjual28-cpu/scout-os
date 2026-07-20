@@ -49,13 +49,12 @@ function looksLikeSeller(c: InstagramCreator, seed: string): boolean {
 }
 
 /**
- * 지역업체·로컬샵·시술/방문 서비스 신호. 뷰티 해시태그를 달아 검색에 딸려오지만
- * 협업할 콘텐츠 셀럽이 아니라 '가게'다 (예: 울산눈썹문신, 세종피부관리, ○○셀렉트샵).
- * 이름·아이디·소개 어디든 이 단어가 있으면 업체로 본다. target==='creator' 에서만 적용.
- * (지역업체 자체를 찾는 검색은 target/의도가 다르므로 여기서 안 걸러짐)
+ * 지역 시술·방문 서비스 매장 신호 (예: 세종피부관리, 대구눈썹문신, 부천 탈모관리).
+ * 이런 곳은 협업할 콘텐츠 셀럽도, 내 상품을 팔아줄 공구 셀러도 아니다 — 자기 시술을
+ * 파는 '가게'다. 그래서 creator·gonggu 검색 모두에서 걸러낸다.
  */
-const BUSINESS_SIGNALS = [
-  // 뷰티 시술·로컬샵
+const LOCAL_BIZ_SIGNALS = [
+  // 뷰티·의료 시술 로컬샵
   '눈썹문신',
   '반영구',
   '속눈썹',
@@ -80,15 +79,7 @@ const BUSINESS_SIGNALS = [
   '필라테스',
   '요가원',
   '공방',
-  // 판매·유통·리테일
-  '셀렉트샵',
-  '편집샵',
-  '소품샵',
-  '스마트스토어',
-  '도매',
-  '유통',
-  '쇼핑몰',
-  // 예약·방문 신호(주로 소개글)
+  // 예약·방문 안내(= 매장 계정의 결정적 신호)
   '예약문의',
   '예약제',
   '시술문의',
@@ -99,10 +90,75 @@ const BUSINESS_SIGNALS = [
   '방문예약',
   '상담문의',
 ];
-/** 지역업체/로컬샵/방문서비스 판별 — 이름·아이디·소개 전체를 본다. */
-function looksLikeBusiness(c: InstagramCreator): boolean {
-  const hay = `${c.username} ${c.displayName} ${c.biography ?? ''}`.toLowerCase();
-  return BUSINESS_SIGNALS.some((w) => hay.includes(w));
+
+/**
+ * 리테일·유통 판매 신호. creator 검색에선 "협업할 사람이 아니라 판매자"라 제외하지만,
+ * gonggu(공구셀러) 검색에선 오히려 찾는 대상이므로 제외하지 않는다.
+ */
+const RETAIL_SIGNALS = ['셀렉트샵', '편집샵', '소품샵', '스마트스토어', '도매', '유통', '쇼핑몰'];
+
+function hay(c: InstagramCreator): string {
+  return `${c.username} ${c.displayName} ${c.biography ?? ''}`.toLowerCase();
+}
+/** 지역 시술·방문 매장 판별 — 셀럽 검색·공구 검색 모두에서 제외 대상. */
+function looksLikeLocalBiz(c: InstagramCreator): boolean {
+  const h = hay(c);
+  return LOCAL_BIZ_SIGNALS.some((w) => h.includes(w));
+}
+/** 리테일/유통 판매 계정 판별 — creator 검색에서만 제외. */
+function looksLikeRetail(c: InstagramCreator): boolean {
+  const h = hay(c);
+  return RETAIL_SIGNALS.some((w) => h.includes(w));
+}
+
+/**
+ * 목적별 결과 제외 판정 — 수집된 후보를 저장 전에 거른다.
+ *  - 게시물이 0개면 크리에이터도 셀러도 아니다(빈 계정). 모든 목적에서 제외.
+ *  - creator: 로컬 매장 + 리테일/판매 계정 제외
+ *  - gonggu : 로컬 매장만 제외(리테일/셀러는 찾는 대상이라 살림)
+ *  - brand  : 브랜드 계정 자체가 목표라 거르지 않음
+ */
+function rejectForTarget(c: InstagramCreator, target: SearchTarget): boolean {
+  if (c.postsCount === 0) return true;
+  if (target === 'creator') return looksLikeLocalBiz(c) || looksLikeRetail(c);
+  if (target === 'gonggu') return looksLikeLocalBiz(c);
+  return false;
+}
+
+/** 팔로워 규모 티어 — 나노/마이크로/미들/매크로. */
+function followerTier(c: InstagramCreator): number {
+  const f = c.followersCount ?? 0;
+  if (f < 10_000) return 0;
+  if (f < 100_000) return 1;
+  if (f < 500_000) return 2;
+  return 3;
+}
+
+/**
+ * 규모별 라운드로빈으로 n명을 고른다. 해시태그 수집은 최근 글을 올린 작은 계정으로
+ * 쏠리기 쉬운데(= 결과가 전부 마이크로), 티어를 번갈아 뽑으면 있는 만큼은 골고루 섞인다.
+ * 특정 티어가 비어 있으면 남은 티어가 자연히 채우므로 결과 수는 줄지 않는다.
+ */
+function spreadByFollowers(list: InstagramCreator[], n: number): InstagramCreator[] {
+  if (n <= 0) return [];
+  if (list.length <= n) return list;
+  const tiers: InstagramCreator[][] = [[], [], [], []];
+  for (const c of list) tiers[followerTier(c)]!.push(c);
+  // 티어 안에서는 큰 계정 우선(같은 티어라면 영향력 큰 쪽을 먼저 담는다).
+  for (const t of tiers) t.sort((a, b) => (b.followersCount ?? 0) - (a.followersCount ?? 0));
+  const out: InstagramCreator[] = [];
+  for (let i = 0; out.length < n; i++) {
+    let took = false;
+    for (const t of tiers) {
+      if (t.length > i) {
+        out.push(t[i]!);
+        took = true;
+        if (out.length >= n) break;
+      }
+    }
+    if (!took) break; // 모든 티어 소진
+  }
+  return out;
 }
 
 export const dynamic = 'force-dynamic';
@@ -110,7 +166,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 /** Matches the limit the Discover client sends (today's effective search target). */
-const TARGET = 24;
+const TARGET = 30;
 /** A running campaign with no progress for this long is considered stale. */
 const STALE_MS = 10 * 60 * 1000;
 
@@ -510,9 +566,9 @@ export const POST = withErrorHandling(
       if (platform !== 'instagram') {
         let creators =
           platform === 'youtube' ? creatorsFromYoutube(items) : creatorsFromTiktok(items);
-        // 셀럽 검색이면 지역업체/로컬샵을 걸러낸다(틱톡·유튜브도 동일).
-        if (target === 'creator') creators = creators.filter((cr) => !looksLikeBusiness(cr));
-        creators = creators.slice(0, TARGET);
+        // 목적별 제외(로컬 매장·빈 계정 등) — 틱톡·유튜브도 동일.
+        creators = creators.filter((cr) => !rejectForTarget(cr, target));
+        creators = spreadByFollowers(creators, TARGET);
         await saveCreators(sb, userId, campaignId, query, creators, 0);
         const { count } = await existingResults(sb, userId, campaignId);
         await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null, target);
@@ -540,9 +596,14 @@ export const POST = withErrorHandling(
         }
 
         // Stage 2 — enriched profiles → save → judge → finish.
-        const creators = profilesFromItems(items).slice(0, TARGET);
+        // 태그 검색도 동일하게: 로컬 매장·빈 계정 제외 + 규모 골고루.
+        const enrichedTagged = profilesFromItems(items);
+        const creators = spreadByFollowers(
+          enrichedTagged.filter((cr) => !rejectForTarget(cr, target)),
+          TARGET,
+        );
         await saveCreators(sb, userId, campaignId, query, creators, 0);
-        await upsertPool('instagram', creators);
+        await upsertPool('instagram', enrichedTagged);
         const { count } = await existingResults(sb, userId, campaignId);
         // Tell the AI these came from tagging a brand — that's the signal.
         await applyAiMatch(
@@ -560,15 +621,22 @@ export const POST = withErrorHandling(
       // ── Keyword mode ───────────────────────────────────────────────────────
       // Stage 1 — profile (account-name) search results.
       if (stage === 1) {
-        let creators = profilesFromItems(items).slice(0, TARGET);
+        // 자르기 전에 먼저 거른다 — 순서가 반대면 걸러질 계정이 자리를 차지해 손해다.
+        const stage1All = profilesFromItems(items);
         // 셀럽 찾기: 이름 검색이 데려온 판매자/브랜드 계정을 걸러낸다. 걸러서 수가
         // 줄면 아래 "충분" 조건에 안 걸려 해시태그→작성자(진짜 크리에이터)로 넘어간다.
-        if (target === 'creator') {
-          const seed = (plan?.searchTerm || query).toLowerCase();
-          creators = creators.filter((cr) => !looksLikeSeller(cr, seed) && !looksLikeBusiness(cr));
-        }
+        const seed = (plan?.searchTerm || query).toLowerCase();
+        const creators = spreadByFollowers(
+          stage1All.filter(
+            (cr) =>
+              !rejectForTarget(cr, target) &&
+              // 계정명에 제품명이 박힌 판매 계정은 셀럽 검색에서만 제외(공구는 셀러가 목표).
+              !(target === 'creator' && looksLikeSeller(cr, seed)),
+          ),
+          TARGET,
+        );
         await saveCreators(sb, userId, campaignId, query, creators, 0);
-        await upsertPool('instagram', creators);
+        await upsertPool('instagram', stage1All);
         const { count } = await existingResults(sb, userId, campaignId);
 
         if (count >= Math.min(TARGET, SEARCH_MIN_SUFFICIENT)) {
@@ -602,16 +670,15 @@ export const POST = withErrorHandling(
         let toScrape = toEnrich;
         if (!TREND_RE.test(matchContext)) {
           const { pooled, missing } = await getPooled('instagram', toEnrich);
-          // 셀럽 검색이면 풀에서 온 계정도 지역업체/로컬샵을 걸러낸다.
-          const cleanPooled =
-            target === 'creator' ? pooled.filter((cr) => !looksLikeBusiness(cr)) : pooled;
+          // 풀에서 온 계정도 목적별 제외를 똑같이 적용.
+          const cleanPooled = pooled.filter((cr) => !rejectForTarget(cr, target));
           if (cleanPooled.length > 0) {
             await saveCreators(
               sb,
               userId,
               campaignId,
               query,
-              cleanPooled.slice(0, Math.max(TARGET - count, 0)),
+              spreadByFollowers(cleanPooled, Math.max(TARGET - count, 0)),
               count,
             );
           }
@@ -638,10 +705,9 @@ export const POST = withErrorHandling(
       const { count: before } = await existingResults(sb, userId, campaignId);
       const room = Math.max(TARGET - before, 0);
       const enriched = profilesFromItems(items);
-      // 셀럽 검색이면 지역업체/로컬샵을 결과에서 빼고 저장(풀 캐시에는 원본을 남긴다).
-      const toSave =
-        target === 'creator' ? enriched.filter((cr) => !looksLikeBusiness(cr)) : enriched;
-      await saveCreators(sb, userId, campaignId, query, toSave.slice(0, room), before);
+      // 목적별 제외 후, 규모가 한쪽으로 쏠리지 않게 골고루 뽑아 저장(풀 캐시엔 원본 유지).
+      const toSave = enriched.filter((cr) => !rejectForTarget(cr, target));
+      await saveCreators(sb, userId, campaignId, query, spreadByFollowers(toSave, room), before);
       await upsertPool('instagram', enriched); // feed the shared cache
       const { count } = await existingResults(sb, userId, campaignId);
       await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null, target);

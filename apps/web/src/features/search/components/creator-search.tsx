@@ -415,7 +415,7 @@ export function CreatorSearch() {
       if (!user) return false;
       const { data: row } = await sb
         .from('campaigns')
-        .select('id,query,status,error,ai_error,created_at,completed_at,started_at')
+        .select('id,query,status,error,ai_error,created_at,completed_at,started_at,search_target')
         .eq('id', id)
         .eq('user_id', user.id)
         .maybeSingle();
@@ -429,8 +429,13 @@ export function CreatorSearch() {
         created_at: string;
         completed_at: string | null;
         started_at: string | null;
+        search_target: string | null;
       };
       setAiError(c.ai_error);
+      // 토글은 '보고 있는 캠페인이 무슨 목적으로 검색됐는지'를 보여줘야 한다. 안 그러면
+      // AI 직원(공구)으로 넘어와도 이전 로컬 선택(셀럽)이 남아 잘못 표시된다.
+      if (c.search_target === 'gonggu' || c.search_target === 'brand') setTarget(c.search_target);
+      else if (c.search_target === 'creator') setTarget('creator');
 
       setCampaignId(c.id);
       setLastViewedCampaign(c.id); // Discover reopens this session next time
@@ -622,7 +627,7 @@ export function CreatorSearch() {
     // tagged is inherently a creator hunt — the server pins it, we just agree.
     const body: Record<string, unknown> = {
       query: q,
-      limit: 24,
+      limit: 30,
       force,
       mode,
       target: mode === 'tagged' ? 'creator' : target,

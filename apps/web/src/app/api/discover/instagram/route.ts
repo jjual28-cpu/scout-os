@@ -26,7 +26,7 @@ export const maxDuration = 60;
 
 const PLATFORM = 'instagram';
 /** Matches the Discover client's limit (today's effective search target). */
-const DEFAULT_LIMIT = 24;
+const DEFAULT_LIMIT = 30;
 const CACHE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const bodySchema = z.object({

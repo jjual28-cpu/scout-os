@@ -132,7 +132,9 @@ function normalize(raw: any): InstagramCreator | null {
     biography: pickStr(o, ['biography', 'bio']),
     followersCount: pickNum(o, ['followersCount', 'followers', 'edge_followed_by']),
     followingCount: pickNum(o, ['followsCount', 'followingCount', 'following', 'edge_follow']),
-    postsCount: pickNum(o, ['postsCount', 'igtvVideoCount', 'edge_owner_to_timeline_media']),
+    // ⚠️ igtvVideoCount 를 넣으면 안 된다 — IGTV를 안 올리는 대부분의 계정에서 0이라,
+    // postsCount 가 없을 때 0으로 잘못 채워져 "게시물 0개"로 보이고 필터에 걸린다.
+    postsCount: pickNum(o, ['postsCount', 'mediaCount', 'edge_owner_to_timeline_media']),
     isVerified: Boolean(o.verified ?? o.isVerified ?? o.is_verified),
     category: pickStr(o, ['businessCategoryName', 'category', 'categoryName']),
     ...recentActivity(o),
@@ -378,5 +380,5 @@ export const SEARCH_TARGET = TARGET;
 export const SEARCH_MIN_SUFFICIENT = MIN_SUFFICIENT;
 /** Stage-3 enrichment cap (mirrors the synchronous pipeline's buffer). */
 export function stage3Cap(need: number): number {
-  return Math.min(Math.max(need, 0) + 4, 24);
+  return Math.min(Math.max(need, 0) + 6, 40);
 }
