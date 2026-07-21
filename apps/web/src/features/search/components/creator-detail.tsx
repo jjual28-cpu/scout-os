@@ -61,7 +61,9 @@ export function CreatorDetail({ id }: { id: string }) {
   const { template: dmTemplate } = useDmTemplate();
   const { products } = useProducts();
   const [dmProductId, setDmProductId] = useState<string>('');
-  const dmProduct = products.find((p) => p.id === dmProductId) ?? products[0] ?? null;
+  // 사용자가 고른 상품만 사용. 예전엔 products[0]로 폴백해서, 구강케어로 찾은 셀럽에게도
+  // 목록 첫 상품(예: 메이크업박스) DM이 나가던 버그가 있었다 → 폴백 제거.
+  const dmProduct = products.find((p) => p.id === dmProductId) ?? null;
 
   // Notes: controlled + debounced autosave.
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
@@ -359,25 +361,37 @@ export function CreatorDetail({ id }: { id: string }) {
           </span>
         </div>
 
-        {/* DM 스타일 템플릿을 쓸 때 — 어떤 상품으로 보낼지({상품}/{브랜드} 채움) */}
-        {dmTemplate.trim() && products.length > 0 ? (
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="text-muted-foreground inline-flex items-center gap-1 text-xs">
-              <Sparkles className="text-primary size-3.5" />내 DM 스타일 사용 · 상품
-            </span>
-            <select
-              value={dmProduct?.id ?? ''}
-              onChange={(e) => setDmProductId(e.target.value)}
-              className="border-input bg-background focus-visible:ring-ring h-8 rounded-lg border px-2 text-xs outline-none focus-visible:ring-2"
-            >
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name || '(이름 없음)'}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : null}
+        {/* 어떤 상품으로 DM을 쓸지 — 항상 선택 가능. 안 고르면 상품 없이(협업 제안만)
+            생성한다. (예전엔 템플릿 있을 때만 보이고, 기본 첫 상품이 자동으로 들어갔음) */}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {products.length > 0 ? (
+            <>
+              <span className="text-muted-foreground inline-flex items-center gap-1 text-xs">
+                <Sparkles className="text-primary size-3.5" />
+                DM에 넣을 상품
+              </span>
+              <select
+                value={dmProductId}
+                onChange={(e) => setDmProductId(e.target.value)}
+                className="border-input bg-background focus-visible:ring-ring h-8 rounded-lg border px-2 text-xs outline-none focus-visible:ring-2"
+              >
+                <option value="">상품 없이 (협업 제안만)</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name || '(이름 없음)'}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : null}
+          {/* 내 DM 스타일(템플릿) 만들러 가기 — 이 화면에서 바로 */}
+          <Button asChild variant="ghost" size="sm" className="text-primary ml-auto">
+            <Link href="/settings#dm-style">
+              <Wand2 className="size-4" />
+              {dmTemplate.trim() ? '내 DM 스타일 수정' : '내 DM 스타일 만들기'}
+            </Link>
+          </Button>
+        </div>
 
         <textarea
           value={draft ?? ''}

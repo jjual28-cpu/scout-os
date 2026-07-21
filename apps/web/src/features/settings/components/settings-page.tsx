@@ -302,9 +302,11 @@ export function SettingsPage() {
         )}
       </SectionCard>
 
-      <SectionCard title="DM 스타일" icon={<MessageSquareText className="size-4" />}>
-        <DmStyleEditor />
-      </SectionCard>
+      <div id="dm-style" className="scroll-mt-20">
+        <SectionCard title="DM 스타일" icon={<MessageSquareText className="size-4" />}>
+          <DmStyleEditor />
+        </SectionCard>
+      </div>
 
       <SectionCard title="인스타그램 연결" icon={<Instagram className="size-4" />}>
         <InstagramConnectCard />
