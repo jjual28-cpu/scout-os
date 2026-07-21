@@ -1,6 +1,17 @@
 'use client';
 
-import { Check, Copy, History, Instagram, RefreshCw, Send, Sparkles, Wand2, X } from 'lucide-react';
+import {
+  Check,
+  Copy,
+  History,
+  Instagram,
+  Loader2,
+  RefreshCw,
+  Send,
+  Sparkles,
+  Wand2,
+  X,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
@@ -9,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { cn, formatCompactNumber } from '@/lib/utils';
 
 import { generateCreatorDm } from '../creator-dm';
+import { generateStyledDm } from '../dm-generate';
 import { STAGE_META, STAGE_ORDER, stageStored, toStage, type Stage } from '../crm-stages';
 import { useDmTemplate } from '../hooks/use-dm-template';
 import { useOutreach } from '../hooks/use-outreach';
@@ -55,6 +67,7 @@ export function CreatorDrawer({
   const [draft, setDraft] = useState('');
   const [variant, setVariant] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [genLoading, setGenLoading] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -77,11 +90,35 @@ export function CreatorDrawer({
     followersCount: card.followersCount,
     reason: card.bio,
   };
-  const gen = () => {
-    const next = generateCreatorDm(dmInput, variant + 1);
-    setVariant((v) => v + 1);
-    setDraft(next);
-    outreach.setDmDraft(card.id, next);
+  // 저장한 'DM 스타일'이 있으면 그 틀로(AI 구간만 이 셀럽에 맞춰 채움), 없으면 규칙 기반.
+  const gen = async () => {
+    if (genLoading) return;
+    const v = variant + 1;
+    setVariant(v);
+    const fallback = generateCreatorDm(dmInput, v);
+    if (!dmTemplate.trim()) {
+      setDraft(fallback);
+      outreach.setDmDraft(card.id, fallback);
+      return;
+    }
+    setGenLoading(true);
+    try {
+      const { text } = await generateStyledDm({
+        template: dmTemplate,
+        creator: {
+          displayName: card.name,
+          username: card.username,
+          biography: card.bio,
+          category: card.tag,
+          followersCount: card.followersCount,
+        },
+        fallback,
+      });
+      setDraft(text);
+      outreach.setDmDraft(card.id, text);
+    } finally {
+      setGenLoading(false);
+    }
   };
   const copy = async (open: boolean) => {
     try {
@@ -204,9 +241,21 @@ export function CreatorDrawer({
               className="border-input bg-background focus-visible:ring-ring w-full resize-y rounded-lg border px-3 py-2 text-sm leading-relaxed outline-none focus-visible:ring-2"
             />
             <div className="mt-2 flex flex-wrap gap-2">
-              <Button type="button" size="sm" variant="outline" onClick={gen}>
-                {draft ? <RefreshCw className="size-4" /> : <Sparkles className="size-4" />}
-                {draft ? '다시 생성' : '초안 생성'}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void gen()}
+                disabled={genLoading}
+              >
+                {genLoading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : draft ? (
+                  <RefreshCw className="size-4" />
+                ) : (
+                  <Sparkles className="size-4" />
+                )}
+                {genLoading ? '생성 중…' : draft ? '다시 생성' : '초안 생성'}
               </Button>
               <Button type="button" size="sm" variant="outline" onClick={() => copy(false)}>
                 {copied ? <Check className="size-4" /> : <Copy className="size-4" />}

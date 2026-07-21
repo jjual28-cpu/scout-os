@@ -10,7 +10,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 import { toStage } from '../crm-stages';
 import { generateDmDraft } from '../dm';
+import { generateStyledDm } from '../dm-generate';
 import { useDmDrafts } from '../hooks/use-dm-drafts';
+import { useDmTemplate } from '../hooks/use-dm-template';
 import { useOutreach } from '../hooks/use-outreach';
 import { useSavedOpportunities } from '../hooks/use-saved-opportunities';
 import { OutreachCard } from './outreach-card';
@@ -105,7 +107,25 @@ function QueueSection({
 export function OutreachList() {
   const { saved, hydrated } = useSavedOpportunities();
   const { getDraft, setDraft } = useDmDrafts();
+  const { template: dmTemplate } = useDmTemplate();
   const outreach = useOutreach();
+
+  /** 저장한 DM 스타일이 있으면 그 틀로, 없으면 규칙 기반 초안으로. */
+  const generate = async (item: (typeof saved)[number]) => {
+    const fallback = generateDmDraft(item);
+    const { text } = await generateStyledDm({
+      template: dmTemplate,
+      creator: {
+        displayName: item.name,
+        username: item.handle ?? username(item.id),
+        biography: item.reason ?? null,
+        category: item.type ?? null,
+        followersCount: item.followersCount ?? null,
+      },
+      fallback,
+    });
+    setDraft(item.id, text);
+  };
 
   const todo = saved.filter((s) => s.status === '연락예정');
   const followUps = outreach.followUpsDueToday();
@@ -150,7 +170,7 @@ export function OutreachList() {
                     key={item.id}
                     item={item}
                     draft={getDraft(item.id)}
-                    onGenerate={() => setDraft(item.id, generateDmDraft(item))}
+                    onGenerate={() => generate(item)}
                   />
                 ))}
               </div>

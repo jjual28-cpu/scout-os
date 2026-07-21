@@ -12,20 +12,21 @@ import { OpportunityBody } from './opportunity-body';
 type OutreachCardProps = {
   item: SavedOpportunity;
   draft: string | undefined;
-  onGenerate: () => void;
+  onGenerate: () => void | Promise<void>;
 };
 
 export function OutreachCard({ item, draft, onGenerate }: OutreachCardProps) {
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const runGenerate = () => {
+  const runGenerate = async () => {
+    if (generating) return;
     setGenerating(true);
-    // Brief simulated latency so it feels like drafting — no AI/API is called.
-    window.setTimeout(() => {
-      onGenerate();
+    try {
+      await onGenerate(); // 템플릿이 있으면 실제 AI 호출, 없으면 즉시 규칙 기반
+    } finally {
       setGenerating(false);
-    }, 700);
+    }
   };
 
   const copy = async () => {
@@ -54,7 +55,12 @@ export function OutreachCard({ item, draft, onGenerate }: OutreachCardProps) {
       {/* DM 초안 */}
       <div className="mt-4">
         {!draft ? (
-          <Button type="button" className="w-full" onClick={runGenerate} disabled={generating}>
+          <Button
+            type="button"
+            className="w-full"
+            onClick={() => void runGenerate()}
+            disabled={generating}
+          >
             {generating ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
@@ -98,7 +104,7 @@ export function OutreachCard({ item, draft, onGenerate }: OutreachCardProps) {
               <Button
                 type="button"
                 variant="outline"
-                onClick={runGenerate}
+                onClick={() => void runGenerate()}
                 disabled={generating}
                 aria-label="다시 생성"
               >
