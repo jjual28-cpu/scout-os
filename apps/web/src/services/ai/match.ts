@@ -45,7 +45,7 @@ export type CreatorMatch = {
  * 찾는다(해시태그가 아니라 소개글 패턴으로 판별). 목적을 잘못 고르면 원하는 걸
  * 정확히 버린다.
  */
-export type SearchTarget = 'creator' | 'brand' | 'gonggu';
+export type SearchTarget = 'creator' | 'brand' | 'gonggu' | 'both';
 
 /**
  * 공동구매(공구) 셀러 신호 — 소개글 기반. 공구 셀러는 #공동구매 같은 해시태그를
@@ -177,9 +177,30 @@ fit 으로 볼 것 (이번 검색 목표):
 
 ${COMMON_TAIL}`;
 
+const SYSTEM_BOTH = `당신은 인플루언서 마케팅 + 공동구매 셀러 발굴 전문가입니다. 브랜드가 이 상품으로 협업하거나 공구를 맡길 만한 계정을 폭넓게 골라냅니다.
+
+두 종류를 모두 fit 으로 봅니다:
+1) 콘텐츠 크리에이터/셀럽 — 그 분야에서 직접 콘텐츠를 만들며, 협찬받아 리뷰·소개할 사람.
+2) 공동구매(공구) 셀러 — 소개글에 날짜별 공구 일정("7/10~17 바디워시"), 공구·공동구매·오픈카톡·주문서·스마트스토어 같은 판매 신호가 있는, 내 상품을 대신 팔아줄 사람.
+각 후보에 '공구 신호: 있음/없음'을 표시했으니 2) 판단에 활용하세요. 신호가 없어도 그 분야의 진짜 크리에이터면 1)로 fit.
+
+반드시 reject 할 것:
+- 브랜드·쇼핑몰 본사 공식 계정 (제조·판매사 본사 — 협업/공구 상대가 아님)
+- 지역 시술·방문 매장 (눈썹문신·피부관리·에스테틱·미용실 등. 예약·오시는길·시술 안내가 있으면 매장)
+- 정보성·뉴스·짤·검색 주제와 무관한 계정
+- 스팸, 팔로워 장사, 소개가 비어 정체불명, 게시물이 사실상 없는 빈 계정
+
+${COMMON_TAIL}`;
+
 function brandBlock(brand: BrandContext | null, query: string, target: SearchTarget): string {
   const noun =
-    target === 'brand' ? '브랜드 계정' : target === 'gonggu' ? '공구 셀러' : '크리에이터';
+    target === 'brand'
+      ? '브랜드 계정'
+      : target === 'gonggu'
+        ? '공구 셀러'
+        : target === 'both'
+          ? '셀럽/공구 셀러'
+          : '크리에이터';
 
   if (!brand || !(brand.productName || brand.brand || brand.category)) {
     return `[내 상품 정보 없음]
@@ -208,6 +229,12 @@ ${lines.join('\n')}
 ${lines.join('\n')}
 검색 의도: "${query}"
 → 이 계정이 '이 상품을 공동구매로 팔 만한 공구 셀러'인지 판단하세요. 같은 분야(뷰티·리빙·육아 등) 제품을 공구로 파는 셀러면 fit.`;
+  }
+  if (target === 'both') {
+    return `[협업하거나 공구로 팔 상품]
+${lines.join('\n')}
+검색 의도: "${query}"
+→ 이 계정이 이 상품으로 협업(리뷰·소개)하거나 공구로 팔 만한 사람인지 판단하세요. 콘텐츠 크리에이터든 공구 셀러든, 상품 분야와 맞으면 fit.`;
   }
   return `[협업을 제안할 브랜드]
 ${lines.join('\n')}
@@ -243,8 +270,8 @@ function candidateBlock(creators: InstagramCreator[], target: SearchTarget): str
         `   소개: ${bio || '(없음)'}`,
         `   카테고리: ${c.category ?? '(없음)'}`,
         `   팔로워: ${c.followersCount ?? '?'} · 게시물: ${c.postsCount ?? '?'}${c.isVerified ? ' · 인증됨' : ''}`,
-        // 공구 검색일 때만 소개글 공구 신호를 표시해 판정을 돕는다.
-        target === 'gonggu'
+        // 공구·통합 검색일 때 소개글 공구 신호를 표시해 판정을 돕는다.
+        target === 'gonggu' || target === 'both'
           ? `   공구 신호: ${looksLikeGonggu(c.biography) ? '있음' : '없음'}`
           : null,
         activityLine(c, now),
@@ -315,7 +342,13 @@ ${candidateBlock(creators, target)}`;
 
   const text = await runAi(userId, {
     system:
-      target === 'brand' ? SYSTEM_BRAND : target === 'gonggu' ? SYSTEM_GONGGU : SYSTEM_CREATOR,
+      target === 'brand'
+        ? SYSTEM_BRAND
+        : target === 'gonggu'
+          ? SYSTEM_GONGGU
+          : target === 'both'
+            ? SYSTEM_BOTH
+            : SYSTEM_CREATOR,
     prompt,
     json: true,
     // ~24 candidates × a short verdict each; leaves room without runaway cost.

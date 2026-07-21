@@ -50,7 +50,7 @@ const bodySchema = z.object({
   /** 'keyword' — 이름/해시태그 검색. 'tagged' — 이 브랜드를 태그한 계정 찾기. */
   mode: z.enum(['keyword', 'tagged']).optional(),
   /** 'creator' — 협업할 셀럽. 'brand' — 제품 파는 브랜드 공식 계정. */
-  target: z.enum(['creator', 'brand', 'gonggu']).optional(),
+  target: z.enum(['creator', 'brand', 'gonggu', 'both']).optional(),
   /** 검색 플랫폼. tiktok·youtube 는 단일 스테이지(키워드→작성자/채널)로 처리된다. */
   platform: z.enum(['instagram', 'tiktok', 'youtube']).optional(),
 });
@@ -211,7 +211,9 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
           ? `${rawQuery} (브랜드)`
           : target === 'gonggu'
             ? `${rawQuery} (공구셀러)`
-            : rawQuery),
+            : target === 'both'
+              ? `${rawQuery} (셀럽+공구)`
+              : rawQuery),
     productId: body.productId ?? null,
     brand: body.brand ?? null,
     season: body.season ?? null,

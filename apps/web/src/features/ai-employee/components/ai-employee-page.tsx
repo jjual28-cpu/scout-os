@@ -110,8 +110,8 @@ export function AiEmployeePage() {
         query: keyword,
         productId,
         source: 'ai',
-        // 상품으로 찾을 땐 그 상품을 공동구매로 팔아줄 '공구 셀러'가 목표다.
-        target: 'gonggu',
+        // 상품으로 찾을 땐 협업할 셀럽과 공구로 팔아줄 셀러를 함께 찾는다(both).
+        target: 'both',
       };
       // 틱톡·유튜브만 platform 전송(미지정=인스타). 태그 모드 없는 단일 스테이지 검색.
       if (platform !== 'instagram') body.platform = platform;
@@ -148,7 +148,7 @@ export function AiEmployeePage() {
     const pool = (aiKeywords.length ? aiKeywords : savedKeywords)
       .map((k) => k.trim())
       .filter(Boolean);
-    const keywords = pool.slice(0, 5);
+    const keywords = pool.slice(0, 6);
     const term = keywords[0] || product.category.trim() || product.name.trim();
     if (!term) {
       setError('상품 정보가 부족해요. 상품에 카테고리를 채우면 AI가 더 잘 찾아요.');
@@ -243,10 +243,10 @@ export function AiEmployeePage() {
                 <ShoppingCart className="text-primary mt-px size-3.5 shrink-0" />
                 <span className="text-foreground/80 leading-snug">
                   <span className="text-foreground font-medium">
-                    공구 셀럽 위주로 상품 검색을 합니다.
+                    협업할 셀럽 + 공구 셀러를 함께 찾아요.
                   </span>{' '}
-                  상품을 공동구매로 팔아줄 셀러(소개글에 공구 일정·주문 안내가 있는 계정)를 중심으로
-                  찾아요.
+                  협찬받아 리뷰해줄 크리에이터와, 상품을 공동구매로 팔아줄 셀러(소개글에 공구
+                  일정·주문 안내가 있는 계정)를 한 번에 찾아드려요.
                 </span>
               </div>
 

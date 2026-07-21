@@ -840,6 +840,29 @@ export function CreatorSearch() {
   };
   const removeExclude = (t: string) => setExcludeTerms((prev) => prev.filter((x) => x !== t));
 
+  /** 사용자가 만질 수 있는 필터를 전부 기본값으로. (규모·국가·제외어·숨김 토글 등)
+   *  가짜·저참여 자동 제외는 품질 보호라 여기서 되돌리지 않는다. */
+  const resetFilters = () => {
+    setBuckets(new Set());
+    setToggles(new Set());
+    setHideRejected(false);
+    setHideHandled(false);
+    setHideVisualReject(false);
+    setRegion('all');
+    chooseSizeBand('all');
+    setExcludeTerms([]);
+  };
+  /** 사용자 필터가 하나라도 켜져 있는지 — 빈 결과 안내에서 '초기화' 노출 판단. */
+  const anyFilterActive =
+    buckets.size > 0 ||
+    toggles.size > 0 ||
+    hideRejected ||
+    hideHandled ||
+    hideVisualReject ||
+    region !== 'all' ||
+    sizeBand !== 'all' ||
+    excludeTerms.length > 0;
+
   /** 옵션 비주얼 판정 — 상위 후보 사진을 비전 AI가 보고 조건에 맞는지 점수. */
   const runVisual = async () => {
     if (!campaignId || visualLoading || !visualCriteria.trim()) return;
@@ -1534,12 +1557,23 @@ export function CreatorSearch() {
               ))}
             </div>
           ) : (
-            <EmptyState
-              className="min-h-[240px] justify-center"
-              icon={<SearchX className="size-5" />}
-              title="필터 조건에 맞는 셀럽이 없어요"
-              description="필터를 조정해 보세요."
-            />
+            <div className="dark:border-border flex min-h-[240px] flex-col items-center justify-center rounded-2xl border border-slate-200/60 p-8 text-center">
+              <SearchX className="text-muted-foreground size-6" />
+              <p className="mt-3 font-medium">
+                {items.length}명을 찾았지만, 지금 필터에 다 가려졌어요
+              </p>
+              <p className="text-muted-foreground mt-1 text-sm">
+                {anyFilterActive
+                  ? '팔로워 규모·국가·제외 키워드 같은 필터가 결과를 숨기고 있어요. 초기화하면 다시 보여요.'
+                  : '조건을 조금 바꾸거나 다시 검색해 보세요.'}
+              </p>
+              {anyFilterActive ? (
+                <Button type="button" className="mt-4" onClick={resetFilters}>
+                  <RefreshCw className="size-4" />
+                  필터 초기화하고 전체 보기
+                </Button>
+              ) : null}
+            </div>
           )}
         </>
       ) : (
