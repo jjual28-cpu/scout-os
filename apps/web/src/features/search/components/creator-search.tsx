@@ -610,6 +610,16 @@ export function CreatorSearch() {
     setSelected(new Set());
     setCached(false);
     setItems([]); // clear the previous session so the first batch shows fresh
+    // 새 검색은 항상 전체로 — 이전에 걸어둔(또는 저장된) 좁히는 필터가 결과를 몰래
+    // 숨기지 않게 초기화한다. 품질 자동 제외(가짜·저참여·업체)는 계속 유지.
+    setBuckets(new Set());
+    setToggles(new Set());
+    setRegion('all');
+    chooseSizeBand('all');
+    setExcludeTerms([]);
+    setHideRejected(true);
+    setHideHandled(true);
+    setHideVisualReject(false);
 
     const meta = draftMeta.current;
     draftMeta.current = null; // one-shot
