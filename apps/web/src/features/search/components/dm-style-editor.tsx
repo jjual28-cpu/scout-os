@@ -10,7 +10,12 @@ import { DEFAULT_DM_TEMPLATE, previewTemplate } from '../dm-template';
 import { useDmTemplate } from '../hooks/use-dm-template';
 
 /** 미리보기에 쓰는 예시 값. */
-const SAMPLE_VARS = { 셀럽: '시세', 상품: '바노티 메이크업박스', 브랜드: 'FANDEAL' };
+const SAMPLE_VARS = {
+  셀럽: '시세',
+  상품: '구강케어 가글',
+  브랜드: 'FANDEAL',
+  상품설명: '입냄새 케어 · 무알콜 저자극 · 휴대 간편',
+};
 
 /**
  * "나만의 DM 스타일" 편집기. 고정 문구 + 변수({셀럽}/{상품}/{브랜드}) +
@@ -70,14 +75,16 @@ export function DmStyleEditor() {
           <br />
           변수 <code className="bg-muted rounded px-1">{'{셀럽}'}</code>{' '}
           <code className="bg-muted rounded px-1">{'{상품}'}</code>{' '}
-          <code className="bg-muted rounded px-1">{'{브랜드}'}</code> 는 자동 치환, AI 구간은{' '}
+          <code className="bg-muted rounded px-1">{'{브랜드}'}</code>{' '}
+          <code className="bg-muted rounded px-1">{'{상품설명}'}</code> 는 자동 치환(상품설명은 고른
+          상품의 특징으로 채워짐), AI 구간은{' '}
           <code className="bg-muted rounded px-1">{'[[ai: 지시]]'}</code> 로 씁니다.
         </p>
       </div>
 
       {/* 토큰 삽입 버튼 */}
       <div className="flex flex-wrap gap-1.5">
-        {(['{셀럽}', '{상품}', '{브랜드}'] as const).map((t) => (
+        {(['{셀럽}', '{상품}', '{상품설명}', '{브랜드}'] as const).map((t) => (
           <button
             key={t}
             type="button"

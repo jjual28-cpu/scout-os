@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { useProducts } from '@/features/products/hooks/use-products';
 import { cn, formatCompactNumber } from '@/lib/utils';
 
 import { generateCreatorDm } from '../creator-dm';
@@ -13,6 +14,7 @@ import { generateAiDm, generateStyledDm } from '../dm-generate';
 import { STAGE_META, STAGE_ORDER, stageStored, toStage, type Stage } from '../crm-stages';
 import { useDmTemplate } from '../hooks/use-dm-template';
 import { useOutreach } from '../hooks/use-outreach';
+import { DmStyleDialog } from './dm-style-dialog';
 
 export type BoardCard = {
   id: string;
@@ -51,12 +53,15 @@ export function CreatorDrawer({
 }) {
   const outreach = useOutreach();
   const { template: dmTemplate } = useDmTemplate();
+  const { products } = useProducts();
   const record = card ? outreach.get(card.id) : null;
 
   const [draft, setDraft] = useState('');
   const [variant, setVariant] = useState(0);
   const [copied, setCopied] = useState(false);
   const [genKind, setGenKind] = useState<'ai' | 'style' | null>(null);
+  const [dmProductId, setDmProductId] = useState('');
+  const [styleOpen, setStyleOpen] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -86,6 +91,17 @@ export function CreatorDrawer({
     category: card.tag,
     followersCount: card.followersCount,
   };
+  const dmProduct = products.find((p) => p.id === dmProductId) ?? null;
+  const brandForDm = dmProduct
+    ? {
+        productName: dmProduct.name,
+        brand: dmProduct.brand,
+        category: dmProduct.category,
+        usp: dmProduct.usp,
+        sellingPoints: dmProduct.sellingPoints,
+        target: dmProduct.target,
+      }
+    : null;
   // 두 갈래를 명확히: 'ai' = AI가 통째로 작성 / 'style' = 저장한 내 DM 스타일 틀 사용.
   const runGen = async (kind: 'ai' | 'style') => {
     if (genKind) return;
@@ -96,8 +112,13 @@ export function CreatorDrawer({
     try {
       const { text } =
         kind === 'style'
-          ? await generateStyledDm({ template: dmTemplate, creator: creatorForDm, fallback })
-          : await generateAiDm({ creator: creatorForDm, fallback });
+          ? await generateStyledDm({
+              template: dmTemplate,
+              creator: creatorForDm,
+              brand: brandForDm,
+              fallback,
+            })
+          : await generateAiDm({ creator: creatorForDm, brand: brandForDm, fallback });
       setDraft(text);
       outreach.setDmDraft(card.id, text);
     } finally {
@@ -209,13 +230,32 @@ export function CreatorDrawer({
           <div>
             <div className="mb-1.5 flex items-center justify-between">
               <p className="text-muted-foreground text-xs font-medium">DM 초안</p>
-              <Button asChild variant="ghost" size="sm" className="text-primary h-7 px-2">
-                <Link href="/settings#dm-style">
-                  <Wand2 className="size-3.5" />
-                  {dmTemplate.trim() ? '내 DM 스타일 수정' : '내 DM 스타일 만들기'}
-                </Link>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="border-primary/40 text-primary h-7 px-2"
+                onClick={() => setStyleOpen(true)}
+              >
+                <Wand2 className="size-3.5" />
+                {dmTemplate.trim() ? '내 DM 스타일 수정' : '내 DM 스타일 만들기'}
               </Button>
             </div>
+            {/* 어떤 상품으로 보낼지 — {상품}/{상품설명} 채움. 안 고르면 상품 없이. */}
+            {products.length > 0 ? (
+              <select
+                value={dmProductId}
+                onChange={(e) => setDmProductId(e.target.value)}
+                className="border-input bg-background focus-visible:ring-ring mb-2 h-8 w-full rounded-lg border px-2 text-xs outline-none focus-visible:ring-2"
+              >
+                <option value="">상품 없이 (협업 제안만)</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name || '(이름 없음)'}
+                  </option>
+                ))}
+              </select>
+            ) : null}
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -318,6 +358,7 @@ export function CreatorDrawer({
           </Button>
         </div>
       </aside>
+      <DmStyleDialog open={styleOpen} onClose={() => setStyleOpen(false)} />
     </>
   );
 }

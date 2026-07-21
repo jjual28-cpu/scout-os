@@ -27,6 +27,7 @@ import { useProducts } from '@/features/products/hooks/use-products';
 
 import { generateCreatorDm, generateCreatorFollowUpDm } from '../creator-dm';
 import { generateAiDm, generateStyledDm } from '../dm-generate';
+import { DmStyleDialog } from './dm-style-dialog';
 import { useCreator } from '../hooks/use-creator';
 import { useDmTemplate } from '../hooks/use-dm-template';
 import { useOutreach } from '../hooks/use-outreach';
@@ -56,6 +57,7 @@ export function CreatorDetail({ id }: { id: string }) {
   const [copied, setCopied] = useState(false);
   const [aiLoading, setAiLoading] = useState<'ai' | 'style' | false>(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [styleOpen, setStyleOpen] = useState(false);
 
   // DM 스타일 템플릿 + 어느 상품으로 보낼지(변수 {상품}/{브랜드} 채움).
   const { template: dmTemplate } = useDmTemplate();
@@ -337,12 +339,16 @@ export function CreatorDetail({ id }: { id: string }) {
               </select>
             </>
           ) : null}
-          {/* 내 DM 스타일(템플릿) 만들러 가기 — 이 화면에서 바로 */}
-          <Button asChild variant="ghost" size="sm" className="text-primary ml-auto">
-            <Link href="/settings#dm-style">
-              <Wand2 className="size-4" />
-              {dmTemplate.trim() ? '내 DM 스타일 수정' : '내 DM 스타일 만들기'}
-            </Link>
+          {/* 내 DM 스타일 편집 — 페이지 이동 없이 팝업으로 */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="border-primary/40 text-primary ml-auto"
+            onClick={() => setStyleOpen(true)}
+          >
+            <Wand2 className="size-4" />
+            {dmTemplate.trim() ? '내 DM 스타일 수정' : '내 DM 스타일 만들기'}
           </Button>
         </div>
 
@@ -492,6 +498,7 @@ export function CreatorDetail({ id }: { id: string }) {
         replyStatus={record.replyStatus}
         status={record.status}
       />
+      <DmStyleDialog open={styleOpen} onClose={() => setStyleOpen(false)} />
     </div>
   );
 }

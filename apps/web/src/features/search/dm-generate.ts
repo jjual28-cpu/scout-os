@@ -67,10 +67,15 @@ export async function generateStyledDm(opts: {
   if (!tpl) return { text: fallback };
 
   try {
+    // {상품설명} = 검색/선택한 상품의 설명(USP·판매포인트·카테고리를 합쳐서).
+    const 상품설명 = brand
+      ? [brand.usp, brand.sellingPoints, brand.category].filter(Boolean).join(' · ')
+      : '';
     const vars = {
       셀럽: creator.displayName || creator.username,
       상품: brand?.productName ?? '',
       브랜드: brand?.brand ?? '',
+      상품설명,
     };
     const prepared = fillVariables(tpl, vars);
     const slots = extractAiSlots(prepared);
