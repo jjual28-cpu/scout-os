@@ -862,6 +862,12 @@ export function CreatorSearch() {
     chooseSizeBand('all');
     setExcludeTerms([]);
   };
+  /** 기본으로 숨겨둔 셀럽(이미 연락·AI 부적합·비주얼 부적합)을 이 화면에서 다시 보이게. */
+  const revealHidden = () => {
+    setHideRejected(false);
+    setHideHandled(false);
+    setHideVisualReject(false);
+  };
   /** 사용자 필터가 하나라도 켜져 있는지 — 빈 결과 안내에서 '초기화' 노출 판단. */
   const anyFilterActive =
     buckets.size > 0 ||
@@ -1552,6 +1558,32 @@ export function CreatorSearch() {
               </select>
             </div>
           </div>
+
+          {/* 왜 전부 안 보이는지 항상 설명 — 기본 숨김(이미 연락·AI 부적합 등)을 투명하게 */}
+          {visible.length > 0 && visible.length < items.length ? (
+            <div className="dark:border-border mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200/60 bg-slate-50/60 px-4 py-2.5 text-sm dark:bg-transparent">
+              <span className="text-muted-foreground">
+                <span className="text-foreground font-medium">{items.length}명</span> 중{' '}
+                <span className="text-foreground font-medium">{visible.length}명</span> 표시 중
+                <span className="text-muted-foreground/90">
+                  {' '}
+                  · 숨김:
+                  {hideHandled && hiddenHandledCount > 0 ? ` 이미 연락 ${hiddenHandledCount}` : ''}
+                  {hideRejected && aiRejectedCount > 0 ? ` · AI 부적합 ${aiRejectedCount}` : ''}
+                  {lowEngagementCount > 0 ? ` · 참여율 낮음 ${lowEngagementCount}` : ''}
+                  {fakeCount > 0 ? ` · 가짜 의심 ${fakeCount}` : ''}
+                </span>
+              </span>
+              {(hideHandled && hiddenHandledCount > 0) ||
+              (hideRejected && aiRejectedCount > 0) ||
+              (hideVisualReject && visualJudgedCount > 0) ? (
+                <Button type="button" variant="outline" size="sm" onClick={revealHidden}>
+                  <Sparkles className="size-3.5" />
+                  숨긴 셀럽도 보기
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
 
           {visible.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
