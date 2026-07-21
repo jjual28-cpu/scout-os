@@ -363,6 +363,20 @@ export function CreatorSearch() {
     if (readStoredTarget() === 'brand') setTarget('brand');
   }, []);
   const chooseTarget = (t: SearchTarget) => {
+    // 검색 목적을 바꾸면 이전(다른 목적) 캠페인 화면을 비운다. 안 그러면 옛날 결과가
+    // 그대로 남아 "브랜드를 눌렀는데 공구 결과가 보인다"처럼 헷갈리고, URL의 옛 캠페인이
+    // 다시 복원되며 토글이 되돌아간다. 비우면 위 URL 동기화가 ?campaign= 도 지운다.
+    if (t !== target) {
+      setPhase('idle');
+      setItems([]);
+      setKeyword('');
+      setInput('');
+      setCampaignId(null);
+      setCached(false);
+      setError(null);
+      setAiError(null);
+      setSelected(new Set());
+    }
     setTarget(t);
     storeTarget(t);
   };
@@ -505,6 +519,25 @@ export function CreatorSearch() {
     if (!campaignId) return;
     if (myStatus === 'succeeded' || myStatus === 'failed') void openCampaign(campaignId);
   }, [campaignId, myStatus, openCampaign]);
+
+  // 화면에 띄운 캠페인을 URL(?campaign=)에 반영한다. 이게 없으면 예전에 열어둔 캠페인
+  // id가 URL에 그대로 남아, 새로고침·메뉴 이동으로 화면이 다시 뜰 때마다 그 옛날
+  // 캠페인을 복원해 토글·결과를 되돌린다(브랜드를 골라도 공구로 튕기던 버그의 뿌리).
+  // 복원(restoring)이 끝난 뒤에만 손대 — 복원이 URL을 읽기 전에 지우면 안 된다.
+  useEffect(() => {
+    if (restoring || typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const cur = url.searchParams.get('campaign');
+    if (campaignId) {
+      if (cur !== campaignId) {
+        url.searchParams.set('campaign', campaignId);
+        window.history.replaceState(null, '', url.toString());
+      }
+    } else if (cur) {
+      url.searchParams.delete('campaign');
+      window.history.replaceState(null, '', url.toString());
+    }
+  }, [campaignId, restoring]);
 
   // Completion toast tapped "바로 보기" → open that campaign even if Discover is
   // already on screen (a same-page URL change wouldn't remount this component).

@@ -684,6 +684,16 @@ export const POST = withErrorHandling(
         await upsertPool('instagram', stage1All);
         const { count } = await existingResults(sb, userId, campaignId);
 
+        // 브랜드 찾기는 stage1(계정 이름 검색)만으로 끝낸다. stage2(해시태그→작성자)는
+        // '해시태그 글을 쓴 사람(=크리에이터)'을 데려와 브랜드 검색을 오염시키고, Apify
+        // 실행이 하나 더 붙어 느려진다(연쇄 중 하나만 멈춰도 클라이언트 10분 타임아웃에
+        // 걸려 자동 취소=실패). 브랜드 공식계정은 애초에 이름 검색에서 나온다.
+        if (target === 'brand') {
+          await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null, target);
+          await markSucceeded(sb, campaignId, count);
+          return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
+        }
+
         if (count >= Math.min(TARGET, SEARCH_MIN_SUFFICIENT)) {
           await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null, target);
           await markSucceeded(sb, campaignId, count);
