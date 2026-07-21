@@ -76,6 +76,10 @@ const LOCAL_BIZ_SIGNALS = [
   '한의원',
   '치과',
   '의원',
+  '병원',
+  '약국',
+  '의료원',
+  '요양원',
   '필라테스',
   '요가원',
   '공방',
@@ -112,6 +116,29 @@ function looksLikeRetail(c: InstagramCreator): boolean {
 }
 
 /**
+ * 브랜드 본사·공식채널·정보성/웹사이트 계정 판별. 협업할 콘텐츠 셀럽도, 내 상품을
+ * 팔아줄 공구 셀러도 아니라 '회사/채널'이다 → creator·gonggu·both 모두에서 제외.
+ *  - 이름/아이디에 공식·official·브랜드
+ *  - 인스타 카테고리가 Product/service·Website·Brand·News 등(개인 크리에이터는 이런 분류가 아님)
+ */
+const BRAND_ORG_NAME = ['공식채널', '공식계정', '공식', 'official', '브랜드'];
+const ORG_CATEGORY = [
+  'product/service',
+  'website',
+  'e-commerce',
+  'brand',
+  'company',
+  'news',
+  'magazine',
+];
+function looksLikeBrandOrOrg(c: InstagramCreator): boolean {
+  const nh = `${c.username} ${c.displayName}`.toLowerCase();
+  if (BRAND_ORG_NAME.some((w) => nh.includes(w))) return true;
+  const cat = (c.category ?? '').toLowerCase();
+  return cat.length > 0 && ORG_CATEGORY.some((w) => cat.includes(w));
+}
+
+/**
 /** 협업/공구 가치가 없는 초소형·빈 계정 최소 기준. 팔로워 37·게시물 1 같은
  *  방금 만든/버려진 계정을 걸러낸다. 값을 '아는' 경우에만 적용(모르면 통과). */
 const MIN_FOLLOWERS = 500;
@@ -124,14 +151,15 @@ function tooSmall(c: InstagramCreator): boolean {
 
 /**
  * 목적별 결과 제외 판정 — 수집된 후보를 저장 전에 거른다.
- *  - creator/gonggu: 초소형·빈 계정(tooSmall) 제외 + 로컬 시술매장 제외.
- *    creator는 리테일/판매 계정도 제외(gonggu는 셀러가 목표라 살림).
+ *  - creator/gonggu/both: 초소형·빈 계정 + 로컬 시술매장 + 브랜드본사/공식채널/정보성 제외.
+ *    creator는 리테일/판매 계정도 제외(gonggu/both는 셀러가 목표라 리테일은 살림).
  *  - brand : 신생 브랜드는 팔로워가 적을 수 있어 크기·업체 필터를 적용하지 않음.
  */
 function rejectForTarget(c: InstagramCreator, target: SearchTarget): boolean {
   if (target === 'brand') return false;
   if (tooSmall(c)) return true;
   if (looksLikeLocalBiz(c)) return true;
+  if (looksLikeBrandOrOrg(c)) return true;
   if (target === 'creator' && looksLikeRetail(c)) return true;
   return false;
 }
