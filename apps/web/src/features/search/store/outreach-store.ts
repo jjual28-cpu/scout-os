@@ -221,6 +221,21 @@ export function setStatus(creatorId: string, status: string) {
   updateRecord(creatorId, { status });
 }
 
+/** 한 크리에이터의 연락 기록을 완전히 삭제. (CRM에서 '삭제'할 때 저장 목록과 함께 지운다) */
+export function removeRecord(creatorId: string) {
+  if (!(creatorId in snapshot.records)) return;
+  const next = { ...snapshot.records };
+  delete next[creatorId];
+  setSnapshot({ records: next });
+  if (mode === 'local') {
+    writeLocal(snapshot.records);
+    return;
+  }
+  if (mode === 'supabase' && userId) {
+    run(sbClient().from('outreach_activities').delete().eq('creator_id', creatorId));
+  }
+}
+
 /**
  * Move a creator to a stage with OPTIMISTIC update + rollback. Returns false if
  * the Supabase write failed (caller shows a Korean error and the UI reverts).

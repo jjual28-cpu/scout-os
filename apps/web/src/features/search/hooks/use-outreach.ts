@@ -40,5 +40,6 @@ export function useOutreach() {
     setFollowUpAt: store.setFollowUpAt,
     markContacted: store.markContacted,
     setReply: store.setReply,
+    removeRecord: store.removeRecord,
   };
 }

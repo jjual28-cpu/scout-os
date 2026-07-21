@@ -134,7 +134,11 @@ export function CrmBoard() {
     const n = selected.size;
     if (n === 0) return;
     if (!window.confirm(`선택한 ${n}명을 삭제할까요? 저장 목록에서 완전히 지워집니다.`)) return;
-    for (const id of selected) saved.remove(id);
+    // 저장 목록 + 연락 기록 둘 다 지워야 카드가 사라진다(연락 기록만 있어도 카드가 생김).
+    for (const id of selected) {
+      saved.remove(id);
+      outreach.removeRecord(id);
+    }
     setSelected(new Set());
   }
   const toggleSelect = (id: string, on: boolean) =>
