@@ -1,17 +1,6 @@
 'use client';
 
-import {
-  Check,
-  Copy,
-  History,
-  Instagram,
-  Loader2,
-  RefreshCw,
-  Send,
-  Sparkles,
-  Wand2,
-  X,
-} from 'lucide-react';
+import { Check, Copy, History, Instagram, Loader2, Send, Sparkles, Wand2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
@@ -20,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { cn, formatCompactNumber } from '@/lib/utils';
 
 import { generateCreatorDm } from '../creator-dm';
-import { generateStyledDm } from '../dm-generate';
+import { generateAiDm, generateStyledDm } from '../dm-generate';
 import { STAGE_META, STAGE_ORDER, stageStored, toStage, type Stage } from '../crm-stages';
 import { useDmTemplate } from '../hooks/use-dm-template';
 import { useOutreach } from '../hooks/use-outreach';
@@ -67,7 +56,7 @@ export function CreatorDrawer({
   const [draft, setDraft] = useState('');
   const [variant, setVariant] = useState(0);
   const [copied, setCopied] = useState(false);
-  const [genLoading, setGenLoading] = useState(false);
+  const [genKind, setGenKind] = useState<'ai' | 'style' | null>(null);
   const [noteDraft, setNoteDraft] = useState('');
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -90,34 +79,29 @@ export function CreatorDrawer({
     followersCount: card.followersCount,
     reason: card.bio,
   };
-  // 저장한 'DM 스타일'이 있으면 그 틀로(AI 구간만 이 셀럽에 맞춰 채움), 없으면 규칙 기반.
-  const gen = async () => {
-    if (genLoading) return;
+  const creatorForDm = {
+    displayName: card.name,
+    username: card.username,
+    biography: card.bio,
+    category: card.tag,
+    followersCount: card.followersCount,
+  };
+  // 두 갈래를 명확히: 'ai' = AI가 통째로 작성 / 'style' = 저장한 내 DM 스타일 틀 사용.
+  const runGen = async (kind: 'ai' | 'style') => {
+    if (genKind) return;
     const v = variant + 1;
     setVariant(v);
     const fallback = generateCreatorDm(dmInput, v);
-    if (!dmTemplate.trim()) {
-      setDraft(fallback);
-      outreach.setDmDraft(card.id, fallback);
-      return;
-    }
-    setGenLoading(true);
+    setGenKind(kind);
     try {
-      const { text } = await generateStyledDm({
-        template: dmTemplate,
-        creator: {
-          displayName: card.name,
-          username: card.username,
-          biography: card.bio,
-          category: card.tag,
-          followersCount: card.followersCount,
-        },
-        fallback,
-      });
+      const { text } =
+        kind === 'style'
+          ? await generateStyledDm({ template: dmTemplate, creator: creatorForDm, fallback })
+          : await generateAiDm({ creator: creatorForDm, fallback });
       setDraft(text);
       outreach.setDmDraft(card.id, text);
     } finally {
-      setGenLoading(false);
+      setGenKind(null);
     }
   };
   const copy = async (open: boolean) => {
@@ -245,18 +229,33 @@ export function CreatorDrawer({
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => void gen()}
-                disabled={genLoading}
+                onClick={() => void runGen('ai')}
+                disabled={genKind !== null}
               >
-                {genLoading ? (
+                {genKind === 'ai' ? (
                   <Loader2 className="size-4 animate-spin" />
-                ) : draft ? (
-                  <RefreshCw className="size-4" />
                 ) : (
                   <Sparkles className="size-4" />
                 )}
-                {genLoading ? '생성 중…' : draft ? '다시 생성' : '초안 생성'}
+                AI DM 생성
               </Button>
+              {dmTemplate.trim() ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void runGen('style')}
+                  disabled={genKind !== null}
+                  className="border-primary/40 text-primary"
+                >
+                  {genKind === 'style' ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Wand2 className="size-4" />
+                  )}
+                  내 스타일 DM
+                </Button>
+              ) : null}
               <Button type="button" size="sm" variant="outline" onClick={() => copy(false)}>
                 {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
                 {copied ? '복사됨' : '복사'}

@@ -25,6 +25,36 @@ export type DmBrand = {
   target?: string | null;
 } | null;
 
+/**
+ * "AI DM 생성" — 저장한 틀 없이 AI가 이 셀럽에 맞춰 DM 전체를 새로 쓴다(/api/ai/dm).
+ * 실패하면 fallback(규칙 기반)을 반환해 흐름이 끊기지 않는다.
+ */
+export async function generateAiDm(opts: {
+  creator: DmCreator;
+  brand?: DmBrand;
+  fallback: string;
+}): Promise<{ text: string; error?: string }> {
+  const { creator, brand = null, fallback } = opts;
+  try {
+    const res = await fetch('/api/ai/dm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ creator, brand }),
+    });
+    const json = (await res.json().catch(() => null)) as {
+      data?: { text?: string };
+      error?: { message?: string };
+    } | null;
+    const text = json?.data?.text?.trim();
+    if (!res.ok || !text) {
+      return { text: fallback, error: json?.error?.message ?? 'AI 초안 생성에 실패했어요.' };
+    }
+    return { text };
+  } catch {
+    return { text: fallback, error: 'AI 초안 생성 중 문제가 발생했어요.' };
+  }
+}
+
 export async function generateStyledDm(opts: {
   template: string;
   creator: DmCreator;

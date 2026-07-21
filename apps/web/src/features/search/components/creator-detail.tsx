@@ -26,7 +26,7 @@ import { cn, formatCompactNumber } from '@/lib/utils';
 import { useProducts } from '@/features/products/hooks/use-products';
 
 import { generateCreatorDm, generateCreatorFollowUpDm } from '../creator-dm';
-import { extractAiSlots, fillVariables, replaceAiSlots } from '../dm-template';
+import { generateAiDm, generateStyledDm } from '../dm-generate';
 import { useCreator } from '../hooks/use-creator';
 import { useDmTemplate } from '../hooks/use-dm-template';
 import { useOutreach } from '../hooks/use-outreach';
@@ -54,7 +54,7 @@ export function CreatorDetail({ id }: { id: string }) {
   const [draft, setDraft] = useState<string | null>(null);
   const [dmVariant, setDmVariant] = useState(0);
   const [copied, setCopied] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
+  const [aiLoading, setAiLoading] = useState<'ai' | 'style' | false>(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
   // DM 스타일 템플릿 + 어느 상품으로 보낼지(변수 {상품}/{브랜드} 채움).
@@ -111,11 +111,6 @@ export function CreatorDetail({ id }: { id: string }) {
     reason: creator.biography,
   };
 
-  const genDraft = () => {
-    const next = generateCreatorDm(dmInput, dmVariant);
-    setDraft(next);
-    outreach.setDmDraft(id, next);
-  };
   const regenDraft = () => {
     const v = dmVariant + 1;
     setDmVariant(v);
@@ -149,71 +144,29 @@ export function CreatorDetail({ id }: { id: string }) {
     : null;
 
   /**
-   * AI 초안. 저장된 "DM 스타일" 템플릿이 있으면 그 틀을 쓰고 AI 구간만 이 셀럽에
-   * 맞게 채운다. 없으면 예전처럼 AI가 전체를 작성한다.
+   * DM 생성 두 갈래를 명확히 분리:
+   *  - 'ai'    : AI가 이 셀럽에 맞춰 DM 전체를 새로 작성(/api/ai/dm).
+   *  - 'style' : 저장한 '내 DM 스타일' 틀을 쓰고 [[ai:]] 구간만 채움.
+   * 상품을 골랐으면 두 경우 모두 {상품}/{브랜드}·문맥에 반영된다.
    */
-  const aiDraft = async () => {
-    setAiLoading(true);
+  const runGen = async (kind: 'ai' | 'style') => {
+    if (aiLoading) return;
+    setAiLoading(kind);
     setAiError(null);
-    try {
-      const useTemplate = dmTemplate.trim().length > 0;
-
-      if (useTemplate) {
-        const vars = {
-          셀럽: creator.displayName || creator.username,
-          상품: dmProduct?.name ?? '',
-          브랜드: dmProduct?.brand ?? '',
-        };
-        const prepared = fillVariables(dmTemplate, vars);
-        const slots = extractAiSlots(prepared);
-        let texts: string[] = [];
-        if (slots.length > 0) {
-          const res = await fetch('/api/ai/dm-template', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ creator: creatorPayload, brand: brandPayload, slots }),
-          });
-          const json = (await res.json().catch(() => null)) as {
-            data?: { texts?: string[] };
-            error?: { message?: string };
-          } | null;
-          if (!res.ok) {
-            setAiError(
-              json?.error?.message ?? 'AI 초안 생성에 실패했어요. 잠시 후 다시 시도해 주세요.',
-            );
-            return;
-          }
-          texts = json?.data?.texts ?? [];
-        }
-        const assembled = replaceAiSlots(prepared, texts);
-        setDraft(assembled);
-        outreach.setDmDraft(id, assembled);
-        return;
-      }
-
-      const res = await fetch('/api/ai/dm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ creator: creatorPayload, brand: brandPayload }),
-      });
-      const json = (await res.json().catch(() => null)) as {
-        data?: { text?: string };
-        error?: { message?: string };
-      } | null;
-      const text = json?.data?.text?.trim();
-      if (!res.ok || !text) {
-        setAiError(
-          json?.error?.message ?? 'AI 초안 생성에 실패했어요. 잠시 후 다시 시도해 주세요.',
-        );
-        return;
-      }
-      setDraft(text);
-      outreach.setDmDraft(id, text);
-    } catch {
-      setAiError('AI 초안 생성 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.');
-    } finally {
-      setAiLoading(false);
-    }
+    const fallback = generateCreatorDm(dmInput, dmVariant);
+    const { text, error } =
+      kind === 'style'
+        ? await generateStyledDm({
+            template: dmTemplate,
+            creator: creatorPayload,
+            brand: brandPayload,
+            fallback,
+          })
+        : await generateAiDm({ creator: creatorPayload, brand: brandPayload, fallback });
+    if (error) setAiError(error);
+    setDraft(text);
+    outreach.setDmDraft(id, text);
+    setAiLoading(false);
   };
   const copy = async (open: boolean) => {
     const text = draft ?? '';
@@ -407,20 +360,36 @@ export function CreatorDetail({ id }: { id: string }) {
             <Send className="size-4" />
             DM 보내기
           </Button>
-          {/* Secondary */}
+          {/* 두 갈래 명확히 — AI가 통째로 쓰기 / 내 저장 스타일로 쓰기 */}
           <Button
             type="button"
             variant="outline"
-            onClick={() => void aiDraft()}
-            disabled={aiLoading}
+            onClick={() => void runGen('ai')}
+            disabled={aiLoading !== false}
           >
-            {aiLoading ? <Loader2 className="size-4 animate-spin" /> : <Wand2 className="size-4" />}
-            AI 초안
+            {aiLoading === 'ai' ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Sparkles className="size-4" />
+            )}
+            AI DM 생성
           </Button>
-          <Button type="button" variant="outline" onClick={genDraft} disabled={aiLoading}>
-            <Sparkles className="size-4" />
-            빠른 초안
-          </Button>
+          {dmTemplate.trim() ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void runGen('style')}
+              disabled={aiLoading !== false}
+              className="border-primary/40 text-primary"
+            >
+              {aiLoading === 'style' ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Wand2 className="size-4" />
+              )}
+              내 스타일 DM
+            </Button>
+          ) : null}
           <Button type="button" variant="outline" onClick={() => copy(false)}>
             {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
             {copied ? '복사됨' : '복사'}

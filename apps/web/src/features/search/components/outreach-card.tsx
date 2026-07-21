@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Copy, Loader2, RefreshCw, Sparkles } from 'lucide-react';
+import { Check, Copy, Loader2, Sparkles, Wand2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -12,20 +12,23 @@ import { OpportunityBody } from './opportunity-body';
 type OutreachCardProps = {
   item: SavedOpportunity;
   draft: string | undefined;
-  onGenerate: () => void | Promise<void>;
+  /** kind: 'ai' = AI가 통째로 작성 / 'style' = 저장한 내 DM 스타일 사용. */
+  onGenerate: (kind: 'ai' | 'style') => void | Promise<void>;
+  /** 저장한 DM 스타일이 있는지 — 있으면 '내 스타일 DM' 버튼도 보여준다. */
+  hasTemplate: boolean;
 };
 
-export function OutreachCard({ item, draft, onGenerate }: OutreachCardProps) {
-  const [generating, setGenerating] = useState(false);
+export function OutreachCard({ item, draft, onGenerate, hasTemplate }: OutreachCardProps) {
+  const [genKind, setGenKind] = useState<'ai' | 'style' | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const runGenerate = async () => {
-    if (generating) return;
-    setGenerating(true);
+  const runGenerate = async (kind: 'ai' | 'style') => {
+    if (genKind) return;
+    setGenKind(kind);
     try {
-      await onGenerate(); // 템플릿이 있으면 실제 AI 호출, 없으면 즉시 규칙 기반
+      await onGenerate(kind);
     } finally {
-      setGenerating(false);
+      setGenKind(null);
     }
   };
 
@@ -55,27 +58,42 @@ export function OutreachCard({ item, draft, onGenerate }: OutreachCardProps) {
       {/* DM 초안 */}
       <div className="mt-4">
         {!draft ? (
-          <Button
-            type="button"
-            className="w-full"
-            onClick={() => void runGenerate()}
-            disabled={generating}
-          >
-            {generating ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Sparkles className="size-4" />
-            )}
-            {generating ? 'DM 초안 생성 중…' : 'DM 초안 생성'}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              className={hasTemplate ? 'flex-1' : 'w-full'}
+              onClick={() => void runGenerate('ai')}
+              disabled={genKind !== null}
+            >
+              {genKind === 'ai' ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Sparkles className="size-4" />
+              )}
+              AI DM 생성
+            </Button>
+            {hasTemplate ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="border-primary/40 text-primary flex-1"
+                onClick={() => void runGenerate('style')}
+                disabled={genKind !== null}
+              >
+                {genKind === 'style' ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Wand2 className="size-4" />
+                )}
+                내 스타일 DM
+              </Button>
+            ) : null}
+          </div>
         ) : (
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-primary/80 text-[11px] font-medium uppercase tracking-wide">
-                DM 초안
-              </p>
-              <span className="text-muted-foreground text-[11px]">AI 생성 (mock)</span>
-            </div>
+            <p className="text-primary/80 text-[11px] font-medium uppercase tracking-wide">
+              DM 초안
+            </p>
 
             <div className="bg-muted/40 whitespace-pre-wrap rounded-lg border p-3 text-sm leading-relaxed">
               {draft}
@@ -104,17 +122,32 @@ export function OutreachCard({ item, draft, onGenerate }: OutreachCardProps) {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => void runGenerate()}
-                disabled={generating}
-                aria-label="다시 생성"
+                onClick={() => void runGenerate('ai')}
+                disabled={genKind !== null}
               >
-                {generating ? (
+                {genKind === 'ai' ? (
                   <Loader2 className="size-4 animate-spin" />
                 ) : (
-                  <RefreshCw className="size-4" />
+                  <Sparkles className="size-4" />
                 )}
-                다시 생성
+                AI
               </Button>
+              {hasTemplate ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-primary/40 text-primary"
+                  onClick={() => void runGenerate('style')}
+                  disabled={genKind !== null}
+                >
+                  {genKind === 'style' ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Wand2 className="size-4" />
+                  )}
+                  내 스타일
+                </Button>
+              ) : null}
             </div>
           </div>
         )}
