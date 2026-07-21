@@ -134,6 +134,14 @@ export function CrmBoard() {
       on ? next.add(id) : next.delete(id);
       return next;
     });
+  /** 컬럼 전체선택 토글 — 그 단계 카드가 모두 선택돼 있으면 해제, 아니면 전부 선택. */
+  const toggleSelectStage = (ids: string[]) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const allOn = ids.length > 0 && ids.every((id) => next.has(id));
+      ids.forEach((id) => (allOn ? next.delete(id) : next.add(id)));
+      return next;
+    });
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] flex-col">
@@ -231,6 +239,15 @@ export function CrmBoard() {
                 <div className="flex items-center gap-2">
                   <span className={cn('size-2 rounded-full', STAGE_META[stage].dot)} />
                   <h2 className="text-sm font-semibold">{stage}</h2>
+                  {byStage[stage].length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleSelectStage(byStage[stage].map((c) => c.id))}
+                      className="text-muted-foreground hover:text-primary text-[11px] font-medium underline-offset-2 hover:underline"
+                    >
+                      {byStage[stage].every((c) => selected.has(c.id)) ? '전체해제' : '전체선택'}
+                    </button>
+                  ) : null}
                   <span className="dark:bg-muted dark:text-muted-foreground ml-auto rounded-full bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">
                     {byStage[stage].length}
                   </span>

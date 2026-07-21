@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Copy, History, Instagram, RefreshCw, Send, Sparkles, X } from 'lucide-react';
+import { Check, Copy, History, Instagram, RefreshCw, Send, Sparkles, Wand2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
@@ -10,6 +10,7 @@ import { cn, formatCompactNumber } from '@/lib/utils';
 
 import { generateCreatorDm } from '../creator-dm';
 import { STAGE_META, STAGE_ORDER, stageStored, toStage, type Stage } from '../crm-stages';
+import { useDmTemplate } from '../hooks/use-dm-template';
 import { useOutreach } from '../hooks/use-outreach';
 
 export type BoardCard = {
@@ -48,6 +49,7 @@ export function CreatorDrawer({
   onError: (msg: string) => void;
 }) {
   const outreach = useOutreach();
+  const { template: dmTemplate } = useDmTemplate();
   const record = card ? outreach.get(card.id) : null;
 
   const [draft, setDraft] = useState('');
@@ -184,7 +186,15 @@ export function CreatorDrawer({
 
           {/* DM */}
           <div>
-            <p className="text-muted-foreground mb-1.5 text-xs font-medium">DM 초안</p>
+            <div className="mb-1.5 flex items-center justify-between">
+              <p className="text-muted-foreground text-xs font-medium">DM 초안</p>
+              <Button asChild variant="ghost" size="sm" className="text-primary h-7 px-2">
+                <Link href="/settings#dm-style">
+                  <Wand2 className="size-3.5" />
+                  {dmTemplate.trim() ? '내 DM 스타일 수정' : '내 DM 스타일 만들기'}
+                </Link>
+              </Button>
+            </div>
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
