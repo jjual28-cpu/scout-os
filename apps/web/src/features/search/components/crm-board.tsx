@@ -7,6 +7,7 @@ import {
   MoreHorizontal,
   Search,
   Send,
+  Trash2,
   X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -128,6 +129,14 @@ export function CrmBoard() {
     setSelected(new Set());
     if (failed) setError('일부 항목 저장에 실패했어요. 다시 시도해 주세요.');
   }
+  /** 선택한 셀럽을 CRM(저장 목록)에서 완전히 삭제. 되돌릴 수 없어 확인 후 실행. */
+  function bulkDelete() {
+    const n = selected.size;
+    if (n === 0) return;
+    if (!window.confirm(`선택한 ${n}명을 삭제할까요? 저장 목록에서 완전히 지워집니다.`)) return;
+    for (const id of selected) saved.remove(id);
+    setSelected(new Set());
+  }
   const toggleSelect = (id: string, on: boolean) =>
     setSelected((prev) => {
       const next = new Set(prev);
@@ -189,6 +198,55 @@ export function CrmBoard() {
         </div>
       </div>
 
+      {/* Bulk action bar — 선택 시 상단에 바로 노출(잘 보이게) */}
+      {selected.size > 0 ? (
+        <div className="border-primary/20 bg-primary/5 flex flex-wrap items-center gap-2 border-b px-4 py-2.5 sm:px-8">
+          <span className="text-sm font-semibold">{selected.size}명 선택</span>
+          <span className="bg-border mx-1 h-5 w-px" />
+          <select
+            onChange={(e) => {
+              if (e.target.value) void bulkMove(e.target.value as Stage);
+              e.target.value = '';
+            }}
+            defaultValue=""
+            className="border-input bg-background h-8 rounded-lg border px-2 text-sm"
+          >
+            <option value="" disabled>
+              상태 변경…
+            </option>
+            {STAGE_ORDER.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          <Button size="sm" variant="outline" onClick={() => void bulkMove('연락 준비')}>
+            연락 준비
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => void bulkMove('제외')}>
+            제외
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={bulkDelete}
+            className="border-rose-300 text-rose-600 hover:bg-rose-50 dark:border-rose-500/40 dark:text-rose-400 dark:hover:bg-rose-500/10"
+          >
+            <Trash2 className="size-4" />
+            삭제
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="ml-auto"
+            onClick={() => setSelected(new Set())}
+          >
+            <X className="size-4" />
+            선택 해제
+          </Button>
+        </div>
+      ) : null}
+
       {/* Board */}
       {!hydrated ? (
         <div className="flex flex-1 gap-4 overflow-x-auto p-6">
@@ -243,7 +301,12 @@ export function CrmBoard() {
                     <button
                       type="button"
                       onClick={() => toggleSelectStage(byStage[stage].map((c) => c.id))}
-                      className="text-muted-foreground hover:text-primary text-[11px] font-medium underline-offset-2 hover:underline"
+                      className={cn(
+                        'rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors',
+                        byStage[stage].every((c) => selected.has(c.id))
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-input text-muted-foreground hover:border-primary/50 hover:text-primary',
+                      )}
                     >
                       {byStage[stage].every((c) => selected.has(c.id)) ? '전체해제' : '전체선택'}
                     </button>
@@ -291,43 +354,6 @@ export function CrmBoard() {
           ))}
         </div>
       )}
-
-      {/* Bulk toolbar */}
-      {selected.size > 0 ? (
-        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-20 flex justify-center px-6">
-          <div className="bg-card pointer-events-auto flex flex-wrap items-center gap-2 rounded-2xl border p-2 pl-4 shadow-xl">
-            <span className="text-sm font-medium">{selected.size}명 선택</span>
-            <span className="bg-border mx-1 h-5 w-px" />
-            <select
-              onChange={(e) => {
-                if (e.target.value) void bulkMove(e.target.value as Stage);
-                e.target.value = '';
-              }}
-              defaultValue=""
-              className="border-input bg-background h-8 rounded-lg border px-2 text-sm"
-            >
-              <option value="" disabled>
-                상태 변경…
-              </option>
-              {STAGE_ORDER.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-            <Button size="sm" variant="outline" onClick={() => void bulkMove('연락 준비')}>
-              연락 준비
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => void bulkMove('제외')}>
-              제외
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-              <X className="size-4" />
-              해제
-            </Button>
-          </div>
-        </div>
-      ) : null}
 
       {/* Error toast */}
       {error ? (
