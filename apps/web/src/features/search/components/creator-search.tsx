@@ -304,7 +304,8 @@ export function CreatorSearch() {
     startedAt: null,
     completedAt: null,
   });
-  const [hideHandled, setHideHandled] = useState(true);
+  // 이미 연락한 셀럽도 기본으로 보인다 — 조용히 사라지면 헷갈린다는 피드백. 토글로 숨김 가능.
+  const [hideHandled, setHideHandled] = useState(false);
   /** Hide the accounts AI judged as not a real fit. On by default. */
   const [hideRejected, setHideRejected] = useState(true);
   /** 제외 키워드 — 아이디/이름/소개/카테고리에 이 단어가 있으면 결과에서 숨긴다. */
@@ -618,7 +619,7 @@ export function CreatorSearch() {
     chooseSizeBand('all');
     setExcludeTerms([]);
     setHideRejected(true);
-    setHideHandled(true);
+    setHideHandled(false);
     setHideVisualReject(false);
 
     const meta = draftMeta.current;

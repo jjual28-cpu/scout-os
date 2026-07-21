@@ -56,19 +56,33 @@ function Kpi({
   label,
   value,
   accent,
+  href,
 }: {
   label: string;
   value: string | number;
   accent?: boolean;
+  /** 있으면 클릭해 그 리스트로 이동(저장·DM·답변·협업 등). */
+  href?: string;
 }) {
-  return (
-    <div className="bg-card flex flex-col rounded-xl border px-4 py-3">
+  const inner = (
+    <>
       <span className="text-muted-foreground text-xs">{label}</span>
       <span className={cn('mt-0.5 text-2xl font-semibold tabular-nums', accent && 'text-primary')}>
         {value}
       </span>
-    </div>
+    </>
   );
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="bg-card hover:border-primary/50 hover:bg-primary/5 flex flex-col rounded-xl border px-4 py-3 transition-colors"
+      >
+        {inner}
+      </Link>
+    );
+  }
+  return <div className="bg-card flex flex-col rounded-xl border px-4 py-3">{inner}</div>;
 }
 
 const FIELD =
@@ -140,7 +154,9 @@ export function CampaignDetail({ id }: { id: string }) {
   const outreach = useOutreach();
 
   const [sort, setSort] = useState<SortKey>('rank');
-  const [showHidden, setShowHidden] = useState(false);
+  // 기본으로 전부 보인다 — 연락완료 등으로 셀럽이 조용히 사라지면 오히려 헷갈린다는
+  // 피드백. 필요하면 토글로 숨길 수 있다.
+  const [showHidden, setShowHidden] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   // DM History — this campaign's creators that have any outreach activity, newest-contacted first.
@@ -307,10 +323,10 @@ export function CampaignDetail({ id }: { id: string }) {
         ) : (
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
             <Kpi label="검색" value={c.summary.discovered} accent />
-            <Kpi label="저장" value={c.summary.saved} />
-            <Kpi label="DM" value={c.summary.dm} />
-            <Kpi label="답변" value={c.summary.reply} />
-            <Kpi label="협업" value={c.summary.collab} />
+            <Kpi label="저장" value={c.summary.saved} href="/crm" />
+            <Kpi label="DM" value={c.summary.dm} href="/crm" />
+            <Kpi label="답변" value={c.summary.reply} href="/inbox" />
+            <Kpi label="협업" value={c.summary.collab} href="/crm" />
             <Kpi label="전환율" value={`${c.summary.conversion}%`} />
           </div>
         )}
