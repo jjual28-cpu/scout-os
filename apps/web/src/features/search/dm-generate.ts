@@ -67,19 +67,14 @@ export async function generateStyledDm(opts: {
   if (!tpl) return { text: fallback };
 
   try {
-    // {상품설명} = 검색/선택한 상품의 설명(USP·판매포인트·카테고리를 합쳐서).
-    const 상품설명 = brand
-      ? [brand.usp, brand.sellingPoints, brand.category].filter(Boolean).join(' · ')
-      : '';
     const vars = {
       셀럽: creator.displayName || creator.username,
       상품: brand?.productName ?? '',
       브랜드: brand?.brand ?? '',
-      상품설명,
     };
     const prepared = fillVariables(tpl, vars);
     const slots = extractAiSlots(prepared);
-    if (slots.length === 0) return { text: replaceAiSlots(prepared, []) };
+    if (slots.length === 0) return { text: clean(replaceAiSlots(prepared, [])) };
 
     const res = await fetch('/api/ai/dm-template', {
       method: 'POST',
@@ -93,8 +88,17 @@ export async function generateStyledDm(opts: {
     if (!res.ok) {
       return { text: fallback, error: json?.error?.message ?? 'AI 초안 생성에 실패했어요.' };
     }
-    return { text: replaceAiSlots(prepared, json?.data?.texts ?? []) };
+    return { text: clean(replaceAiSlots(prepared, json?.data?.texts ?? [])) };
   } catch {
     return { text: fallback, error: 'AI 초안 생성 중 문제가 발생했어요.' };
   }
+}
+
+/** 채워지지 않은 변수({상품} 등)가 DM에 그대로 남지 않게 제거하고 빈 줄을 정리. */
+function clean(text: string): string {
+  return text
+    .replace(/\{(셀럽|상품|브랜드|상품설명)\}/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }

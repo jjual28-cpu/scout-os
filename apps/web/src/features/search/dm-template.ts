@@ -9,7 +9,7 @@
  * 생성 흐름: fillVariables → extractAiSlots → (AI 호출) → replaceAiSlots
  */
 
-export const DM_TEMPLATE_VARS = ['셀럽', '상품', '브랜드', '상품설명'] as const;
+export const DM_TEMPLATE_VARS = ['셀럽', '상품', '브랜드'] as const;
 
 /** 처음 여는 사람을 위한 기본 예시 템플릿(오너 예시 기반, 조건은 예시값). */
 export const DEFAULT_DM_TEMPLATE = `안녕하세요, {셀럽}님! 😊
@@ -27,9 +27,9 @@ export const DEFAULT_DM_TEMPLATE = `안녕하세요, {셀럽}님! 😊
 
 const AI_SLOT_RE = /\[\[ai:\s*([\s\S]*?)\]\]/gi;
 
-/** 변수({셀럽}/{상품}/{브랜드}/{상품설명})를 값으로 치환. 값이 없으면 원형 유지. */
+/** 변수({셀럽}/{상품}/{브랜드})를 값으로 치환. 값이 없으면 원형 유지. */
 export function fillVariables(template: string, vars: Partial<Record<string, string>>): string {
-  return template.replace(/\{(셀럽|상품|브랜드|상품설명)\}/g, (_all, key: string) => {
+  return template.replace(/\{(셀럽|상품|브랜드)\}/g, (_all, key: string) => {
     const v = vars[key];
     return v && v.trim() ? v : `{${key}}`;
   });
