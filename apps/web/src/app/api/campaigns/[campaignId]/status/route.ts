@@ -151,10 +151,32 @@ const ORG_CATEGORY = [
   'charity',
   'government',
 ];
+// 아이디·이름에 '의류/샵/스토어' 단어가 박힌 자사몰·판매 계정. 인스타 카테고리를
+// 'Reel creator'처럼 위장해도(실제 사례: b.g_sportswear) 아이디가 정체를 드러낸다.
+//  - SUBSTR: 길고 명확해 부분일치해도 오탐이 없는 단어
+//  - TOKEN : 짧아서 부분일치하면 오탐 위험(small·workshop·restore) → 구분자로 쪼갠
+//            토큰과 정확히 같을 때만 매칭
+const SHOP_WORDS_SUBSTR = [
+  'sportswear',
+  'activewear',
+  'swimwear',
+  '스포츠웨어',
+  '쇼핑몰',
+  '편집샵',
+  '셀렉트샵',
+  '스마트스토어',
+];
+const SHOP_WORDS_TOKEN = ['shop', 'store', 'mall', 'wear', '스토어'];
+function looksLikeShop(nh: string): boolean {
+  if (SHOP_WORDS_SUBSTR.some((w) => nh.includes(w))) return true;
+  const tokens = nh.split(/[^a-z0-9가-힣]+/).filter(Boolean);
+  return tokens.some((t) => SHOP_WORDS_TOKEN.includes(t));
+}
 function looksLikeBrandOrOrg(c: InstagramCreator): boolean {
   const nh = `${c.username} ${c.displayName}`.toLowerCase();
   if (BRAND_ORG_NAME.some((w) => nh.includes(w))) return true;
   if (ORG_NAME_SIGNALS.some((w) => nh.includes(w))) return true;
+  if (looksLikeShop(nh)) return true;
   const cat = (c.category ?? '').toLowerCase();
   return cat.length > 0 && ORG_CATEGORY.some((w) => cat.includes(w));
 }
