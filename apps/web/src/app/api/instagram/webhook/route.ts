@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 
 import { env, isInstagramConfigured } from '@/lib/env';
 import { resolveUserByIgId } from '@/services/instagram/connection-service';
-import { saveMessage } from '@/services/instagram/inbox-service';
+import { markCreatorReplied, saveMessage } from '@/services/instagram/inbox-service';
 import { fetchPeerUsername, verifySignature } from '@/services/instagram/messaging';
 
 export const dynamic = 'force-dynamic';
@@ -66,6 +66,8 @@ export const POST = async (request: NextRequest) => {
           text,
           mid: typeof msg.mid === 'string' ? msg.mid : null,
         });
+        // 답장 온 셀럽을 CRM '답변' 칸으로 자동 이동(연락 기록 있는 경우만).
+        if (peerUsername) await markCreatorReplied(conn.userId, peerUsername);
       }
     }
   } catch (err) {

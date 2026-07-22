@@ -72,7 +72,10 @@ export const env = {
   // billed to the operator; all users share it, capped per-user per-day. The key
   // never reaches the browser. Undefined ⇒ AI features report "not configured".
   OPENROUTER_API_KEY: optional(nonEmpty, process.env.OPENROUTER_API_KEY),
-  OPENROUTER_MODEL: process.env.OPENROUTER_MODEL ?? 'google/gemini-2.5-flash-lite',
+  // 기본값을 flash로 — lite는 '넛츠 검색에 복지단체/자사몰이 섞여도 통과'처럼 주제
+  // 관련성·업체 판별이 약했다. flash는 아이디+소개+링크를 종합 판단해 훨씬 잘 거른다.
+  // (검색 1회당 몇 원 차이, 하루 상한으로 폭주 방지.) env로 언제든 오버라이드 가능.
+  OPENROUTER_MODEL: process.env.OPENROUTER_MODEL ?? 'google/gemini-2.5-flash',
   /** Vision-capable model for image-based (외모/머릿결 등) 셀럽 판정. */
   OPENROUTER_VISION_MODEL: process.env.OPENROUTER_VISION_MODEL ?? 'google/gemini-2.5-flash',
   /** Per-user AI calls allowed per day (Asia/Seoul). Guards the shared key. */
