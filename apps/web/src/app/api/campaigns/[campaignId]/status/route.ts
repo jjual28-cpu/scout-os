@@ -122,6 +122,20 @@ function looksLikeRetail(c: InstagramCreator): boolean {
  *  - 인스타 카테고리가 Product/service·Website·Brand·News 등(개인 크리에이터는 이런 분류가 아님)
  */
 const BRAND_ORG_NAME = ['공식채널', '공식계정', '공식', 'official', '브랜드'];
+// 비영리·복지·공공 '단체/기관' 이름 신호 — 협업할 크리에이터도 공구 셀러도 아니다
+// (예: 독거노인종합지원센터, ○○복지관, ○○협회). 카테고리가 비어도 이름으로 잡는다.
+const ORG_NAME_SIGNALS = [
+  '협회',
+  '재단',
+  '복지관',
+  '복지센터',
+  '지원센터',
+  '진흥원',
+  '진흥공단',
+  '공단',
+  '시민단체',
+  '자원봉사',
+];
 const ORG_CATEGORY = [
   'product/service',
   'website',
@@ -130,10 +144,17 @@ const ORG_CATEGORY = [
   'company',
   'news',
   'magazine',
+  // 비영리·정부·지역·종교·정치 '단체' 카테고리 (Nonprofit/Community/Government/
+  // Religious/Political organization) — 'organization' 하나로 대부분 걸린다.
+  'organization',
+  'nonprofit',
+  'charity',
+  'government',
 ];
 function looksLikeBrandOrOrg(c: InstagramCreator): boolean {
   const nh = `${c.username} ${c.displayName}`.toLowerCase();
   if (BRAND_ORG_NAME.some((w) => nh.includes(w))) return true;
+  if (ORG_NAME_SIGNALS.some((w) => nh.includes(w))) return true;
   const cat = (c.category ?? '').toLowerCase();
   return cat.length > 0 && ORG_CATEGORY.some((w) => cat.includes(w));
 }
