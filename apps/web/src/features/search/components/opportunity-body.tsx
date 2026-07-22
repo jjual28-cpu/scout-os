@@ -133,12 +133,15 @@ export function OpportunityBody({
         {linked(
           <span
             className={cn(
-              'dark:text-muted-foreground dark:border-border inline-flex items-center gap-1 rounded-md border border-slate-200/70 px-2 py-0.5 text-xs font-medium text-slate-500',
-              profileHref && 'hover:text-foreground transition-colors hover:border-slate-300',
+              'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold',
+              profileHref
+                ? // 사장님이 늘 눌러 프로필로 가는 링크 — 저장 버튼처럼 보라색으로 크게 강조
+                  'bg-primary/10 text-primary ring-primary/20 hover:bg-primary/20 ring-1 transition-colors'
+                : 'dark:bg-muted dark:text-muted-foreground bg-slate-100 text-slate-500',
             )}
           >
-            <PlatformIcon className="size-3" />
-            {platformMeta.label}
+            <PlatformIcon className="size-4" />
+            {platformMeta.label} 보기
           </span>,
         )}
       </div>
