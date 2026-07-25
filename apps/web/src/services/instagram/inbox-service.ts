@@ -63,7 +63,7 @@ export async function markCreatorReplied(userId: string, peerUsername: string): 
   const patch =
     cur === '협업' || cur === '제외'
       ? { reply_status: '답변옴' } // 더 진행된 단계는 유지, 답장 왔다는 표시만
-      : { status: '답변옴', reply_status: '답변옴' };
+      : { status: '답변옴', reply_status: '답변옴', follow_up_at: null }; // 답장 왔으니 후속 예약 해제
 
   const { error } = await admin
     .from('outreach_activities')

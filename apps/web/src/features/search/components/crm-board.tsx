@@ -34,6 +34,7 @@ export function CrmBoard() {
   const [platform, setPlatform] = useState('all');
   const [onlyFollowUp, setOnlyFollowUp] = useState(false);
   const [onlyReplied, setOnlyReplied] = useState(false);
+  const [onlyDue, setOnlyDue] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [dragId, setDragId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<Stage | null>(null);
@@ -42,6 +43,11 @@ export function CrmBoard() {
   const [error, setError] = useState<string | null>(null);
 
   const hydrated = saved.hydrated && outreach.hydrated;
+
+  // 후속 필요 = '연락 완료'인데 (아직 답변 없이) 예정일이 오늘이거나 지난 카드.
+  const today = new Date().toISOString().slice(0, 10);
+  const isDue = (c: BoardCard) =>
+    Boolean(c.followUpAt) && c.followUpAt! <= today && c.stage === '연락 완료';
 
   const cards: BoardCard[] = useMemo(() => {
     const map = new Map<string, BoardCard>();
@@ -58,7 +64,8 @@ export function CrmBoard() {
         profileUrl: `https://www.instagram.com/${handle}/`,
         tag: s.type,
         bio: s.reason ?? '',
-        stage: rec ? toStage(rec.status) : '저장',
+        // 저장만 하고 손대지 않은 카드(기본 상태 '미검토')는 '저장'에 둔다 — '검토'로 뒤로 튀지 않게.
+        stage: rec && rec.status !== '미검토' ? toStage(rec.status) : '저장',
         contactedAt: rec?.contactedAt ?? null,
         followUpAt: rec?.followUpAt ?? null,
         note: rec?.note || s.note || '',
@@ -95,10 +102,13 @@ export function CrmBoard() {
         if (q && !`${c.name} @${c.username}`.toLowerCase().includes(q)) return false;
         if (platform !== 'all' && c.platform !== platform) return false;
         if (onlyFollowUp && !c.followUpAt) return false;
-        if (onlyReplied && c.stage !== '답변') return false;
+        // '답변 있음' = 지금 답변 칸이거나, 답장 후 협업 등으로 더 진행된 카드까지 포함.
+        if (onlyReplied && c.stage !== '답변' && c.replyStatus !== '답변옴') return false;
+        if (onlyDue && !isDue(c)) return false;
         return true;
       }),
-    [cards, text, platform, onlyFollowUp, onlyReplied],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isDue/today are stable within a render
+    [cards, text, platform, onlyFollowUp, onlyReplied, onlyDue],
   );
 
   const byStage = useMemo(() => {
@@ -115,6 +125,8 @@ export function CrmBoard() {
     for (const c of visible) m[c.stage].push(c);
     return m;
   }, [visible]);
+
+  const dueCount = cards.filter(isDue).length;
 
   async function move(id: string, stage: Stage) {
     const ok = await outreach.setStageSafe(id, stageStored(stage));
@@ -190,6 +202,21 @@ export function CrmBoard() {
           </FilterToggle>
           <FilterToggle active={onlyReplied} onClick={() => setOnlyReplied((v) => !v)}>
             답변 있음
+          </FilterToggle>
+          <FilterToggle active={onlyDue} onClick={() => setOnlyDue((v) => !v)}>
+            후속 필요
+            {dueCount > 0 ? (
+              <span
+                className={cn(
+                  'ml-1.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold',
+                  onlyDue
+                    ? 'bg-primary/20 text-primary'
+                    : 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+                )}
+              >
+                {dueCount}
+              </span>
+            ) : null}
           </FilterToggle>
           <select
             disabled
@@ -319,7 +346,12 @@ export function CrmBoard() {
                     {byStage[stage].length}
                   </span>
                 </div>
-                {stage === '연락 준비' && byStage[stage].filter((c) => c.followUpAt).length > 0 ? (
+                {stage === '연락 완료' && byStage[stage].filter(isDue).length > 0 ? (
+                  <p className="mt-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                    후속 필요 {byStage[stage].filter(isDue).length}
+                  </p>
+                ) : stage === '연락 준비' &&
+                  byStage[stage].filter((c) => c.followUpAt).length > 0 ? (
                   <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
                     후속 예정 {byStage[stage].filter((c) => c.followUpAt).length}
                   </p>
@@ -339,6 +371,7 @@ export function CrmBoard() {
                     <CardView
                       key={card.id}
                       card={card}
+                      due={isDue(card)}
                       selected={selected.has(card.id)}
                       menuOpen={menuId === card.id}
                       onToggleSelect={toggleSelect}
@@ -403,6 +436,7 @@ function FilterToggle({
 
 function CardView({
   card,
+  due,
   selected,
   menuOpen,
   onToggleSelect,
@@ -413,6 +447,7 @@ function CardView({
   onDragEnd,
 }: {
   card: BoardCard;
+  due: boolean;
   selected: boolean;
   menuOpen: boolean;
   onToggleSelect: (id: string, on: boolean) => void;
@@ -496,6 +531,13 @@ function CardView({
         </div>
       </div>
 
+      {due ? (
+        <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+          <CalendarClock className="size-3" />
+          후속 필요{card.followUpAt ? ` · ${card.followUpAt}` : ''}
+        </div>
+      ) : null}
+
       <div className="text-muted-foreground mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
         <span className="capitalize">{card.platform}</span>
         {card.followersCount != null ? (
@@ -516,7 +558,7 @@ function CardView({
               최근 연락 {card.contactedAt.slice(0, 10)}
             </p>
           ) : null}
-          {card.followUpAt ? (
+          {card.followUpAt && !due ? (
             <p className="flex items-center gap-1">
               <CalendarClock className="size-3" />
               후속 {card.followUpAt}

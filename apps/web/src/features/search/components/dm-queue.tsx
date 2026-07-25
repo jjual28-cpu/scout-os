@@ -155,9 +155,8 @@ export function DmQueue() {
   };
 
   const noDraftTargets = useMemo(
-    () => remaining.filter((s) => !outreach.get(s.id).dmDraft?.trim()).length,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [remaining],
+    () => remaining.filter((s) => !outreach.records[s.id]?.dmDraft?.trim()).length,
+    [remaining, outreach.records],
   );
 
   return (

@@ -31,6 +31,13 @@ type Snapshot = { records: RecordMap; hydrated: boolean };
 
 const KEY = 'scout:outreach-activities';
 
+/** 연락 완료 후 자동으로 잡히는 후속(follow-up) 간격(일). 답장을 놓치지 않게 한다. */
+const FOLLOW_UP_DAYS = 3;
+/** 오늘 기준 days일 뒤의 'YYYY-MM-DD'. followUpsDueToday 와 같은 UTC 기준으로 맞춘다. */
+function isoDatePlus(days: number): string {
+  return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+}
+
 let snapshot: Snapshot = { records: {}, hydrated: false };
 const SERVER_SNAPSHOT: Snapshot = { records: {}, hydrated: false };
 const listeners = new Set<() => void>();
@@ -242,7 +249,12 @@ export function removeRecord(creatorId: string) {
  */
 export async function setStageSafe(creatorId: string, status: string): Promise<boolean> {
   const prev = snapshot.records[creatorId];
-  const optimistic: OutreachRecord = { ...(prev ?? emptyRecord(creatorId)), status, creatorId };
+  const base = prev ?? emptyRecord(creatorId);
+  // '연락 완료'로 옮기면 후속일을 자동 예약(이미 있으면 유지), '답변'으로 옮기면 해제.
+  let followUpAt = base.followUpAt;
+  if (status === '연락완료' && !followUpAt) followUpAt = isoDatePlus(FOLLOW_UP_DAYS);
+  else if (status === '답변옴') followUpAt = null;
+  const optimistic: OutreachRecord = { ...base, status, followUpAt, creatorId };
   setSnapshot({ records: { ...snapshot.records, [creatorId]: optimistic } });
 
   if (mode === 'local') {
@@ -279,14 +291,22 @@ export function setFollowUpAt(creatorId: string, followUpAt: string | null) {
 /** Record a manual "연락 완료": stamp the time, bump the counter, advance status. */
 export function markContacted(creatorId: string) {
   const current = snapshot.records[creatorId] ?? emptyRecord(creatorId);
+  const replied = current.status === '답변옴';
   updateRecord(creatorId, {
     contactedAt: new Date().toISOString(),
     contactCount: current.contactCount + 1,
-    status: current.status === '답변옴' ? '답변옴' : '연락완료',
+    status: replied ? '답변옴' : '연락완료',
+    // 방금 연락했으니 후속 시계를 새로 건다(이미 답변 온 경우는 기존 값 유지).
+    followUpAt: replied ? current.followUpAt : isoDatePlus(FOLLOW_UP_DAYS),
   });
 }
 
-/** Record that the creator replied. */
+/** Record that the creator replied. 답장이 왔으니 더 쫓을 필요가 없어 후속 예약은 해제. */
 export function setReply(creatorId: string, replyNote: string) {
-  updateRecord(creatorId, { replyStatus: '답변옴', replyNote, status: '답변옴' });
+  updateRecord(creatorId, {
+    replyStatus: '답변옴',
+    replyNote,
+    status: '답변옴',
+    followUpAt: null,
+  });
 }
