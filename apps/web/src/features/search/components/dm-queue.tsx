@@ -1,7 +1,17 @@
 'use client';
 
-import { Check, Loader2, Package, Send, SkipForward, Sparkles, Wand2 } from 'lucide-react';
+import {
+  Check,
+  Loader2,
+  Package,
+  RotateCcw,
+  Send,
+  SkipForward,
+  Sparkles,
+  Wand2,
+} from 'lucide-react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 import { EmptyState } from '@/components/layout/blocks';
@@ -10,7 +20,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useProducts } from '@/features/products/hooks/use-products';
-import { formatCompactNumber } from '@/lib/utils';
+import { cn, formatCompactNumber } from '@/lib/utils';
 
 import { generateCreatorDm } from '../creator-dm';
 import { generateAiDm, generateStyledDm, type DmBrand, type DmCreator } from '../dm-generate';
@@ -45,6 +55,12 @@ export function DmQueue() {
   const { template } = useDmTemplate();
   const { products } = useProducts();
 
+  const searchParams = useSearchParams();
+  // 'followup' = 후속 예정일이 된 셀럽에게 다시 연락(재연락) / 그 외 = 아직 연락 안 한 신규.
+  const mode = searchParams.get('mode') === 'followup' ? 'followup' : 'new';
+  const focusId = searchParams.get('focus');
+  const today = new Date().toISOString().slice(0, 10);
+
   const [skipped, setSkipped] = useState<Set<string>>(new Set());
   const [dmProductId, setDmProductId] = useState('');
   const [styleOpen, setStyleOpen] = useState(false);
@@ -65,19 +81,51 @@ export function DmQueue() {
       }
     : null;
 
-  // 큐 대상 = 저장했지만 아직 연락 안 했고, 제외도 아니고, 이번 세션에 건너뛰지 않은 셀럽.
-  const remaining = useMemo(
+  // 큐 대상: 제외·건너뛴 셀럽은 항상 빼고, 모드에 따라
+  //  - 신규:  아직 연락 안 한 셀럽
+  //  - 재연락: 연락했고 후속 예정일이 오늘/지났고 아직 답변이 없는(연락완료) 셀럽
+  const remaining = useMemo(() => {
+    const list = saved.filter((s) => {
+      const r = outreach.records[s.id];
+      if (r?.status === '제외') return false;
+      if (skipped.has(s.id)) return false;
+      if (mode === 'followup') {
+        return (
+          Boolean(r?.contactedAt) &&
+          r?.status === '연락완료' &&
+          Boolean(r?.followUpAt) &&
+          r!.followUpAt! <= today
+        );
+      }
+      if (r?.contactedAt) return false;
+      return true;
+    });
+    // CRM '재연락' 버튼으로 특정 셀럽을 지정해 왔으면 그 사람을 맨 앞으로.
+    if (focusId) {
+      const i = list.findIndex((s) => s.id === focusId);
+      if (i > 0) list.unshift(list.splice(i, 1)[0]!);
+    }
+    return list;
+  }, [saved, outreach.records, skipped, mode, focusId, today]);
+  const current = remaining[0] ?? null;
+
+  // 신규/재연락 토글에 보여줄 건수.
+  const newCount = useMemo(
     () =>
       saved.filter((s) => {
         const r = outreach.records[s.id];
-        if (r?.status === '제외') return false;
-        if (r?.contactedAt) return false;
-        if (skipped.has(s.id)) return false;
-        return true;
-      }),
-    [saved, outreach.records, skipped],
+        return r?.status !== '제외' && !r?.contactedAt;
+      }).length,
+    [saved, outreach.records],
   );
-  const current = remaining[0] ?? null;
+  const followupCount = useMemo(
+    () =>
+      saved.filter((s) => {
+        const r = outreach.records[s.id];
+        return r?.status === '연락완료' && Boolean(r?.followUpAt) && r!.followUpAt! <= today;
+      }).length,
+    [saved, outreach.records, today],
+  );
 
   useEffect(() => {
     setDraft(current ? (outreach.get(current.id).dmDraft ?? '') : '');
@@ -162,9 +210,40 @@ export function DmQueue() {
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-8 sm:py-10">
       <PageHeader
-        title="DM 발송"
-        description="연락할 셀럽을 한 명씩 넘기며 빠르게 보내요. 인스타 창이 열리면 붙여넣기(Ctrl/⌘+V) + 엔터만 하면 끝."
+        title={mode === 'followup' ? '재연락' : 'DM 발송'}
+        description={
+          mode === 'followup'
+            ? '후속 예정일이 된 셀럽에게 다시 연락해요. 보내면 다음 후속일이 자동으로 새로 잡혀요.'
+            : '연락할 셀럽을 한 명씩 넘기며 빠르게 보내요. 인스타 창이 열리면 붙여넣기(Ctrl/⌘+V) + 엔터만 하면 끝.'
+        }
       />
+
+      {/* 신규 / 재연락 전환 */}
+      <div className="border-input mb-5 mt-4 inline-flex rounded-lg border p-0.5 text-sm">
+        <Link
+          href="/dm-queue"
+          className={cn(
+            'rounded-md px-3 py-1 transition-colors',
+            mode === 'new' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground',
+          )}
+        >
+          신규{newCount > 0 ? ` (${newCount})` : ''}
+        </Link>
+        <Link
+          href="/dm-queue?mode=followup"
+          className={cn(
+            'inline-flex items-center gap-1 rounded-md px-3 py-1 transition-colors',
+            mode === 'followup'
+              ? 'bg-primary text-primary-foreground'
+              : followupCount > 0
+                ? 'text-amber-600 dark:text-amber-400'
+                : 'text-muted-foreground',
+          )}
+        >
+          <RotateCcw className="size-3.5" />
+          재연락{followupCount > 0 ? ` (${followupCount})` : ''}
+        </Link>
+      </div>
 
       {/* 옵션 바 — 상품 · 스타일 · 미리 초안 */}
       <div className="mb-5 flex flex-wrap items-center gap-2">
@@ -222,8 +301,18 @@ export function DmQueue() {
         <EmptyState
           className="min-h-[320px] justify-center"
           icon={<Check className="size-5" />}
-          title={skipped.size > 0 ? '남은 셀럽을 다 처리했어요' : '보낼 셀럽이 없어요'}
-          description="셀럽 찾기에서 저장하면 여기 발송 큐에 쌓여요."
+          title={
+            skipped.size > 0
+              ? '남은 셀럽을 다 처리했어요'
+              : mode === 'followup'
+                ? '재연락할 셀럽이 없어요'
+                : '보낼 셀럽이 없어요'
+          }
+          description={
+            mode === 'followup'
+              ? "후속 예정일이 된 셀럽이 여기 모여요. CRM의 '후속 필요' 카드에서 넘어와요."
+              : '셀럽 찾기에서 저장하면 여기 발송 큐에 쌓여요.'
+          }
           action={
             skipped.size > 0 ? (
               <Button type="button" variant="outline" onClick={() => setSkipped(new Set())}>
@@ -231,7 +320,9 @@ export function DmQueue() {
               </Button>
             ) : (
               <Button asChild>
-                <Link href="/discover">셀럽 찾으러 가기</Link>
+                <Link href={mode === 'followup' ? '/crm' : '/discover'}>
+                  {mode === 'followup' ? 'CRM에서 후속 확인' : '셀럽 찾으러 가기'}
+                </Link>
               </Button>
             )
           }
@@ -240,8 +331,8 @@ export function DmQueue() {
         <>
           <div className="text-muted-foreground mb-3 flex items-center justify-between text-sm">
             <span>
-              보낼 셀럽 <span className="text-foreground font-semibold">{remaining.length}명</span>{' '}
-              남음
+              {mode === 'followup' ? '재연락할 셀럽 ' : '보낼 셀럽 '}
+              <span className="text-foreground font-semibold">{remaining.length}명</span> 남음
             </span>
             {skipped.size > 0 ? (
               <button

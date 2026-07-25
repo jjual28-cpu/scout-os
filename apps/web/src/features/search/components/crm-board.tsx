@@ -5,11 +5,13 @@ import {
   CalendarClock,
   Instagram,
   MoreHorizontal,
+  RotateCcw,
   Search,
   Send,
   Trash2,
   X,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/layout/page-header';
@@ -218,6 +220,19 @@ export function CrmBoard() {
               </span>
             ) : null}
           </FilterToggle>
+          {dueCount > 0 ? (
+            <Button
+              asChild
+              size="sm"
+              variant="outline"
+              className="h-9 border-amber-400/60 text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-500/10"
+            >
+              <Link href="/dm-queue?mode=followup">
+                <RotateCcw className="size-3.5" />
+                재연락 시작
+              </Link>
+            </Button>
+          ) : null}
           <select
             disabled
             className="border-input bg-background text-muted-foreground h-9 cursor-not-allowed rounded-lg border px-2.5 text-sm opacity-60"
@@ -579,6 +594,16 @@ function CardView({
           <Instagram className="size-3.5" />
           프로필
         </a>
+        {due ? (
+          <Link
+            href={`/dm-queue?mode=followup&focus=${encodeURIComponent(card.id)}`}
+            onClick={stop}
+            className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 px-2 py-1 text-xs font-medium text-amber-600 hover:bg-amber-500/25 dark:text-amber-400"
+          >
+            <RotateCcw className="size-3.5" />
+            재연락
+          </Link>
+        ) : null}
       </div>
     </div>
   );

@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+
 import { DmQueue } from '@/features/search';
 
 import type { Metadata } from 'next';
@@ -10,5 +12,9 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic';
 
 export default function DmQueuePage() {
-  return <DmQueue />;
+  return (
+    <Suspense>
+      <DmQueue />
+    </Suspense>
+  );
 }
