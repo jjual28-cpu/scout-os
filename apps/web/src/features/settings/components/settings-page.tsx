@@ -21,6 +21,7 @@ import {
   formatPrice,
   PLAN_ORDER,
   PLANS,
+  priceYearly,
   type PlanKey,
 } from '@/features/billing/plans';
 import { loadToss } from '@/features/billing/toss-client';
@@ -42,6 +43,7 @@ export function SettingsPage() {
   const billingResult = searchParams.get('billing');
   const tossClientKey = env.NEXT_PUBLIC_TOSS_CLIENT_KEY;
   const [billingBusy, setBillingBusy] = useState<string | null>(null);
+  const [cycle, setCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [busy, setBusy] = useState(false);
   const [test, setTest] = useState<TestState>({ kind: 'idle' });
 
@@ -60,7 +62,7 @@ export function SettingsPage() {
       const origin = window.location.origin;
       await toss.requestBillingAuth('카드', {
         customerKey: customerKeyFor(user.id),
-        successUrl: `${origin}/api/billing/callback?plan=${plan}&cycle=monthly`,
+        successUrl: `${origin}/api/billing/callback?plan=${plan}&cycle=${cycle}`,
         failUrl: `${origin}/settings?billing=fail`,
       });
       // requestBillingAuth navigates away; nothing after this runs on success.
@@ -195,23 +197,68 @@ export function SettingsPage() {
               ) : !sub.signedIn ? (
                 <p className="text-muted-foreground text-xs">로그인하면 업그레이드할 수 있어요.</p>
               ) : sub.plan.key === 'free' ? (
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => void upgrade('basic')}
-                    disabled={Boolean(billingBusy)}
-                  >
-                    {billingBusy === 'basic' ? <Loader2 className="size-4 animate-spin" /> : null}
-                    베이직 · {formatPrice(PLANS.basic.priceMonthly)}/월
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => void upgrade('pro')}
-                    disabled={Boolean(billingBusy)}
-                  >
-                    {billingBusy === 'pro' ? <Loader2 className="size-4 animate-spin" /> : null}
-                    프로 · {formatPrice(PLANS.pro.priceMonthly)}/월
-                  </Button>
+                <div className="space-y-3">
+                  {/* 월간 / 연간 선택 — 연간은 2개월 무료 */}
+                  <div className="border-input inline-flex rounded-lg border p-0.5 text-sm">
+                    <button
+                      type="button"
+                      onClick={() => setCycle('monthly')}
+                      className={cn(
+                        'rounded-md px-3 py-1 transition-colors',
+                        cycle === 'monthly'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground',
+                      )}
+                    >
+                      월간
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCycle('yearly')}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 rounded-md px-3 py-1 transition-colors',
+                        cycle === 'yearly'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground',
+                      )}
+                    >
+                      연간
+                      <span
+                        className={cn(
+                          'rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
+                          cycle === 'yearly'
+                            ? 'bg-primary-foreground/20'
+                            : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+                        )}
+                      >
+                        2개월 무료
+                      </span>
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => void upgrade('basic')}
+                      disabled={Boolean(billingBusy)}
+                    >
+                      {billingBusy === 'basic' ? <Loader2 className="size-4 animate-spin" /> : null}
+                      베이직 ·{' '}
+                      {cycle === 'yearly'
+                        ? `${formatPrice(priceYearly(PLANS.basic))}/년`
+                        : `${formatPrice(PLANS.basic.priceMonthly)}/월`}
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => void upgrade('pro')}
+                      disabled={Boolean(billingBusy)}
+                    >
+                      {billingBusy === 'pro' ? <Loader2 className="size-4 animate-spin" /> : null}
+                      프로 ·{' '}
+                      {cycle === 'yearly'
+                        ? `${formatPrice(priceYearly(PLANS.pro))}/년`
+                        : `${formatPrice(PLANS.pro.priceMonthly)}/월`}
+                    </Button>
+                  </div>
                 </div>
               ) : sub.cancelAtPeriodEnd ? (
                 <p className="text-muted-foreground text-xs">

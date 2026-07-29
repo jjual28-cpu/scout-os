@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { PLANS, type PlanKey } from '@/features/billing/plans';
+import { PLANS, YEARLY_MONTHS_CHARGED, type PlanKey } from '@/features/billing/plans';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 import { chargeBilling } from './toss';
@@ -25,8 +25,8 @@ function periodEnd(cycle: 'monthly' | 'yearly'): string {
 
 function amountFor(plan: PlanKey, cycle: 'monthly' | 'yearly'): number {
   const monthly = PLANS[plan].priceMonthly;
-  // Yearly = 10 months' price (2 months free). Monthly = as listed.
-  return cycle === 'yearly' ? monthly * 10 : monthly;
+  // Yearly = YEARLY_MONTHS_CHARGED months' price (2 months free). Monthly = as listed.
+  return cycle === 'yearly' ? monthly * YEARLY_MONTHS_CHARGED : monthly;
 }
 
 function orderId(userId: string, ts: number): string {

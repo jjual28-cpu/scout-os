@@ -38,6 +38,17 @@ export const PLANS: Record<PlanKey, Plan> = {
 
 export const PLAN_ORDER: PlanKey[] = ['free', 'basic', 'pro'];
 
+/**
+ * 연간 결제 시 청구하는 개월 수 — 12개월 중 2개월 무료(= 월가 × 10).
+ * 서버의 실제 청구액(amountFor)과 클라의 표시가 어긋나면 안 되므로 여기 한 곳에서 정한다.
+ */
+export const YEARLY_MONTHS_CHARGED = 10;
+
+/** 연간 결제 금액(원). */
+export function priceYearly(plan: Plan): number {
+  return plan.priceMonthly * YEARLY_MONTHS_CHARGED;
+}
+
 /** Coerce any stored/unknown value to a valid plan (defaults to free). */
 export function toPlanKey(value: unknown): PlanKey {
   return value === 'basic' || value === 'pro' ? value : 'free';
