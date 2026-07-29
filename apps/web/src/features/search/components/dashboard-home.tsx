@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils';
 
 import { useOutreach } from '../hooks/use-outreach';
 import { useSavedOpportunities } from '../hooks/use-saved-opportunities';
+import { OnboardingChecklist } from './onboarding-checklist';
 
 function creatorUsername(creatorId: string): string {
   return creatorId.split(':')[1] ?? creatorId;
@@ -123,6 +124,9 @@ export function DashboardHome() {
           </Button>
         }
       />
+
+      {/* 신규 사용자 활성화 — 검색→저장→DM 핵심 루프 안내. 다 하면 자동으로 사라짐. */}
+      <OnboardingChecklist />
 
       {/* 오늘 할 일 — 후속 필요·답변 대기를 첫 화면에서 바로 처리하게 한다. */}
       {dueCount > 0 || replies.length > 0 ? (
