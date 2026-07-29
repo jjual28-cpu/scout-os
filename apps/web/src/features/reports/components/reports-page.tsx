@@ -1,6 +1,16 @@
 'use client';
 
-import { BarChart3, Info, MessageSquare, Package, Reply, Search, Star, Users } from 'lucide-react';
+import {
+  BarChart3,
+  Filter,
+  Info,
+  MessageSquare,
+  Package,
+  Reply,
+  Search,
+  Star,
+  Users,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -49,6 +59,43 @@ function RangeTabs({ value, onChange }: { value: RangeKey; onChange: (r: RangeKe
 
 function Num({ children }: { children: React.ReactNode }) {
   return <span className="tabular-nums">{children}</span>;
+}
+
+/**
+ * 발굴 퍼널 — 발견→저장→DM→답변→협업의 단계별 규모와 이전 단계 대비 전환율을
+ * 가로 막대로 보여준다. 막대 폭은 첫 단계(발견) 기준 상대 비율. 어디서 이탈하는지
+ * 한눈에 드러나게 한다.
+ */
+function FunnelChart({ stages }: { stages: { label: string; value: number; bar: string }[] }) {
+  const top = stages[0]?.value ?? 0;
+  return (
+    <div className="space-y-3">
+      {stages.map((s, i) => {
+        const widthPct = top > 0 ? Math.max((s.value / top) * 100, s.value > 0 ? 3 : 0) : 0;
+        const prev = i > 0 ? stages[i - 1]!.value : null;
+        const stepConv = prev != null && prev > 0 ? Math.round((s.value / prev) * 100) : null;
+        return (
+          <div key={s.label}>
+            <div className="mb-1 flex items-center justify-between text-sm">
+              <span className="font-medium">{s.label}</span>
+              <span className="text-muted-foreground tabular-nums">
+                <span className="text-foreground font-semibold">{s.value}</span>
+                {stepConv != null ? (
+                  <span className="ml-2 text-xs">이전 대비 {stepConv}%</span>
+                ) : null}
+              </span>
+            </div>
+            <div className="dark:bg-muted h-6 w-full overflow-hidden rounded-lg bg-slate-100">
+              <div
+                className={cn('h-full rounded-lg transition-all', s.bar)}
+                style={{ width: `${widthPct}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export function ReportsPage() {
@@ -185,6 +232,22 @@ export function ReportsPage() {
               delta={<span className="text-muted-foreground">협업 ÷ DM</span>}
             />
           </div>
+
+          {/* 발굴 퍼널 — 단계별 이탈을 한눈에 */}
+          <SectionCard title="발굴 퍼널" icon={<Filter className="size-4" />} bodyClassName="mt-4">
+            <FunnelChart
+              stages={[
+                { label: '발견', value: kpis.discovered, bar: 'bg-blue-500' },
+                { label: '저장', value: kpis.saved, bar: 'bg-amber-500' },
+                { label: 'DM 발송', value: kpis.dm, bar: 'bg-fuchsia-500' },
+                { label: '답변', value: kpis.reply, bar: 'bg-emerald-500' },
+                { label: '협업', value: kpis.collab, bar: 'bg-rose-500' },
+              ]}
+            />
+            <p className="text-muted-foreground mt-3 text-xs">
+              막대 폭은 발견 대비 비율 · ‘이전 대비’는 직전 단계 대비 전환율입니다.
+            </p>
+          </SectionCard>
 
           {/* Top 검색어 / Top 캠페인 */}
           <div className="grid gap-4 lg:grid-cols-2">
