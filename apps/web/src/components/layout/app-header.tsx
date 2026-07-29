@@ -1,11 +1,12 @@
 'use client';
 
-import { Bell, Menu } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import Link from 'next/link';
 
 import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
+import { NotificationBell } from './notification-bell';
 import { useCurrentUser } from './use-current-user';
 
 /** Slim global top bar inside the content column: mobile menu trigger on the left,
@@ -28,14 +29,7 @@ export function AppHeader({ onOpenMenu }: { onOpenMenu: () => void }) {
 
       <div className="flex-1" />
 
-      <button
-        type="button"
-        aria-label="알림 (준비 중)"
-        aria-disabled
-        className="text-muted-foreground/60 relative cursor-default rounded-md p-2"
-      >
-        <Bell className="size-[18px]" />
-      </button>
+      <NotificationBell />
       <ThemeToggle />
       <Link
         href="/account"
