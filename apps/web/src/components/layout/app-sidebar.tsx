@@ -22,6 +22,8 @@ import { useState } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/features/auth';
+import { useInbox } from '@/features/inbox/hooks/use-inbox';
+import { useOutreach } from '@/features/search/hooks/use-outreach';
 import { isSupabaseConfigured } from '@/lib/env';
 import { cn } from '@/lib/utils';
 
@@ -63,9 +65,18 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { signOut } = useAuth();
   const { email, name } = useCurrentUser();
+  const outreach = useOutreach();
+  const { unreadTotal } = useInbox();
   const [soonOpen, setSoonOpen] = useState<SoonItem | null>(null);
 
   const initials = (name ?? email ?? 'SC').slice(0, 2).toUpperCase();
+
+  // 사이드바 배지 — 협업관리: 오늘 후속 필요(연락완료+예정일 지남), 받은 답장: 미읽음.
+  const today = new Date().toISOString().slice(0, 10);
+  const dueCount = Object.values(outreach.records).filter(
+    (r) => r.status === '연락완료' && r.followUpAt && r.followUpAt <= today,
+  ).length;
+  const badges: Record<string, number> = { '/crm': dueCount, '/inbox': unreadTotal };
 
   return (
     <div className="flex h-full flex-col">
@@ -100,6 +111,18 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
               >
                 <Icon className="size-[18px] shrink-0" />
                 <span className="flex-1 truncate">{item.title}</span>
+                {badges[item.href] ? (
+                  <span
+                    className={cn(
+                      'ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none',
+                      item.href === '/inbox'
+                        ? 'bg-rose-500 text-white'
+                        : 'bg-amber-400 text-amber-950',
+                    )}
+                  >
+                    {badges[item.href]}
+                  </span>
+                ) : null}
               </Link>
             );
           })}

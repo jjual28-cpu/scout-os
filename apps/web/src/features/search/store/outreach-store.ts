@@ -31,8 +31,27 @@ type Snapshot = { records: RecordMap; hydrated: boolean };
 
 const KEY = 'scout:outreach-activities';
 
-/** 연락 완료 후 자동으로 잡히는 후속(follow-up) 간격(일). 답장을 놓치지 않게 한다. */
-const FOLLOW_UP_DAYS = 3;
+/** 연락 완료 후 자동으로 잡히는 후속(follow-up) 기본 간격(일). 설정에서 변경 가능. */
+const FOLLOW_UP_DAYS_KEY = 'scout:follow-up-days';
+const DEFAULT_FOLLOW_UP_DAYS = 3;
+
+/** 사용자가 설정한 후속 간격(일). 없거나 잘못되면 기본 3일. 설정 변경 후 예약분부터 적용. */
+export function getFollowUpDays(): number {
+  try {
+    const n = Number(window.localStorage.getItem(FOLLOW_UP_DAYS_KEY));
+    return Number.isFinite(n) && n > 0 ? n : DEFAULT_FOLLOW_UP_DAYS;
+  } catch {
+    return DEFAULT_FOLLOW_UP_DAYS;
+  }
+}
+export function setFollowUpDays(days: number): void {
+  try {
+    window.localStorage.setItem(FOLLOW_UP_DAYS_KEY, String(days));
+  } catch {
+    /* ignore */
+  }
+}
+
 /** 오늘 기준 days일 뒤의 'YYYY-MM-DD'. followUpsDueToday 와 같은 UTC 기준으로 맞춘다. */
 function isoDatePlus(days: number): string {
   return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
@@ -252,7 +271,7 @@ export async function setStageSafe(creatorId: string, status: string): Promise<b
   const base = prev ?? emptyRecord(creatorId);
   // '연락 완료'로 옮기면 후속일을 자동 예약(이미 있으면 유지), '답변'으로 옮기면 해제.
   let followUpAt = base.followUpAt;
-  if (status === '연락완료' && !followUpAt) followUpAt = isoDatePlus(FOLLOW_UP_DAYS);
+  if (status === '연락완료' && !followUpAt) followUpAt = isoDatePlus(getFollowUpDays());
   else if (status === '답변옴') followUpAt = null;
   const optimistic: OutreachRecord = { ...base, status, followUpAt, creatorId };
   setSnapshot({ records: { ...snapshot.records, [creatorId]: optimistic } });
@@ -297,7 +316,7 @@ export function markContacted(creatorId: string) {
     contactCount: current.contactCount + 1,
     status: replied ? '답변옴' : '연락완료',
     // 방금 연락했으니 후속 시계를 새로 건다(이미 답변 온 경우는 기존 값 유지).
-    followUpAt: replied ? current.followUpAt : isoDatePlus(FOLLOW_UP_DAYS),
+    followUpAt: replied ? current.followUpAt : isoDatePlus(getFollowUpDays()),
   });
 }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  CalendarClock,
   CheckCircle2,
   CreditCard,
   Instagram,
@@ -25,6 +26,7 @@ import {
 import { loadToss } from '@/features/billing/toss-client';
 import { InstagramConnectCard } from '@/features/inbox/components/instagram-connect-card';
 import { DmStyleEditor } from '@/features/search/components/dm-style-editor';
+import { FollowUpSetting } from '@/features/search/components/follow-up-setting';
 import { env } from '@/lib/env';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
@@ -307,6 +309,10 @@ export function SettingsPage() {
           <DmStyleEditor />
         </SectionCard>
       </div>
+
+      <SectionCard title="후속 연락" icon={<CalendarClock className="size-4" />}>
+        <FollowUpSetting />
+      </SectionCard>
 
       <SectionCard title="인스타그램 연결" icon={<Instagram className="size-4" />}>
         <InstagramConnectCard />

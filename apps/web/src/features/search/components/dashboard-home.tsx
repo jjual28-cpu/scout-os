@@ -3,9 +3,11 @@
 import {
   ArrowRight,
   ArrowUpRight,
+  CalendarClock,
   Megaphone,
   MessageSquare,
   Reply,
+  RotateCcw,
   Search,
   Sparkles,
   Users,
@@ -55,6 +57,15 @@ export function DashboardHome() {
   const records = useMemo(() => Object.values(outreach.records), [outreach.records]);
   const followUps = outreach.followUpsDueToday();
   const replies = useMemo(() => records.filter((r) => r.status === '답변옴'), [records]);
+
+  // 오늘 후속 필요 = 연락완료인데 예정일이 오늘이거나 지난(아직 답변 없는) 셀럽.
+  const today = new Date().toISOString().slice(0, 10);
+  const dueCount = useMemo(
+    () =>
+      records.filter((r) => r.status === '연락완료' && r.followUpAt && r.followUpAt <= today)
+        .length,
+    [records, today],
+  );
 
   const kpis = useMemo(() => {
     // Counted with the SAME helper the /campaigns list filters by, so this number
@@ -112,6 +123,43 @@ export function DashboardHome() {
           </Button>
         }
       />
+
+      {/* 오늘 할 일 — 후속 필요·답변 대기를 첫 화면에서 바로 처리하게 한다. */}
+      {dueCount > 0 || replies.length > 0 ? (
+        <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-amber-300/50 bg-amber-50/60 p-3.5 dark:border-amber-500/30 dark:bg-amber-500/[0.08]">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400">
+            <CalendarClock className="size-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">오늘 처리할 일</p>
+            <p className="text-muted-foreground text-xs">
+              {[
+                dueCount > 0 ? `후속 필요 ${dueCount}명` : null,
+                replies.length > 0 ? `답변 대기 ${replies.length}명` : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          </div>
+          {replies.length > 0 ? (
+            <Button asChild size="sm" variant="outline">
+              <Link href="/crm">답변 보기</Link>
+            </Button>
+          ) : null}
+          {dueCount > 0 ? (
+            <Button
+              asChild
+              size="sm"
+              className="bg-amber-500 text-white hover:bg-amber-600 dark:bg-amber-500 dark:hover:bg-amber-600"
+            >
+              <Link href="/dm-queue?mode=followup">
+                <RotateCcw className="size-4" />
+                재연락 시작 {dueCount}
+              </Link>
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Today's Overview */}
       <SectionLabel>Today&apos;s Overview</SectionLabel>
