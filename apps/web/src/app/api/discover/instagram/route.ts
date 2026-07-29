@@ -197,6 +197,10 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       configured: true,
       campaignId: null,
       status: 'failed' as const,
+      // 클라이언트가 밋밋한 에러 대신 '업그레이드' CTA를 띄우도록 하는 플래그.
+      limitReached: true,
+      planName: gate.planName,
+      limit: gate.limit,
       error: `${gate.planName} 플랜은 이번 달 검색 ${gate.limit}회를 모두 사용했어요. 설정에서 업그레이드하면 더 검색할 수 있어요.`,
     });
   }

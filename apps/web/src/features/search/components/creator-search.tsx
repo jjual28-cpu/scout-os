@@ -288,6 +288,8 @@ export function CreatorSearch() {
   const [items, setItems] = useState<DiscoverOpportunity[]>([]);
   const [searchedAt, setSearchedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 무료/유료 한도 초과 시 — 밋밋한 에러 대신 업그레이드 CTA를 띄운다(전환 순간).
+  const [limitHit, setLimitHit] = useState<{ planName: string; limit: number } | null>(null);
   /** Non-fatal AI notice (판정/검색어 변환 실패) — search still succeeded. */
   const [aiError, setAiError] = useState<string | null>(null);
   const reqId = useRef(0);
@@ -639,6 +641,7 @@ export function CreatorSearch() {
     setInput(q);
     setKeyword(q);
     setError(null);
+    setLimitHit(null);
     setAiError(null);
     setPhase('searching');
     setSelected(new Set());
@@ -696,6 +699,9 @@ export function CreatorSearch() {
           status?: 'running' | 'succeeded' | 'failed' | 'idle';
           cached?: boolean;
           error?: string;
+          limitReached?: boolean;
+          planName?: string;
+          limit?: number;
         };
       } | null;
       if (my !== reqId.current) return; // superseded by a newer search
@@ -710,7 +716,11 @@ export function CreatorSearch() {
         return;
       }
       if (!data?.campaignId) {
-        setError(data?.error ?? '검색을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.');
+        if (data?.limitReached) {
+          setLimitHit({ planName: data.planName ?? '무료', limit: data.limit ?? 1 });
+        } else {
+          setError(data?.error ?? '검색을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.');
+        }
         setPhase('done');
         return;
       }
@@ -1357,6 +1367,36 @@ export function CreatorSearch() {
         </div>
       ) : null}
 
+      {limitHit ? (
+        <div className="border-primary/30 from-primary/10 mb-6 rounded-2xl border bg-gradient-to-br to-fuchsia-500/10 p-5">
+          <div className="flex items-start gap-3.5">
+            <span className="bg-primary text-primary-foreground flex size-10 shrink-0 items-center justify-center rounded-xl">
+              <Sparkles className="size-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-base font-semibold">
+                {limitHit.planName} 플랜 이번 달 검색 {limitHit.limit}회를 다 썼어요
+              </p>
+              <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+                업그레이드하면 바로 더 검색할 수 있어요 — 베이직 월 100회 · 프로 월 300회. 지금 찾던
+                셀럽을 놓치지 마세요.
+              </p>
+              <div className="mt-3.5 flex flex-wrap gap-2">
+                <Button asChild>
+                  <Link href="/settings">
+                    <Sparkles className="size-4" />
+                    업그레이드하기
+                  </Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href="/crm">저장한 셀럽 관리</Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {aiError ? (
         <div className="mb-6 flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
           <TriangleAlert className="mt-0.5 size-4 shrink-0" />
@@ -1652,7 +1692,7 @@ export function CreatorSearch() {
             </div>
           )}
         </>
-      ) : (
+      ) : limitHit ? null : (
         <EmptyState
           className="min-h-[340px] justify-center"
           icon={<SearchX className="size-5" />}
