@@ -38,6 +38,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
+import { SearchQuota } from '@/features/billing/components/search-quota';
 import * as runStore from '@/features/campaigns/campaign-run-store';
 import { useCampaigns } from '@/features/campaigns/hooks/use-campaigns';
 import { consumeCampaignDraft } from '@/features/campaigns/draft';
@@ -1710,6 +1711,8 @@ export function CreatorSearch() {
           title="Discover"
           description="브랜드에 맞는 셀럽을 검색하고, 결과를 캠페인으로 저장하세요."
         />
+
+        <SearchQuota />
 
         {/* 검색 목적 — 무엇을 찾을지가 검색의 전부를 결정하므로 맨 위에 크게. */}
         <div className="mb-6">
