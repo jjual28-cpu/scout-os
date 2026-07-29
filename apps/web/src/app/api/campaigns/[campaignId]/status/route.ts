@@ -40,6 +40,7 @@ const SELLER_SIGNALS = [
   '도매',
   '쇼핑몰',
   'mall',
+  '구매대행',
 ];
 function looksLikeSeller(c: InstagramCreator, seed: string): boolean {
   const hay = `${c.username} ${c.displayName}`.toLowerCase();
@@ -71,6 +72,11 @@ const LOCAL_BIZ_SIGNALS = [
   '헤어샵',
   '헤어살롱',
   '바버샵',
+  '왁싱샵',
+  '태닝샵',
+  '마사지샵',
+  '슈가링',
+  '피부관리실',
   '성형외과',
   '클리닉',
   '한의원',
@@ -86,6 +92,9 @@ const LOCAL_BIZ_SIGNALS = [
   // 예약·방문 안내(= 매장 계정의 결정적 신호)
   '예약문의',
   '예약제',
+  '예약필수',
+  '전화예약',
+  '당일예약',
   '시술문의',
   '오시는길',
   '영업시간',
@@ -99,7 +108,18 @@ const LOCAL_BIZ_SIGNALS = [
  * 리테일·유통 판매 신호. creator 검색에선 "협업할 사람이 아니라 판매자"라 제외하지만,
  * gonggu(공구셀러) 검색에선 오히려 찾는 대상이므로 제외하지 않는다.
  */
-const RETAIL_SIGNALS = ['셀렉트샵', '편집샵', '소품샵', '스마트스토어', '도매', '유통', '쇼핑몰'];
+const RETAIL_SIGNALS = [
+  '셀렉트샵',
+  '편집샵',
+  '소품샵',
+  '스마트스토어',
+  '도매',
+  '유통',
+  '쇼핑몰',
+  '위탁판매',
+  '공장직영',
+  '구매대행',
+];
 
 function hay(c: InstagramCreator): string {
   return `${c.username} ${c.displayName} ${c.biography ?? ''}`.toLowerCase();
@@ -135,6 +155,9 @@ const ORG_NAME_SIGNALS = [
   '공단',
   '시민단체',
   '자원봉사',
+  '주식회사',
+  '유한회사',
+  '협동조합',
 ];
 const ORG_CATEGORY = [
   'product/service',
@@ -160,11 +183,16 @@ const SHOP_WORDS_SUBSTR = [
   'sportswear',
   'activewear',
   'swimwear',
+  'underwear',
   '스포츠웨어',
+  '언더웨어',
   '쇼핑몰',
   '편집샵',
   '셀렉트샵',
   '스마트스토어',
+  '패션몰',
+  '아울렛',
+  '의류매장',
 ];
 const SHOP_WORDS_TOKEN = ['shop', 'store', 'mall', 'wear', '스토어'];
 function looksLikeShop(nh: string): boolean {
