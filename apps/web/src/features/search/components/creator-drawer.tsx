@@ -83,12 +83,14 @@ export function CreatorDrawer({
   const [dmProductId, setDmProductId] = useState('');
   const [styleOpen, setStyleOpen] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
+  const [replyDraft, setReplyDraft] = useState('');
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (card && record) {
       setDraft(record.dmDraft ?? '');
       setNoteDraft(record.note ?? '');
+      setReplyDraft('');
       setVariant(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -384,6 +386,53 @@ export function CreatorDrawer({
               최근 연락 {fmt(record.contactedAt)} · 연락 {record.contactCount}회
             </p>
           </div>
+
+          {/* 답변 기록 — 인박스 자동연동이 아직 없을 때 수동으로. 기록하면 '답변옴'으로
+              전진하고 후속 예약이 해제된다(응답률 분석에 반영). 이미 인박스 답장이 있으면
+              위 '받은 답장'이 대신하므로 숨긴다. */}
+          {!inboxReply ? (
+            <div>
+              <p className="text-muted-foreground mb-1.5 flex items-center gap-1 text-xs font-medium">
+                <MessageSquareText className="size-3.5" />
+                답변 기록
+              </p>
+              {record.replyStatus === '답변옴' ? (
+                <div className="border-primary/25 bg-primary/[0.04] rounded-xl border p-3">
+                  <p className="text-primary flex items-center gap-1 text-xs font-medium">
+                    <Check className="size-3.5" />
+                    답변옴으로 기록됨
+                  </p>
+                  {record.replyNote ? (
+                    <p className="text-foreground/90 mt-1.5 whitespace-pre-wrap text-sm leading-relaxed">
+                      {record.replyNote}
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <>
+                  <textarea
+                    value={replyDraft}
+                    onChange={(e) => setReplyDraft(e.target.value)}
+                    rows={2}
+                    placeholder="셀럽이 뭐라고 답했나요? (선택 — 비워도 기록돼요)"
+                    className="border-input bg-background focus-visible:ring-ring w-full resize-y rounded-lg border px-3 py-2 text-sm outline-none focus-visible:ring-2"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => outreach.setReply(card.id, replyDraft.trim())}
+                  >
+                    <MessageSquareText className="size-4" />
+                    답변옴으로 기록
+                  </Button>
+                  <p className="text-muted-foreground mt-1.5 text-xs">
+                    기록하면 CRM ‘답변’ 단계로 옮겨지고 후속 예약이 해제돼요.
+                  </p>
+                </>
+              )}
+            </div>
+          ) : null}
 
           {/* Timeline */}
           <div>
