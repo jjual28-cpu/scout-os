@@ -209,6 +209,73 @@ export function topCampaigns(
     .slice(0, limit);
 }
 
+// ── 활동 추이 (실제 이벤트 시각 기준) ────────────────────────────────────────
+//
+// 코호트 퍼널과 달리 이건 "실제로 언제 일어났나"를 그린다. 단, 정직한 시각이 있는
+// 두 이벤트만 쓴다: 캠페인 생성(createdAt) · DM 발송(contactedAt). 답변/협업은
+// 발생 시각이 없으므로(위 COHORT SEMANTICS 참고) 절대 추이로 그리지 않는다.
+
+export type TrendBucket = { label: string; campaigns: number; dm: number };
+
+function mmdd(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+/**
+ * 선택 기간을 균등 버킷으로 나눠 캠페인 생성·DM 발송 건수를 센다. 7일은 일 단위,
+ * 그 외는 주 단위(전체는 최근 8주). 버킷은 now에서 뒤로 끊으며 [start, end) 반열림.
+ * 코호트가 아니라 전역 활동이라 campaigns/records 원본을 그대로 받는다.
+ */
+export function activityTrend(
+  campaigns: Campaign[],
+  records: Records,
+  range: RangeKey,
+  now: Date,
+): TrendBucket[] {
+  const DAY = 86_400_000;
+  const [bucketMs, count] =
+    range === '7d'
+      ? [DAY, 7]
+      : range === '30d'
+        ? [7 * DAY, 5]
+        : range === '90d'
+          ? [7 * DAY, 13]
+          : [7 * DAY, 8]; // 'all' → 최근 8주
+
+  // 오늘 끝(자정 다음)에 맞춰 뒤로 count개.
+  const endOfToday = new Date(now);
+  endOfToday.setHours(23, 59, 59, 999);
+  const end = endOfToday.getTime() + 1;
+
+  const buckets: (TrendBucket & { start: number; end: number })[] = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const bEnd = end - i * bucketMs;
+    const bStart = bEnd - bucketMs;
+    buckets.push({ label: mmdd(bStart), campaigns: 0, dm: 0, start: bStart, end: bEnd });
+  }
+  const first = buckets[0]!.start;
+
+  const place = (iso: string | null | undefined): (typeof buckets)[number] | null => {
+    if (!iso) return null;
+    const t = new Date(iso).getTime();
+    if (!Number.isFinite(t) || t < first || t >= end) return null;
+    const idx = Math.min(buckets.length - 1, Math.floor((t - first) / bucketMs));
+    return buckets[idx] ?? null;
+  };
+
+  for (const c of campaigns) {
+    const b = place(c.createdAt);
+    if (b) b.campaigns++;
+  }
+  for (const r of Object.values(records)) {
+    const b = place(r.contactedAt);
+    if (b) b.dm++;
+  }
+
+  return buckets.map(({ label, campaigns, dm }) => ({ label, campaigns, dm }));
+}
+
 // ── 상품별 성과 ──────────────────────────────────────────────────────────────
 
 export type ProductRow = {

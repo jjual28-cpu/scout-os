@@ -6,9 +6,11 @@ import {
   Info,
   MessageSquare,
   Package,
+  Percent,
   Reply,
   Search,
   Star,
+  TrendingUp,
   Users,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -94,6 +96,52 @@ function FunnelChart({ stages }: { stages: { label: string; value: number; bar: 
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * 활동 추이 — 버킷별 캠페인 생성·DM 발송 건수를 세로 이중 막대로. 발생 시각이 확실한
+ * 두 이벤트만 그린다(답변/협업 제외). 막대 높이는 전체 최댓값 기준 상대값.
+ */
+function TrendChart({ data }: { data: { label: string; campaigns: number; dm: number }[] }) {
+  const max = Math.max(1, ...data.map((d) => Math.max(d.campaigns, d.dm)));
+  const h = (v: number) => (v > 0 ? Math.max((v / max) * 100, 5) : 0);
+  const hasAny = data.some((d) => d.campaigns > 0 || d.dm > 0);
+  return (
+    <div>
+      <div className="flex items-end gap-1.5 sm:gap-2.5" style={{ height: 152 }}>
+        {data.map((d, i) => (
+          <div key={i} className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
+            <div className="flex w-full items-end justify-center gap-1" style={{ height: 128 }}>
+              <div
+                className="bg-primary w-2 rounded-t transition-all sm:w-2.5"
+                style={{ height: `${h(d.campaigns)}%` }}
+                title={`캠페인 ${d.campaigns}`}
+              />
+              <div
+                className="w-2 rounded-t bg-fuchsia-500 transition-all sm:w-2.5"
+                style={{ height: `${h(d.dm)}%` }}
+                title={`DM ${d.dm}`}
+              />
+            </div>
+            <span className="text-muted-foreground truncate text-[10px] tabular-nums">
+              {d.label}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="text-muted-foreground mt-3 flex items-center gap-4 text-xs">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="bg-primary size-2.5 rounded-sm" />
+          캠페인 생성
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2.5 rounded-sm bg-fuchsia-500" />
+          DM 발송
+        </span>
+        {!hasAny ? <span className="ml-auto">이 기간엔 활동이 없어요.</span> : null}
+      </div>
     </div>
   );
 }
@@ -225,6 +273,13 @@ export function ReportsPage() {
               accent="rose"
             />
             <StatCard
+              icon={<Percent className="size-4" />}
+              label="응답률"
+              value={`${kpis.dm > 0 ? Math.round((kpis.reply / kpis.dm) * 100) : 0}%`}
+              accent="emerald"
+              delta={<span className="text-muted-foreground">답변 ÷ DM</span>}
+            />
+            <StatCard
               icon={<BarChart3 className="size-4" />}
               label="전환율"
               value={`${kpis.conversion}%`}
@@ -246,6 +301,19 @@ export function ReportsPage() {
             />
             <p className="text-muted-foreground mt-3 text-xs">
               막대 폭은 발견 대비 비율 · ‘이전 대비’는 직전 단계 대비 전환율입니다.
+            </p>
+          </SectionCard>
+
+          {/* 활동 추이 — 실제 이벤트 시각 기준(캠페인 생성·DM 발송) */}
+          <SectionCard
+            title="활동 추이"
+            icon={<TrendingUp className="size-4" />}
+            bodyClassName="mt-4"
+          >
+            <TrendChart data={data.trend} />
+            <p className="text-muted-foreground mt-3 text-xs">
+              실제 발생 시각 기준 — 캠페인 생성일·DM 발송일({range === '7d' ? '일' : '주'} 단위).
+              답변·협업은 발생 시각 데이터가 없어 추이에는 넣지 않아요.
             </p>
           </SectionCard>
 

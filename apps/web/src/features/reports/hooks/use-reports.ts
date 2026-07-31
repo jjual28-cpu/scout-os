@@ -7,6 +7,7 @@ import { useOutreach } from '@/features/search/hooks/use-outreach';
 import { useSavedOpportunities } from '@/features/search/hooks/use-saved-opportunities';
 
 import {
+  activityTrend,
   cohort,
   computeKpis,
   productRows,
@@ -17,6 +18,7 @@ import {
   type ReportKpis,
   type TopCampaign,
   type TopQuery,
+  type TrendBucket,
 } from '../compute';
 import { type RangeKey } from '../range';
 
@@ -26,6 +28,7 @@ export type ReportData = {
   topQueries: TopQuery[];
   topCampaigns: TopCampaign[];
   products: ProductRow[];
+  trend: TrendBucket[];
   hydrated: boolean;
 };
 
@@ -56,6 +59,7 @@ export function useReports(range: RangeKey, now: Date): ReportData {
       topQueries: topQueries(c, creatorLinks, savedSet, records),
       topCampaigns: topCampaigns(c, creatorLinks, savedSet, records),
       products: productRows(c, creatorLinks, savedSet, records),
+      trend: activityTrend(campaigns, records, range, at),
       hydrated,
     };
   }, [campaigns, creatorLinks, savedSet, outreach.records, range, nowMs, hydrated]);
