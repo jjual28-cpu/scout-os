@@ -8,6 +8,7 @@ import {
   Send,
   SkipForward,
   Sparkles,
+  Tag,
   Wand2,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -68,6 +69,8 @@ export function DmQueue() {
   const [genKind, setGenKind] = useState<'ai' | 'style' | null>(null);
   const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
   const [copied, setCopied] = useState(false);
+  // 이번 세션에 보낸 수(진행률·모멘텀 표시용). 모드 전환 시 리셋.
+  const [sentCount, setSentCount] = useState(0);
 
   const dmProduct = products.find((p) => p.id === dmProductId) ?? null;
   const brand: DmBrand = dmProduct
@@ -132,6 +135,11 @@ export function DmQueue() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id]);
 
+  // 신규↔재연락 전환하면 이번 세션 카운터를 새로 시작.
+  useEffect(() => {
+    setSentCount(0);
+  }, [mode]);
+
   const fallbackFor = (s: SavedOpportunity) =>
     generateCreatorDm(
       {
@@ -191,6 +199,7 @@ export function DmQueue() {
       /* clipboard blocked — the DM window still opens */
     }
     outreach.markContacted(current.id); // contactedAt 세팅 → 큐에서 빠지고 다음 셀럽으로
+    setSentCount((n) => n + 1);
     window.open(
       `https://ig.me/m/${encodeURIComponent(handleOf(current))}`,
       '_blank',
@@ -329,19 +338,34 @@ export function DmQueue() {
         />
       ) : (
         <>
-          <div className="text-muted-foreground mb-3 flex items-center justify-between text-sm">
-            <span>
-              {mode === 'followup' ? '재연락할 셀럽 ' : '보낼 셀럽 '}
-              <span className="text-foreground font-semibold">{remaining.length}명</span> 남음
-            </span>
-            {skipped.size > 0 ? (
-              <button
-                type="button"
-                onClick={() => setSkipped(new Set())}
-                className="text-primary text-xs hover:underline"
-              >
-                건너뛴 {skipped.size}명 다시 보기
-              </button>
+          <div className="mb-3">
+            <div className="text-muted-foreground flex items-center justify-between text-sm">
+              <span>
+                {mode === 'followup' ? '재연락할 셀럽 ' : '보낼 셀럽 '}
+                <span className="text-foreground font-semibold">{remaining.length}명</span> 남음
+                {sentCount > 0 ? (
+                  <span className="text-primary ml-1.5 font-medium">
+                    · 이번 세션 {sentCount}명 보냄
+                  </span>
+                ) : null}
+              </span>
+              {skipped.size > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setSkipped(new Set())}
+                  className="text-primary text-xs hover:underline"
+                >
+                  건너뛴 {skipped.size}명 다시 보기
+                </button>
+              ) : null}
+            </div>
+            {sentCount > 0 ? (
+              <div className="bg-muted mt-2 h-1.5 overflow-hidden rounded-full">
+                <div
+                  className="bg-primary h-full rounded-full transition-all duration-300"
+                  style={{ width: `${(sentCount / (sentCount + remaining.length)) * 100}%` }}
+                />
+              </div>
             ) : null}
           </div>
 
@@ -369,6 +393,19 @@ export function DmQueue() {
                     ? ` · 팔로워 ${formatCompactNumber(current.followersCount)}`
                     : ''}
                 </p>
+                {outreach.get(current.id).tags.length > 0 ? (
+                  <div className="mt-1 flex flex-wrap items-center gap-1">
+                    {outreach.get(current.id).tags.map((t) => (
+                      <span
+                        key={t}
+                        className="bg-primary/10 text-primary inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-medium"
+                      >
+                        <Tag className="size-2.5" />
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -415,6 +452,13 @@ export function DmQueue() {
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onBlur={(e) => outreach.setDmDraft(current.id, e.target.value)}
+                onKeyDown={(e) => {
+                  // ⌘/Ctrl+Enter = 바로 보내기 (한 명씩 빠르게 넘길 때).
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    void send();
+                  }
+                }}
                 rows={9}
                 placeholder="'AI DM' 또는 '내 스타일'로 초안을 만들거나 직접 쓰세요."
                 className="border-input bg-background focus-visible:ring-ring w-full resize-y rounded-lg border px-3 py-2 text-sm leading-relaxed outline-none focus-visible:ring-2"
@@ -426,6 +470,9 @@ export function DmQueue() {
               <Button type="button" className="flex-1" onClick={() => void send()}>
                 {copied ? <Check className="size-4" /> : <Send className="size-4" />}
                 보내기 (복사 + DM창 열기)
+                <kbd className="bg-primary-foreground/20 ml-1.5 hidden rounded px-1.5 py-0.5 font-sans text-[10px] font-medium sm:inline">
+                  ⌘↵
+                </kbd>
               </Button>
               <Button type="button" variant="outline" onClick={skip}>
                 <SkipForward className="size-4" />
