@@ -1,25 +1,42 @@
 'use client';
 
-import { Bookmark } from 'lucide-react';
+import { Bookmark, Tag, X } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
+import { useOutreach } from '../hooks/use-outreach';
 import { useSavedOpportunities } from '../hooks/use-saved-opportunities';
 import { FILTER_OPTIONS, type StatusFilter } from '../status';
 import { SavedOpportunityCard } from './saved-opportunity-card';
 
 export function SavedList() {
   const { saved, count, hydrated, setStatus, setNote, remove, clear } = useSavedOpportunities();
+  const outreach = useOutreach();
   const [filter, setFilter] = useState<StatusFilter>('전체');
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+
+  const tagsFor = (id: string): string[] => outreach.records[id]?.tags ?? [];
+
+  // 저장된 셀럽들에 실제로 붙은 태그 목록(빈도순) — 태그 필터 칩으로 노출.
+  const allTags = useMemo(() => {
+    const freq = new Map<string, number>();
+    for (const s of saved) for (const t of tagsFor(s.id)) freq.set(t, (freq.get(t) ?? 0) + 1);
+    return [...freq.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved, outreach.records]);
 
   const countFor = (option: StatusFilter) =>
     option === '전체' ? saved.length : saved.filter((s) => s.status === option).length;
 
-  const filtered = filter === '전체' ? saved : saved.filter((s) => s.status === filter);
+  const filtered = saved.filter((s) => {
+    if (filter !== '전체' && s.status !== filter) return false;
+    if (tagFilter && !tagsFor(s.id).includes(tagFilter)) return false;
+    return true;
+  });
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-10">
@@ -78,9 +95,47 @@ export function SavedList() {
             })}
           </div>
 
+          {/* 태그 필터 — 저장된 셀럽에 붙은 태그가 있을 때만 */}
+          {allTags.length > 0 ? (
+            <div className="mb-6 flex flex-wrap items-center gap-1.5">
+              <Tag className="text-muted-foreground size-3.5" />
+              {allTags.map((t) => {
+                const active = tagFilter === t;
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setTagFilter(active ? null : t)}
+                    className={cn(
+                      'inline-flex items-center gap-0.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+                      active
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-primary/30 text-primary hover:bg-primary/10',
+                    )}
+                  >
+                    {t}
+                  </button>
+                );
+              })}
+              {tagFilter ? (
+                <button
+                  type="button"
+                  onClick={() => setTagFilter(null)}
+                  className="text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 text-xs"
+                >
+                  <X className="size-3" />
+                  태그 해제
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
           {filtered.length === 0 ? (
             <div className="text-muted-foreground rounded-2xl border border-dashed py-16 text-center text-sm">
-              &lsquo;{filter}&rsquo; 상태의 기회가 없습니다.
+              {tagFilter
+                ? `‘${tagFilter}’ 태그${filter !== '전체' ? ` · ‘${filter}’ 상태` : ''}의 기회가 없습니다.`
+                : `‘${filter}’ 상태의 기회가 없습니다.`}
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -88,6 +143,7 @@ export function SavedList() {
                 <SavedOpportunityCard
                   key={item.id}
                   item={item}
+                  tags={tagsFor(item.id)}
                   onStatusChange={setStatus}
                   onNoteChange={setNote}
                   onRemove={remove}

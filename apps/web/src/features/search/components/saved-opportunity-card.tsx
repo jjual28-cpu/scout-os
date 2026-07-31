@@ -1,6 +1,6 @@
 'use client';
 
-import { Trash2 } from 'lucide-react';
+import { Tag, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,8 @@ import { OpportunityBody } from './opportunity-body';
 
 type SavedOpportunityCardProps = {
   item: SavedOpportunity;
+  /** CRM 태그(outreach 레코드에서). 있으면 카드에 칩으로 표시. */
+  tags?: string[];
   onStatusChange: (id: string, status: OpportunityStatus) => void;
   onNoteChange: (id: string, note: string) => void;
   onRemove: (id: string) => void;
@@ -19,6 +21,7 @@ type SavedOpportunityCardProps = {
 
 export function SavedOpportunityCard({
   item,
+  tags = [],
   onStatusChange,
   onNoteChange,
   onRemove,
@@ -30,6 +33,20 @@ export function SavedOpportunityCard({
   return (
     <article className="bg-card flex flex-col rounded-2xl border p-5">
       <OpportunityBody result={item} />
+
+      {tags.length > 0 ? (
+        <div className="mt-3 flex flex-wrap items-center gap-1">
+          {tags.map((t) => (
+            <span
+              key={t}
+              className="bg-primary/10 text-primary inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-medium"
+            >
+              <Tag className="size-2.5" />
+              {t}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       {/* 상태 */}
       <div className="mt-5 border-t pt-4">
