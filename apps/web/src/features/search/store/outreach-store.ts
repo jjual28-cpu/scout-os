@@ -24,6 +24,8 @@ export type OutreachRecord = {
   replyStatus: string | null;
   replyNote: string;
   contactCount: number;
+  /** 자유 태그(다중 라벨). 예: "뷰티", "10만+", "재컨택". */
+  tags: string[];
 };
 
 type RecordMap = Record<string, OutreachRecord>;
@@ -104,6 +106,7 @@ export function emptyRecord(creatorId: string): OutreachRecord {
     replyStatus: null,
     replyNote: '',
     contactCount: 0,
+    tags: [],
   };
 }
 
@@ -141,6 +144,7 @@ function rowToRecord(r: any): OutreachRecord {
     replyStatus: r.reply_status ?? null,
     replyNote: r.reply_note ?? '',
     contactCount: r.contact_count ?? 0,
+    tags: Array.isArray(r.tags) ? r.tags : [],
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -157,6 +161,7 @@ function recordToRow(r: OutreachRecord, uid: string) {
     reply_status: r.replyStatus,
     reply_note: r.replyNote || null,
     contact_count: r.contactCount,
+    tags: r.tags ?? [],
   };
 }
 
@@ -205,7 +210,7 @@ async function applyUser(uid: string | null) {
     const { data } = await sbClient()
       .from('outreach_activities')
       .select(
-        'creator_id,status,note,dm_draft,contacted_at,follow_up_at,reply_status,reply_note,contact_count',
+        'creator_id,status,note,dm_draft,contacted_at,follow_up_at,reply_status,reply_note,contact_count,tags',
       );
     const records: RecordMap = {};
     for (const row of data ?? []) {
@@ -306,6 +311,14 @@ export function setDmDraft(creatorId: string, dmDraft: string) {
 export function setFollowUpAt(creatorId: string, followUpAt: string | null) {
   updateRecord(creatorId, { followUpAt });
 }
+export function setTags(creatorId: string, tags: string[]) {
+  // 공백 제거·중복 제거·순서 유지.
+  const clean: string[] = [];
+  for (const t of tags.map((x) => x.trim()).filter(Boolean)) {
+    if (!clean.includes(t)) clean.push(t);
+  }
+  updateRecord(creatorId, { tags: clean });
+}
 
 /** Record a manual "연락 완료": stamp the time, bump the counter, advance status. */
 export function markContacted(creatorId: string) {
@@ -327,5 +340,27 @@ export function setReply(creatorId: string, replyNote: string) {
     replyNote,
     status: '답변옴',
     followUpAt: null,
+  });
+}
+
+/** 이미 협업/제외로 사용자가 확정한 상태 — 인박스 자동연동이 되돌리면 안 됨. */
+const REPLY_LOCKED_STATUS = new Set(['협업', '제외']);
+
+/**
+ * 인박스(인스타 웹훅)로 들어온 셀럽 답장을 연락기록에 자동 반영한다.
+ * `<ReplyReconciler/>`가 이미 연락한(=레코드 존재) 셀럽에 대해서만 호출한다.
+ *  - replyStatus 를 '답변옴'으로 표시(→ CRM '답변' 컬럼·리포트 응답률 자동 반영)
+ *  - 아직 답변 전 단계면 status 도 '답변옴'으로 전진 (협업/제외로 확정한 건은 그대로 둠)
+ *  - 후속 예약 해제, replyNote 는 비어 있을 때만 실제 답장 내용으로 채움(수동 메모 보존)
+ * 이미 '답변옴'이면 아무것도 하지 않는다(idempotent).
+ */
+export function markRepliedFromInbox(creatorId: string, replyText: string) {
+  const current = snapshot.records[creatorId];
+  if (!current || current.replyStatus === '답변옴') return;
+  const advance = !REPLY_LOCKED_STATUS.has(current.status);
+  updateRecord(creatorId, {
+    replyStatus: '답변옴',
+    replyNote: current.replyNote || replyText,
+    ...(advance ? { status: '답변옴', followUpAt: null } : {}),
   });
 }

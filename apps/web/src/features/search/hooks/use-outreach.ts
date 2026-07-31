@@ -38,8 +38,10 @@ export function useOutreach() {
     setNote: store.setNote,
     setDmDraft: store.setDmDraft,
     setFollowUpAt: store.setFollowUpAt,
+    setTags: store.setTags,
     markContacted: store.markContacted,
     setReply: store.setReply,
+    markRepliedFromInbox: store.markRepliedFromInbox,
     removeRecord: store.removeRecord,
   };
 }

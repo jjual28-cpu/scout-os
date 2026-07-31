@@ -1,6 +1,19 @@
 'use client';
 
-import { Check, Copy, History, Instagram, Loader2, Send, Sparkles, Wand2, X } from 'lucide-react';
+import {
+  Check,
+  Copy,
+  History,
+  Inbox,
+  Instagram,
+  Loader2,
+  MessageSquareText,
+  Send,
+  Sparkles,
+  Tag,
+  Wand2,
+  X,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
@@ -12,9 +25,11 @@ import { cn, formatCompactNumber } from '@/lib/utils';
 import { generateCreatorDm } from '../creator-dm';
 import { generateAiDm, generateStyledDm } from '../dm-generate';
 import { STAGE_META, STAGE_ORDER, stageStored, toStage, type Stage } from '../crm-stages';
+import { useInboxReplyMap, replyKey } from '../hooks/use-inbox-reply-map';
 import { useDmTemplate } from '../hooks/use-dm-template';
 import { useOutreach } from '../hooks/use-outreach';
 import { DmStyleDialog } from './dm-style-dialog';
+import { TagEditor } from './tag-editor';
 
 export type BoardCard = {
   id: string;
@@ -31,6 +46,9 @@ export type BoardCard = {
   followUpAt: string | null;
   note: string;
   replyStatus: string | null;
+  tags: string[];
+  /** 인박스로 받은 최신 답장(있으면 카드에 자동 표시). */
+  reply: { text: string; unread: number } | null;
 };
 
 function fmt(iso: string | null): string {
@@ -54,7 +72,9 @@ export function CreatorDrawer({
   const outreach = useOutreach();
   const { template: dmTemplate } = useDmTemplate();
   const { products } = useProducts();
+  const { map: replyMap } = useInboxReplyMap();
   const record = card ? outreach.get(card.id) : null;
+  const inboxReply = card ? (replyMap.get(replyKey(card.id)) ?? null) : null;
 
   const [draft, setDraft] = useState('');
   const [variant, setVariant] = useState(0);
@@ -192,6 +212,30 @@ export function CreatorDrawer({
             </p>
           ) : null}
 
+          {/* 받은 답장 (인박스 자동연동) */}
+          {inboxReply ? (
+            <div className="border-primary/25 bg-primary/[0.04] rounded-xl border p-3.5">
+              <div className="flex items-center gap-1.5">
+                <MessageSquareText className="text-primary size-4" />
+                <p className="text-sm font-semibold">받은 답장</p>
+                {inboxReply.unread > 0 ? (
+                  <span className="bg-primary text-primary-foreground ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold">
+                    새 {inboxReply.unread}
+                  </span>
+                ) : null}
+              </div>
+              <p className="text-foreground/90 mt-2 line-clamp-4 whitespace-pre-wrap text-sm leading-relaxed">
+                {inboxReply.text || '(내용 없음)'}
+              </p>
+              <Button asChild size="sm" className="mt-2.5">
+                <Link href="/inbox">
+                  <Inbox className="size-4" />
+                  인박스에서 답장
+                </Link>
+              </Button>
+            </div>
+          ) : null}
+
           {/* Stage */}
           <div>
             <p className="text-muted-foreground mb-2 text-xs font-medium">상태</p>
@@ -224,6 +268,15 @@ export function CreatorDrawer({
               placeholder="내부 메모…"
               className="border-input bg-background focus-visible:ring-ring w-full resize-y rounded-lg border px-3 py-2 text-sm outline-none focus-visible:ring-2"
             />
+          </div>
+
+          {/* Tags */}
+          <div>
+            <p className="text-muted-foreground mb-1.5 flex items-center gap-1 text-xs font-medium">
+              <Tag className="size-3.5" />
+              태그
+            </p>
+            <TagEditor tags={record.tags} onChange={(next) => outreach.setTags(card.id, next)} />
           </div>
 
           {/* DM */}

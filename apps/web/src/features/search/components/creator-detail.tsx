@@ -7,12 +7,15 @@ import {
   Check,
   Copy,
   History,
+  Inbox,
   Instagram,
   Loader2,
+  MessageSquareText,
   MoreHorizontal,
   RefreshCw,
   Send,
   Sparkles,
+  Tag,
   TriangleAlert,
   Wand2,
 } from 'lucide-react';
@@ -30,8 +33,10 @@ import { generateAiDm, generateStyledDm } from '../dm-generate';
 import { DmStyleDialog } from './dm-style-dialog';
 import { useCreator } from '../hooks/use-creator';
 import { useDmTemplate } from '../hooks/use-dm-template';
+import { useInboxReplyMap, replyKey } from '../hooks/use-inbox-reply-map';
 import { useOutreach } from '../hooks/use-outreach';
 import { CONTACT_STATUS_META, CONTACT_STATUS_ORDER } from '../status';
+import { TagEditor } from './tag-editor';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -46,10 +51,26 @@ function formatDate(iso: string | null): string {
   }
 }
 
+function formatDateTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString('ko-KR', {
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return '';
+  }
+}
+
 export function CreatorDetail({ id }: { id: string }) {
   const { status: loadStatus, creator, updatedAt } = useCreator(id);
   const outreach = useOutreach();
   const record = outreach.get(id);
+  // 인박스(인스타 웹훅)로 들어온 이 셀럽의 최신 답장 — 인스타에 안 들어가도 자동 표시.
+  const { map: replyMap } = useInboxReplyMap();
+  const inboxReply = replyMap.get(replyKey(id)) ?? null;
 
   // DM draft is edited locally, persisted on explicit actions / blur.
   const [draft, setDraft] = useState<string | null>(null);
@@ -304,6 +325,16 @@ export function CreatorDetail({ id }: { id: string }) {
           rows={2}
           className="border-input bg-background focus-visible:ring-ring mt-2 w-full resize-y rounded-lg border px-3 py-2 text-sm outline-none focus-visible:ring-2"
         />
+
+        <h2 className="mt-5 flex items-center gap-1.5 text-sm font-semibold">
+          <Tag className="size-3.5" />
+          태그
+        </h2>
+        <TagEditor
+          className="mt-2"
+          tags={record.tags}
+          onChange={(next) => outreach.setTags(id, next)}
+        />
       </section>
 
       {/* ── DM ──────────────────────────────────────────────────── */}
@@ -441,6 +472,38 @@ export function CreatorDetail({ id }: { id: string }) {
           스타일에서 나만의 틀을 저장할 수 있어요.
         </p>
       </section>
+
+      {/* ── 받은 답장 (인박스 자동연동) ──────────────────────────── */}
+      {inboxReply ? (
+        <section className="border-primary/25 bg-primary/[0.04] mt-6 rounded-2xl border p-6">
+          <div className="flex items-center gap-1.5">
+            <MessageSquareText className="text-primary size-4" />
+            <h2 className="text-sm font-semibold">받은 답장</h2>
+            {inboxReply.unread > 0 ? (
+              <span className="bg-primary text-primary-foreground ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold">
+                새 답장 {inboxReply.unread}
+              </span>
+            ) : null}
+            <span className="text-muted-foreground ml-auto text-xs">
+              {formatDateTime(inboxReply.at)}
+            </span>
+          </div>
+          <p className="bg-background mt-3 whitespace-pre-wrap rounded-xl border px-3.5 py-2.5 text-sm leading-relaxed">
+            {inboxReply.text || '(내용 없음)'}
+          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <Button asChild size="sm">
+              <Link href="/inbox">
+                <Inbox className="size-4" />
+                인박스에서 답장하기
+              </Link>
+            </Button>
+            <span className="text-muted-foreground text-xs">
+              인스타에 들어가지 않아도 답장이 여기로 모여요.
+            </span>
+          </div>
+        </section>
+      ) : null}
 
       {/* ── 후속관리 ────────────────────────────────────────────── */}
       <section className="bg-card dark:border-border mt-6 rounded-2xl border border-slate-200/60 p-6">

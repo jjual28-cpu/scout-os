@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { CampaignPoller } from '@/features/campaigns/components/campaign-poller';
+import { ReplyReconciler } from '@/features/search/components/reply-reconciler';
 import { cn } from '@/lib/utils';
 
 import { AppHeader } from './app-header';
@@ -63,6 +64,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Keeps an in-flight search advancing while the user browses other menus. */}
       <CampaignPoller />
+      {/* 셀럽 답장이 인박스로 들어오면 CRM 상태에 자동 반영(렌더 없음). */}
+      <ReplyReconciler />
     </div>
   );
 }

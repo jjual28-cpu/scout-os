@@ -4,10 +4,12 @@ import {
   AlertCircle,
   CalendarClock,
   Instagram,
+  MessageSquareText,
   MoreHorizontal,
   RotateCcw,
   Search,
   Send,
+  Tag,
   Trash2,
   X,
 } from 'lucide-react';
@@ -20,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn, formatCompactNumber } from '@/lib/utils';
 
 import { STAGE_META, STAGE_ORDER, stageStored, toStage, type Stage } from '../crm-stages';
+import { useInboxReplyMap, replyKey, type CreatorReply } from '../hooks/use-inbox-reply-map';
 import { useOutreach } from '../hooks/use-outreach';
 import { useSavedOpportunities } from '../hooks/use-saved-opportunities';
 import { CreatorDrawer, type BoardCard } from './creator-drawer';
@@ -28,9 +31,17 @@ function username(id: string): string {
   return id.split(':')[1] ?? id;
 }
 
+/** 인박스에 답장이 있으면, 아직 답변 전 단계인 카드를 '답변'으로 자동 표시(파생, 저장 안 함). */
+function deriveStage(base: Stage, reply: CreatorReply | undefined): Stage {
+  if (!reply) return base;
+  if (base === '답변' || base === '협업' || base === '제외') return base;
+  return '답변';
+}
+
 export function CrmBoard() {
   const saved = useSavedOpportunities();
   const outreach = useOutreach();
+  const { map: replyMap } = useInboxReplyMap();
 
   const [text, setText] = useState('');
   const [platform, setPlatform] = useState('all');
@@ -56,6 +67,9 @@ export function CrmBoard() {
     for (const s of saved.saved) {
       const rec = outreach.records[s.id];
       const handle = s.handle ?? username(s.id);
+      const reply = replyMap.get(replyKey(s.id));
+      // 저장만 하고 손대지 않은 카드(기본 상태 '미검토')는 '저장'에 둔다 — '검토'로 뒤로 튀지 않게.
+      const base: Stage = rec && rec.status !== '미검토' ? toStage(rec.status) : '저장';
       map.set(s.id, {
         id: s.id,
         name: s.name,
@@ -66,17 +80,19 @@ export function CrmBoard() {
         profileUrl: `https://www.instagram.com/${handle}/`,
         tag: s.type,
         bio: s.reason ?? '',
-        // 저장만 하고 손대지 않은 카드(기본 상태 '미검토')는 '저장'에 둔다 — '검토'로 뒤로 튀지 않게.
-        stage: rec && rec.status !== '미검토' ? toStage(rec.status) : '저장',
+        stage: deriveStage(base, reply),
         contactedAt: rec?.contactedAt ?? null,
         followUpAt: rec?.followUpAt ?? null,
         note: rec?.note || s.note || '',
-        replyStatus: rec?.replyStatus ?? null,
+        replyStatus: reply ? '답변옴' : (rec?.replyStatus ?? null),
+        tags: rec?.tags ?? [],
+        reply: reply ? { text: reply.text, unread: reply.unread } : null,
       });
     }
     for (const rec of Object.values(outreach.records)) {
       if (map.has(rec.creatorId)) continue;
       const u = username(rec.creatorId);
+      const reply = replyMap.get(replyKey(rec.creatorId));
       map.set(rec.creatorId, {
         id: rec.creatorId,
         name: u,
@@ -87,15 +103,17 @@ export function CrmBoard() {
         profileUrl: `https://www.instagram.com/${u}/`,
         tag: '',
         bio: '',
-        stage: toStage(rec.status),
+        stage: deriveStage(toStage(rec.status), reply),
         contactedAt: rec.contactedAt,
         followUpAt: rec.followUpAt,
         note: rec.note,
-        replyStatus: rec.replyStatus,
+        replyStatus: reply ? '답변옴' : rec.replyStatus,
+        tags: rec.tags ?? [],
+        reply: reply ? { text: reply.text, unread: reply.unread } : null,
       });
     }
     return [...map.values()];
-  }, [saved.saved, outreach.records]);
+  }, [saved.saved, outreach.records, replyMap]);
 
   const visible = useMemo(
     () =>
@@ -546,11 +564,27 @@ function CardView({
         </div>
       </div>
 
-      {due ? (
-        <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
-          <CalendarClock className="size-3" />
-          후속 필요{card.followUpAt ? ` · ${card.followUpAt}` : ''}
+      {card.reply || due ? (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {card.reply ? (
+            <span className="bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium">
+              <MessageSquareText className="size-3" />
+              답장 도착{card.reply.unread > 0 ? ` · 새 ${card.reply.unread}` : ''}
+            </span>
+          ) : null}
+          {due ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+              <CalendarClock className="size-3" />
+              후속 필요{card.followUpAt ? ` · ${card.followUpAt}` : ''}
+            </span>
+          ) : null}
         </div>
+      ) : null}
+
+      {card.reply ? (
+        <p className="text-muted-foreground bg-muted/60 mt-2 line-clamp-2 rounded-lg px-2.5 py-1.5 text-xs">
+          💬 {card.reply.text || '(내용 없음)'}
+        </p>
       ) : null}
 
       <div className="text-muted-foreground mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
@@ -564,6 +598,20 @@ function CardView({
           </span>
         ) : null}
       </div>
+
+      {card.tags.length > 0 ? (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          {card.tags.map((t) => (
+            <span
+              key={t}
+              className="bg-primary/10 text-primary inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-medium"
+            >
+              <Tag className="size-2.5" />
+              {t}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       {card.followUpAt || card.contactedAt || card.note ? (
         <div className="text-muted-foreground mt-2 space-y-0.5 text-xs">

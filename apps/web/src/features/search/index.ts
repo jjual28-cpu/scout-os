@@ -6,7 +6,6 @@ export { CrmBoard } from './components/crm-board';
 export { SavedList } from './components/saved-list';
 export { OutreachList } from './components/outreach-list';
 export { DmQueue } from './components/dm-queue';
-export { FollowUpToday } from './components/follow-up-today';
 export { CreatorDetail } from './components/creator-detail';
 export { ResultCard } from './components/result-card';
 export { useSearch } from './hooks/use-search';
