@@ -120,117 +120,137 @@ const faqs = [
 
 export default function LandingPage() {
   return (
-    <main className="relative min-h-screen overflow-hidden bg-white text-slate-900">
-      {/* Ambient background — layered brand-color blobs + faint dotted grid (adds depth) */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-[760px]"
-        style={{
-          background:
-            'radial-gradient(52% 44% at 82% 0%, hsl(288 90% 62% / 0.16) 0%, transparent 60%), radial-gradient(46% 40% at 8% 6%, hsl(262 83% 58% / 0.12) 0%, transparent 55%)',
-        }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-[560px] opacity-50"
-        style={{
-          backgroundImage: 'radial-gradient(hsl(262 83% 58% / 0.14) 1px, transparent 1px)',
-          backgroundSize: '22px 22px',
-          maskImage: 'linear-gradient(to bottom, black, transparent)',
-          WebkitMaskImage: 'linear-gradient(to bottom, black, transparent)',
-        }}
-      />
+    <main className="relative min-h-screen bg-white text-slate-900">
+      {/* ── DARK HERO ──────────────────────────────────────────────── */}
+      <div className="relative overflow-hidden bg-slate-950 pb-28 text-white">
+        {/* Neon brand glows */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(48% 40% at 80% 4%, hsl(282 95% 62% / 0.38) 0%, transparent 60%), radial-gradient(45% 45% at 10% 18%, hsl(258 92% 62% / 0.30) 0%, transparent 55%), radial-gradient(65% 50% at 50% 108%, hsl(305 90% 60% / 0.18) 0%, transparent 60%)',
+          }}
+        />
+        {/* Dot grid */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-[0.14]"
+          style={{
+            backgroundImage: 'radial-gradient(white 1px, transparent 1px)',
+            backgroundSize: '26px 26px',
+            maskImage: 'radial-gradient(70% 60% at 50% 25%, black, transparent)',
+            WebkitMaskImage: 'radial-gradient(70% 60% at 50% 25%, black, transparent)',
+          }}
+        />
 
-      <div className="relative mx-auto w-full max-w-6xl px-6">
-        {/* Nav */}
-        <header className="flex items-center justify-between py-5">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-sm">
-              <span className="text-sm font-bold">S</span>
+        <div className="relative mx-auto w-full max-w-6xl px-6">
+          {/* Nav (dark) */}
+          <header className="flex items-center justify-between py-5">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-lg shadow-fuchsia-500/30">
+                <span className="text-sm font-bold">S</span>
+              </div>
+              <span className="text-lg font-semibold tracking-tight text-white">Scout OS</span>
             </div>
-            <span className="text-lg font-semibold tracking-tight">Scout OS</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button asChild variant="ghost">
-              <Link href="/login">로그인</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/signup">무료로 시작하기</Link>
-            </Button>
-          </div>
-        </header>
-
-        {/* Hero */}
-        <section className="grid items-center gap-12 py-14 lg:grid-cols-2 lg:gap-8 lg:py-24">
-          <div>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200/70 bg-white/80 px-3.5 py-1.5 text-xs font-semibold text-violet-700 shadow-sm backdrop-blur">
-              <Sparkles className="size-3.5 text-violet-500" />
-              체험단·공구·협찬, 이제 AI로
-            </span>
-
-            <h1 className="mt-6 text-balance text-[2.6rem] font-bold leading-[1.1] tracking-tight sm:text-[3.4rem]">
-              체험단·공구 대신,
-              <br />
-              AI가 찾은{' '}
-              <span className="bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-500 bg-clip-text text-transparent">
-                셀럽
-              </span>
-              에게
-              <br />
-              직접 DM 보내세요.
-            </h1>
-
-            <p className="mt-5 max-w-xl text-pretty text-lg leading-relaxed text-slate-600">
-              키워드만 넣으면 AI가 우리 상품에 맞는 인스타 셀럽을 찾아드려요. 맞춤 DM 초안부터
-              답장·협업 관리, 성과까지 한 곳에서 — 체험단·공구 수수료 없이.
-            </p>
-
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg" className="shadow-lg shadow-violet-500/25">
-                <Link href="/signup">
-                  무료로 시작하기 <ArrowRight className="size-4" />
-                </Link>
-              </Button>
-              <Button asChild size="lg" variant="outline">
+            <div className="flex items-center gap-2">
+              <Button
+                asChild
+                variant="ghost"
+                className="text-white/80 hover:bg-white/10 hover:text-white"
+              >
                 <Link href="/login">로그인</Link>
               </Button>
+              <Button asChild className="bg-white text-slate-900 hover:bg-white/90">
+                <Link href="/signup">무료로 시작하기</Link>
+              </Button>
             </div>
+          </header>
 
-            <ul className="mt-7 flex flex-wrap gap-2 text-sm">
-              {['회원가입 무료', '카드 등록 없음', '바로 사용 가능'].map((t) => (
-                <li
-                  key={t}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 shadow-sm"
+          {/* Hero */}
+          <section className="grid items-center gap-12 py-14 lg:grid-cols-2 lg:gap-8 lg:py-20">
+            <div>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3.5 py-1.5 text-xs font-semibold text-violet-200 backdrop-blur">
+                <Sparkles className="size-3.5 text-fuchsia-300" />
+                체험단·공구·협찬, 이제 AI로
+              </span>
+
+              <h1 className="mt-6 text-balance text-[2.7rem] font-bold leading-[1.08] tracking-tight text-white sm:text-[3.6rem]">
+                체험단·공구 대신,
+                <br />
+                AI가 찾은{' '}
+                <span className="bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-400 bg-clip-text text-transparent">
+                  셀럽
+                </span>
+                에게
+                <br />
+                직접 DM 보내세요.
+              </h1>
+
+              <p className="mt-5 max-w-xl text-pretty text-lg leading-relaxed text-slate-300">
+                키워드만 넣으면 AI가 우리 상품에 맞는 인스타 셀럽을 찾아드려요. 맞춤 DM 초안부터
+                답장·협업 관리, 성과까지 한 곳에서 — 체험단·공구 수수료 없이.
+              </p>
+
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <Button
+                  asChild
+                  size="lg"
+                  className="bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white shadow-xl shadow-fuchsia-500/30 hover:opacity-95"
                 >
-                  <Check className="size-4 text-violet-500" />
-                  {t}
-                </li>
-              ))}
-            </ul>
-          </div>
+                  <Link href="/signup">
+                    무료로 시작하기 <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+                <Button
+                  asChild
+                  size="lg"
+                  variant="outline"
+                  className="border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                >
+                  <Link href="/login">로그인</Link>
+                </Button>
+              </div>
 
-          {/* Product preview — glow + slight tilt + floating feature chips for depth */}
-          <div className="relative">
-            <div
-              aria-hidden
-              className="absolute -inset-8 rounded-[2.5rem] bg-gradient-to-tr from-violet-400/25 via-purple-400/15 to-fuchsia-400/25 blur-3xl"
-            />
-            <div className="relative rotate-[1.5deg] transition-transform duration-500 hover:rotate-0">
-              <HeroPreview />
+              <ul className="mt-7 flex flex-wrap gap-2 text-sm">
+                {['회원가입 무료', '카드 등록 없음', '바로 사용 가능'].map((t) => (
+                  <li
+                    key={t}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-slate-300"
+                  >
+                    <Check className="size-4 text-fuchsia-400" />
+                    {t}
+                  </li>
+                ))}
+              </ul>
             </div>
-            <div className="absolute -left-3 top-10 hidden items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-600 shadow-lg sm:flex">
-              <TriangleAlert className="size-3.5" />
-              가짜 팔로워 의심
-            </div>
-            <div className="absolute -right-2 bottom-12 hidden items-center gap-1.5 rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-semibold text-violet-600 shadow-lg sm:flex">
-              <Sparkles className="size-3.5" />
-              AI 추천 · 적합도 92
-            </div>
-          </div>
-        </section>
 
+            {/* Product preview — neon glow + tilt + floating feature chips */}
+            <div className="relative">
+              <div
+                aria-hidden
+                className="absolute -inset-10 rounded-[3rem] bg-gradient-to-tr from-violet-600/45 via-fuchsia-600/35 to-pink-500/35 blur-3xl"
+              />
+              <div className="relative rotate-[1.5deg] transition-transform duration-500 hover:rotate-0">
+                <HeroPreview />
+              </div>
+              <div className="absolute -left-3 top-10 hidden items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-600 shadow-xl sm:flex">
+                <TriangleAlert className="size-3.5" />
+                가짜 팔로워 의심
+              </div>
+              <div className="absolute -right-2 bottom-14 hidden items-center gap-1.5 rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-semibold text-violet-600 shadow-xl sm:flex">
+                <Sparkles className="size-3.5" />
+                AI 추천 · 적합도 92
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      {/* ── LIGHT CONTENT (feature cards rise over the dark→light seam) ── */}
+      <div className="relative mx-auto w-full max-w-6xl px-6">
         {/* Feature cards */}
-        <section className="grid gap-5 py-10 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="relative z-10 -mt-20 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {features.map((f) => {
             const Icon = f.icon;
             return (
