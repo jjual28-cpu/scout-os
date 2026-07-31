@@ -1,29 +1,54 @@
-import { ArrowRight, BarChart3, Check, MessageSquare, Sparkles, Target } from 'lucide-react';
+import {
+  ArrowRight,
+  BarChart3,
+  Check,
+  MessageSquare,
+  ShieldCheck,
+  Sparkles,
+  Target,
+} from 'lucide-react';
 import Link from 'next/link';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Scout OS — 체험단·공구·협찬 셀럽을 AI로 찾고 DM까지',
+  description:
+    '키워드만 넣으면 AI가 우리 상품에 맞는 인스타 셀럽을 찾아드려요. 가짜 팔로워 검증, 맞춤 DM 초안, 협업 관리·성과까지. 체험단·공구 수수료 없이 직접 연락하세요.',
+  keywords: [
+    '체험단',
+    '공동구매 셀러',
+    '인스타 공구',
+    '제품 협찬',
+    '인플루언서 섭외',
+    '셀럽 마케팅',
+    '인스타 마케팅',
+  ],
+};
+
 const features = [
   {
     icon: Target,
-    title: '정확한 셀럽 발견',
-    body: 'AI와 데이터 분석으로 브랜드에 맞는 셀럽을 찾아요.',
+    title: '우리 상품 맞춤 셀럽 발굴',
+    body: '키워드·상품을 AI가 분석해 체험단·공구·협찬에 맞는 인스타 셀럽을 찾아줘요.',
   },
   {
-    icon: Sparkles,
-    title: '맞춤 키워드 추천',
-    body: '상품을 분석해 최적의 검색 키워드를 추천해요.',
+    icon: ShieldCheck,
+    title: '가짜 팔로워 걸러내기',
+    body: '팔로워 수만 보지 않아요. 참여율·진짜 영향력까지 AI가 검증해줘요.',
   },
   {
     icon: MessageSquare,
-    title: 'DM 및 협업 관리',
-    body: '개인화된 메시지와 연락 상태를 한곳에서 관리해요.',
+    title: '맞춤 DM · 답장까지 한 곳에서',
+    body: '셀럽마다 맞춤 DM 초안을 만들고, 답장·연락 상태를 CRM으로 관리해요.',
   },
   {
     icon: BarChart3,
-    title: '성과 추적',
-    body: '캠페인의 검색·저장·DM·답변·협업 성과를 확인해요.',
+    title: '협업 성과 추적',
+    body: '발굴 → 저장 → DM → 답변 → 협업까지 퍼널로 성과를 확인해요.',
   },
 ];
 
@@ -71,20 +96,20 @@ export default function LandingPage() {
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
               <Sparkles className="size-3.5 text-slate-400" />
-              AI Creator Discovery Platform
+              체험단·공구·협찬, 이제 AI로
             </span>
 
             <h1 className="mt-6 text-balance text-4xl font-bold leading-[1.15] tracking-tight sm:text-5xl">
-              AI가 브랜드에
+              체험단·공구 대신,
               <br />
-              <span className="text-primary">딱 맞는 셀럽</span>을
+              AI가 찾은 <span className="text-primary">셀럽</span>에게
               <br />
-              먼저 찾아드립니다.
+              직접 DM 보내세요.
             </h1>
 
             <p className="mt-5 max-w-xl text-pretty text-lg leading-relaxed text-slate-600">
-              브랜드와 맞는 크리에이터를 찾고, 협업을 관리하고, DM과 성과까지 하나의 Workspace에서
-              관리하세요.
+              키워드만 넣으면 AI가 우리 상품에 맞는 인스타 셀럽을 찾아드려요. 맞춤 DM 초안부터
+              답장·협업 관리, 성과까지 한 곳에서 — 체험단·공구 수수료 없이.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -154,7 +179,7 @@ export default function LandingPage() {
         </section>
 
         <footer className="border-t border-slate-200 py-8 text-center text-xs text-slate-400">
-          © {new Date().getFullYear()} Scout OS · AI 셀럽 디스커버리 플랫폼
+          © {new Date().getFullYear()} Scout OS · AI 셀럽 발굴 · 체험단·공구·협찬 아웃리치
         </footer>
       </div>
     </main>
