@@ -301,36 +301,52 @@ export default function LandingPage() {
             </div>
           </div>
         </section>
+      </div>
 
-        {/* Comparison vs 체험단·공구 */}
-        <section className="py-14">
-          <h2 className="text-center text-2xl font-bold tracking-tight sm:text-3xl">
+      {/* ── DARK ACCENT: comparison (full-bleed) ─────────────────── */}
+      <div className="relative overflow-hidden bg-slate-950 py-20 text-white">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(45% 55% at 15% 10%, hsl(258 92% 62% / 0.28) 0%, transparent 55%), radial-gradient(45% 55% at 85% 90%, hsl(300 90% 60% / 0.24) 0%, transparent 55%)',
+          }}
+        />
+        <div className="relative mx-auto w-full max-w-6xl px-6">
+          <h2 className="text-center text-2xl font-bold tracking-tight text-white sm:text-3xl">
             체험단·공구와 뭐가 다른가요?
           </h2>
-          <div className="mx-auto mt-10 max-w-2xl overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
-            <div className="grid grid-cols-3 bg-slate-50 text-sm font-semibold">
-              <div className="p-4 text-slate-400"> </div>
-              <div className="p-4 text-center text-slate-500">체험단·공구 대행</div>
-              <div className="bg-gradient-to-b from-violet-600 to-fuchsia-500 p-4 text-center text-white">
+          <p className="mt-3 text-center text-slate-400">
+            수수료 없이, 진짜 영향력 있는 셀럽을 직접 골라 연락하세요.
+          </p>
+          <div className="mx-auto mt-10 max-w-2xl overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-2xl backdrop-blur">
+            <div className="grid grid-cols-3 text-sm font-semibold">
+              <div className="p-4 text-slate-500"> </div>
+              <div className="p-4 text-center text-slate-400">체험단·공구 대행</div>
+              <div className="bg-gradient-to-b from-violet-500 to-fuchsia-500 p-4 text-center text-white shadow-lg shadow-fuchsia-500/30">
                 Scout OS
               </div>
             </div>
             {compare.map((row) => (
-              <div key={row.label} className="grid grid-cols-3 border-t border-slate-100 text-sm">
-                <div className="p-4 font-medium">{row.label}</div>
-                <div className="flex items-center gap-1.5 p-4 text-slate-400">
-                  <X className="size-4 shrink-0 text-slate-300" />
+              <div key={row.label} className="grid grid-cols-3 border-t border-white/10 text-sm">
+                <div className="p-4 font-medium text-white">{row.label}</div>
+                <div className="flex items-center gap-1.5 p-4 text-slate-500">
+                  <X className="size-4 shrink-0 text-slate-600" />
                   {row.them}
                 </div>
-                <div className="flex items-center gap-1.5 bg-violet-50/60 p-4 font-medium text-slate-900">
-                  <Check className="size-4 shrink-0 text-violet-600" />
+                <div className="flex items-center gap-1.5 bg-gradient-to-r from-violet-500/10 to-fuchsia-500/10 p-4 font-medium text-white">
+                  <Check className="size-4 shrink-0 text-fuchsia-400" />
                   {row.us}
                 </div>
               </div>
             ))}
           </div>
-        </section>
+        </div>
+      </div>
 
+      {/* reopen light container */}
+      <div className="relative mx-auto w-full max-w-6xl px-6">
         {/* Pricing — tinted panel, elevated 인기 plan */}
         <section id="pricing" className="py-14">
           <div className="rounded-[2rem] bg-gradient-to-b from-slate-50 to-white p-8 ring-1 ring-slate-100 sm:p-12">
