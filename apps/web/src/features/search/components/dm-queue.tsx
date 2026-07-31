@@ -28,8 +28,27 @@ import { generateAiDm, generateStyledDm, type DmBrand, type DmCreator } from '..
 import { useDmTemplate } from '../hooks/use-dm-template';
 import { useOutreach } from '../hooks/use-outreach';
 import { useSavedOpportunities } from '../hooks/use-saved-opportunities';
-import { type SavedOpportunity } from '../types';
+import { type SavedOpportunity, type SearchResultType } from '../types';
 import { DmStyleDialog } from './dm-style-dialog';
+import { TYPE_META } from './opportunity-body';
+
+/** 셀럽 유형(카테고리) 칩 — discover/saved 카드와 같은 아이콘·색. */
+function CategoryChip({ type }: { type: SearchResultType }) {
+  const meta = TYPE_META[type];
+  if (!meta) return null;
+  const Icon = meta.icon;
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium',
+        meta.chip,
+      )}
+    >
+      <Icon className="size-3" />
+      {type}
+    </span>
+  );
+}
 
 function handleOf(s: SavedOpportunity): string {
   return s.handle ?? s.id.split(':')[1] ?? s.id;
@@ -393,19 +412,18 @@ export function DmQueue() {
                     ? ` · 팔로워 ${formatCompactNumber(current.followersCount)}`
                     : ''}
                 </p>
-                {outreach.get(current.id).tags.length > 0 ? (
-                  <div className="mt-1 flex flex-wrap items-center gap-1">
-                    {outreach.get(current.id).tags.map((t) => (
-                      <span
-                        key={t}
-                        className="bg-primary/10 text-primary inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-medium"
-                      >
-                        <Tag className="size-2.5" />
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
+                <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                  <CategoryChip type={current.type} />
+                  {outreach.get(current.id).tags.map((t) => (
+                    <span
+                      key={t}
+                      className="bg-primary/10 text-primary inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-medium"
+                    >
+                      <Tag className="size-2.5" />
+                      {t}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
 

@@ -19,7 +19,8 @@ import { type SearchPlatform, type SearchResult, type SearchResultType } from '.
 
 type TypeMeta = { icon: LucideIcon; chip: string };
 
-const TYPE_META: Record<SearchResultType, TypeMeta> = {
+/** 유형(카테고리)별 아이콘·칩 색. discover/saved 카드와 DM 큐가 같은 시각언어를 쓰도록 공유. */
+export const TYPE_META: Record<SearchResultType, TypeMeta> = {
   '신규 브랜드': { icon: Sparkles, chip: 'bg-rose-500/10 text-rose-600 dark:text-rose-400' },
   '마이크로 크리에이터': {
     icon: Users,
