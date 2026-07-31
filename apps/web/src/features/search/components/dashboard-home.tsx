@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { useOutreach } from '../hooks/use-outreach';
 import { useSavedOpportunities } from '../hooks/use-saved-opportunities';
 import { OnboardingChecklist } from './onboarding-checklist';
+import { PipelineDiagnosis } from './pipeline-diagnosis';
 
 function creatorUsername(creatorId: string): string {
   return creatorId.split(':')[1] ?? creatorId;
@@ -164,6 +165,9 @@ export function DashboardHome() {
           ) : null}
         </div>
       ) : null}
+
+      {/* 파이프라인 진단 — 데이터 기반 개선 액션 추천 */}
+      <PipelineDiagnosis />
 
       {/* Today's Overview */}
       <SectionLabel>Today&apos;s Overview</SectionLabel>
