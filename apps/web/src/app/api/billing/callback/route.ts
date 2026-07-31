@@ -20,8 +20,8 @@ async function getSupabase() {
  */
 export const GET = async (request: NextRequest) => {
   const url = new URL(request.url);
-  const back = (flag: 'success' | 'fail') =>
-    NextResponse.redirect(`${env.NEXT_PUBLIC_APP_URL}/settings?billing=${flag}`);
+  const back = (flag: 'success' | 'fail', extra = '') =>
+    NextResponse.redirect(`${env.NEXT_PUBLIC_APP_URL}/settings?billing=${flag}${extra}`);
 
   try {
     if (!isTossConfigured()) return back('fail');
@@ -48,7 +48,8 @@ export const GET = async (request: NextRequest) => {
       customerKey,
       ts: Date.now(),
     });
-    return back('success');
+    // 성공 시 plan·cycle 을 넘겨 설정 화면에서 GA4 purchase 전환(매출값 포함)을 쏘게 한다.
+    return back('success', `&plan=${plan}&cycle=${cycle}`);
   } catch (err) {
     console.error(`[billing] callback failed: ${String(err)}`);
     return back('fail');

@@ -36,6 +36,7 @@ import { EmptyState } from '@/components/layout/blocks';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { trackSearch } from '@/lib/analytics';
 import { cn } from '@/lib/utils';
 
 import { SearchQuota } from '@/features/billing/components/search-quota';
@@ -645,6 +646,7 @@ export function CreatorSearch() {
     setLimitHit(null);
     setAiError(null);
     setPhase('searching');
+    trackSearch(q); // 활성화 지표(GA4)
     setSelected(new Set());
     setCached(false);
     setItems([]); // clear the previous session so the first batch shows fresh

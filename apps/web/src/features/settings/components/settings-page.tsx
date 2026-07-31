@@ -10,7 +10,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { SectionCard, StatusBadge } from '@/components/layout/blocks';
 import { PageHeader } from '@/components/layout/page-header';
@@ -22,9 +22,11 @@ import {
   PLAN_ORDER,
   PLANS,
   priceYearly,
+  toPlanKey,
   type PlanKey,
 } from '@/features/billing/plans';
 import { loadToss } from '@/features/billing/toss-client';
+import { trackPurchase } from '@/lib/analytics';
 import { InstagramConnectCard } from '@/features/inbox/components/instagram-connect-card';
 import { DmStyleEditor } from '@/features/search/components/dm-style-editor';
 import { FollowUpSetting } from '@/features/search/components/follow-up-setting';
@@ -46,6 +48,18 @@ export function SettingsPage() {
   const [cycle, setCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [busy, setBusy] = useState(false);
   const [test, setTest] = useState<TestState>({ kind: 'idle' });
+
+  // 결제 성공으로 돌아왔을 때 GA4 purchase 전환을 1회 전송(매출값 포함).
+  const purchaseFired = useRef(false);
+  useEffect(() => {
+    if (billingResult !== 'success' || purchaseFired.current) return;
+    const plan = toPlanKey(searchParams.get('plan'));
+    if (plan === 'free') return;
+    const cycleParam = searchParams.get('cycle') === 'yearly' ? 'yearly' : 'monthly';
+    const value = cycleParam === 'yearly' ? priceYearly(PLANS[plan]) : PLANS[plan].priceMonthly;
+    purchaseFired.current = true;
+    trackPurchase({ plan, value, cycle: cycleParam });
+  }, [billingResult, searchParams]);
 
   async function upgrade(plan: PlanKey) {
     if (!tossClientKey || billingBusy) return;

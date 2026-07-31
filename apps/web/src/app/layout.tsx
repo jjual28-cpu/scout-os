@@ -1,5 +1,6 @@
 import { Inter } from 'next/font/google';
 
+import { GoogleAnalytics } from '@/components/analytics/google-analytics';
 import { AppProviders } from '@/providers';
 import { siteConfig } from '@/config/site';
 
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko" suppressHydrationWarning>
       <body className={`${inter.variable} min-h-screen font-sans antialiased`}>
+        <GoogleAnalytics />
         <AppProviders>{children}</AppProviders>
       </body>
     </html>

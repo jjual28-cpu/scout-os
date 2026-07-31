@@ -8,6 +8,7 @@ import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { trackSignup } from '@/lib/analytics';
 
 import { useAuth } from '../hooks/use-auth';
 import { signupSchema, type SignupInput } from '../schemas';
@@ -28,6 +29,8 @@ export function SignupForm({ redirectTo }: { redirectTo?: string }) {
 
   const onSubmit = handleSubmit(async (values) => {
     const result = await signUp(values, redirectTo ?? '/home');
+    // 계정이 생성된 경우(즉시 로그인 or 이메일 확인 대기) = 가입 전환.
+    if (result === true || result === 'confirm') trackSignup();
     if (result === 'confirm') setConfirmSent(true);
   });
 
