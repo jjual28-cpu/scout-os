@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   Sparkles,
   Target,
+  TriangleAlert,
   X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -35,21 +36,25 @@ export const metadata: Metadata = {
 const features = [
   {
     icon: Target,
+    tone: 'bg-violet-100 text-violet-600',
     title: '우리 상품 맞춤 셀럽 발굴',
     body: '키워드·상품을 AI가 분석해 체험단·공구·협찬에 맞는 인스타 셀럽을 찾아줘요.',
   },
   {
     icon: ShieldCheck,
+    tone: 'bg-fuchsia-100 text-fuchsia-600',
     title: '가짜 팔로워 걸러내기',
     body: '팔로워 수만 보지 않아요. 참여율·진짜 영향력까지 AI가 검증해줘요.',
   },
   {
     icon: MessageSquare,
+    tone: 'bg-sky-100 text-sky-600',
     title: '맞춤 DM · 답장까지 한 곳에서',
     body: '셀럽마다 맞춤 DM 초안을 만들고, 답장·연락 상태를 CRM으로 관리해요.',
   },
   {
     icon: BarChart3,
+    tone: 'bg-emerald-100 text-emerald-600',
     title: '협업 성과 추적',
     body: '발굴 → 저장 → DM → 답변 → 협업까지 퍼널로 성과를 확인해요.',
   },
@@ -116,13 +121,23 @@ const faqs = [
 export default function LandingPage() {
   return (
     <main className="relative min-h-screen overflow-hidden bg-white text-slate-900">
-      {/* Ambient purple radial gradient (very soft) */}
+      {/* Ambient background — layered brand-color blobs + faint dotted grid (adds depth) */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[760px]"
         style={{
           background:
-            'radial-gradient(60% 50% at 78% 12%, hsl(262 83% 58% / 0.10) 0%, transparent 60%), radial-gradient(45% 40% at 15% 90%, hsl(262 83% 58% / 0.06) 0%, transparent 60%)',
+            'radial-gradient(52% 44% at 82% 0%, hsl(288 90% 62% / 0.16) 0%, transparent 60%), radial-gradient(46% 40% at 8% 6%, hsl(262 83% 58% / 0.12) 0%, transparent 55%)',
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-[560px] opacity-50"
+        style={{
+          backgroundImage: 'radial-gradient(hsl(262 83% 58% / 0.14) 1px, transparent 1px)',
+          backgroundSize: '22px 22px',
+          maskImage: 'linear-gradient(to bottom, black, transparent)',
+          WebkitMaskImage: 'linear-gradient(to bottom, black, transparent)',
         }}
       />
 
@@ -130,7 +145,7 @@ export default function LandingPage() {
         {/* Nav */}
         <header className="flex items-center justify-between py-5">
           <div className="flex items-center gap-2">
-            <div className="bg-primary text-primary-foreground flex h-8 w-8 items-center justify-center rounded-lg">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-sm">
               <span className="text-sm font-bold">S</span>
             </div>
             <span className="text-lg font-semibold tracking-tight">Scout OS</span>
@@ -146,17 +161,21 @@ export default function LandingPage() {
         </header>
 
         {/* Hero */}
-        <section className="grid items-center gap-12 py-16 lg:grid-cols-2 lg:gap-10 lg:py-24">
+        <section className="grid items-center gap-12 py-14 lg:grid-cols-2 lg:gap-8 lg:py-24">
           <div>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-              <Sparkles className="size-3.5 text-slate-400" />
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200/70 bg-white/80 px-3.5 py-1.5 text-xs font-semibold text-violet-700 shadow-sm backdrop-blur">
+              <Sparkles className="size-3.5 text-violet-500" />
               체험단·공구·협찬, 이제 AI로
             </span>
 
-            <h1 className="mt-6 text-balance text-4xl font-bold leading-[1.15] tracking-tight sm:text-5xl">
+            <h1 className="mt-6 text-balance text-[2.6rem] font-bold leading-[1.1] tracking-tight sm:text-[3.4rem]">
               체험단·공구 대신,
               <br />
-              AI가 찾은 <span className="text-primary">셀럽</span>에게
+              AI가 찾은{' '}
+              <span className="bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-500 bg-clip-text text-transparent">
+                셀럽
+              </span>
+              에게
               <br />
               직접 DM 보내세요.
             </h1>
@@ -167,7 +186,7 @@ export default function LandingPage() {
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg">
+              <Button asChild size="lg" className="shadow-lg shadow-violet-500/25">
                 <Link href="/signup">
                   무료로 시작하기 <ArrowRight className="size-4" />
                 </Link>
@@ -177,18 +196,37 @@ export default function LandingPage() {
               </Button>
             </div>
 
-            <ul className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-500">
+            <ul className="mt-7 flex flex-wrap gap-2 text-sm">
               {['회원가입 무료', '카드 등록 없음', '바로 사용 가능'].map((t) => (
-                <li key={t} className="inline-flex items-center gap-1.5">
-                  <Check className="text-primary size-4" />
+                <li
+                  key={t}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 shadow-sm"
+                >
+                  <Check className="size-4 text-violet-500" />
                   {t}
                 </li>
               ))}
             </ul>
           </div>
 
-          {/* Product preview — real HTML UI mockup, not an image */}
-          <HeroPreview />
+          {/* Product preview — glow + slight tilt + floating feature chips for depth */}
+          <div className="relative">
+            <div
+              aria-hidden
+              className="absolute -inset-8 rounded-[2.5rem] bg-gradient-to-tr from-violet-400/25 via-purple-400/15 to-fuchsia-400/25 blur-3xl"
+            />
+            <div className="relative rotate-[1.5deg] transition-transform duration-500 hover:rotate-0">
+              <HeroPreview />
+            </div>
+            <div className="absolute -left-3 top-10 hidden items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-600 shadow-lg sm:flex">
+              <TriangleAlert className="size-3.5" />
+              가짜 팔로워 의심
+            </div>
+            <div className="absolute -right-2 bottom-12 hidden items-center gap-1.5 rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-semibold text-violet-600 shadow-lg sm:flex">
+              <Sparkles className="size-3.5" />
+              AI 추천 · 적합도 92
+            </div>
+          </div>
         </section>
 
         {/* Feature cards */}
@@ -196,8 +234,16 @@ export default function LandingPage() {
           {features.map((f) => {
             const Icon = f.icon;
             return (
-              <div key={f.title} className="rounded-2xl border border-slate-200/70 bg-white p-6">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+              <div
+                key={f.title}
+                className="group rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-violet-200 hover:shadow-xl hover:shadow-violet-500/[0.07]"
+              >
+                <div
+                  className={cn(
+                    'flex h-11 w-11 items-center justify-center rounded-xl transition-transform group-hover:scale-110',
+                    f.tone,
+                  )}
+                >
                   <Icon className="size-5" />
                 </div>
                 <h3 className="mt-4 font-semibold">{f.title}</h3>
@@ -207,50 +253,57 @@ export default function LandingPage() {
           })}
         </section>
 
-        {/* How it works */}
-        <section className="border-t border-slate-200 py-16">
-          <h2 className="text-center text-2xl font-bold tracking-tight sm:text-3xl">
-            3단계면 끝나요
-          </h2>
-          <p className="mt-2 text-center text-slate-600">
-            체험단 신청·대행사 미팅 없이, 오늘 바로 시작하세요.
-          </p>
-          <div className="mt-10 grid gap-6 sm:grid-cols-3">
-            {steps.map((s) => {
-              const Icon = s.icon;
-              return (
-                <div key={s.title} className="rounded-2xl border border-slate-200/70 bg-white p-6">
-                  <div className="bg-primary/10 text-primary flex h-11 w-11 items-center justify-center rounded-xl">
-                    <Icon className="size-5" />
+        {/* How it works — tinted panel */}
+        <section className="py-14">
+          <div className="rounded-[2rem] bg-gradient-to-b from-violet-50/70 to-white p-8 ring-1 ring-violet-100/70 sm:p-12">
+            <h2 className="text-center text-2xl font-bold tracking-tight sm:text-3xl">
+              3단계면 끝나요
+            </h2>
+            <p className="mt-2 text-center text-slate-600">
+              체험단 신청·대행사 미팅 없이, 오늘 바로 시작하세요.
+            </p>
+            <div className="mt-10 grid gap-6 sm:grid-cols-3">
+              {steps.map((s) => {
+                const Icon = s.icon;
+                return (
+                  <div
+                    key={s.title}
+                    className="rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm"
+                  >
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-lg shadow-violet-500/25">
+                      <Icon className="size-5" />
+                    </div>
+                    <h3 className="mt-4 font-semibold">{s.title}</h3>
+                    <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{s.body}</p>
                   </div>
-                  <h3 className="mt-4 font-semibold">{s.title}</h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{s.body}</p>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </section>
 
         {/* Comparison vs 체험단·공구 */}
-        <section className="border-t border-slate-200 py-16">
+        <section className="py-14">
           <h2 className="text-center text-2xl font-bold tracking-tight sm:text-3xl">
             체험단·공구와 뭐가 다른가요?
           </h2>
-          <div className="mx-auto mt-10 max-w-2xl overflow-hidden rounded-2xl border border-slate-200">
+          <div className="mx-auto mt-10 max-w-2xl overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
             <div className="grid grid-cols-3 bg-slate-50 text-sm font-semibold">
-              <div className="p-4 text-slate-500"> </div>
+              <div className="p-4 text-slate-400"> </div>
               <div className="p-4 text-center text-slate-500">체험단·공구 대행</div>
-              <div className="text-primary p-4 text-center">Scout OS</div>
+              <div className="bg-gradient-to-b from-violet-600 to-fuchsia-500 p-4 text-center text-white">
+                Scout OS
+              </div>
             </div>
             {compare.map((row) => (
               <div key={row.label} className="grid grid-cols-3 border-t border-slate-100 text-sm">
                 <div className="p-4 font-medium">{row.label}</div>
-                <div className="flex items-center gap-1.5 p-4 text-slate-500">
+                <div className="flex items-center gap-1.5 p-4 text-slate-400">
                   <X className="size-4 shrink-0 text-slate-300" />
                   {row.them}
                 </div>
-                <div className="flex items-center gap-1.5 p-4 font-medium">
-                  <Check className="text-primary size-4 shrink-0" />
+                <div className="flex items-center gap-1.5 bg-violet-50/60 p-4 font-medium text-slate-900">
+                  <Check className="size-4 shrink-0 text-violet-600" />
                   {row.us}
                 </div>
               </div>
@@ -258,48 +311,52 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Pricing */}
-        <section id="pricing" className="border-t border-slate-200 py-16">
-          <h2 className="text-center text-2xl font-bold tracking-tight sm:text-3xl">
-            합리적인 가격
-          </h2>
-          <p className="mt-2 text-center text-slate-600">
-            부담 없이 무료로 써보고, 필요하면 그때 올리세요. 연간 결제 시 2개월 무료.
-          </p>
-          <div className="mx-auto mt-10 grid max-w-3xl gap-5 sm:grid-cols-3">
-            {plans.map((p) => (
-              <div
-                key={p.name}
-                className={cn(
-                  'rounded-2xl border bg-white p-6',
-                  p.highlight ? 'border-primary ring-primary/20 ring-2' : 'border-slate-200/70',
-                )}
-              >
-                {p.highlight ? (
-                  <span className="bg-primary text-primary-foreground inline-block rounded-full px-2.5 py-0.5 text-[11px] font-semibold">
-                    인기
-                  </span>
-                ) : null}
-                <p className="mt-2 font-semibold">{p.name}</p>
-                <p className="mt-1">
-                  <span className="text-2xl font-bold tracking-tight">{p.price}</span>
-                  <span className="text-sm text-slate-500">{p.unit}</span>
-                </p>
-                <p className="mt-1.5 text-sm text-slate-600">{p.desc}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-8 text-center">
-            <Button asChild size="lg">
-              <Link href="/signup">
-                무료로 시작하기 <ArrowRight className="size-4" />
-              </Link>
-            </Button>
+        {/* Pricing — tinted panel, elevated 인기 plan */}
+        <section id="pricing" className="py-14">
+          <div className="rounded-[2rem] bg-gradient-to-b from-slate-50 to-white p-8 ring-1 ring-slate-100 sm:p-12">
+            <h2 className="text-center text-2xl font-bold tracking-tight sm:text-3xl">
+              합리적인 가격
+            </h2>
+            <p className="mt-2 text-center text-slate-600">
+              부담 없이 무료로 써보고, 필요하면 그때 올리세요. 연간 결제 시 2개월 무료.
+            </p>
+            <div className="mx-auto mt-10 grid max-w-3xl items-center gap-5 sm:grid-cols-3">
+              {plans.map((p) => (
+                <div
+                  key={p.name}
+                  className={cn(
+                    'rounded-2xl border bg-white p-6 transition-all',
+                    p.highlight
+                      ? 'border-violet-300 shadow-xl shadow-violet-500/10 ring-1 ring-violet-200 sm:-translate-y-2'
+                      : 'border-slate-200/70 shadow-sm',
+                  )}
+                >
+                  {p.highlight ? (
+                    <span className="inline-block rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-500 px-2.5 py-0.5 text-[11px] font-semibold text-white">
+                      인기
+                    </span>
+                  ) : null}
+                  <p className="mt-2 font-semibold">{p.name}</p>
+                  <p className="mt-1">
+                    <span className="text-2xl font-bold tracking-tight">{p.price}</span>
+                    <span className="text-sm text-slate-500">{p.unit}</span>
+                  </p>
+                  <p className="mt-1.5 text-sm text-slate-600">{p.desc}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-8 text-center">
+              <Button asChild size="lg" className="shadow-lg shadow-violet-500/25">
+                <Link href="/signup">
+                  무료로 시작하기 <ArrowRight className="size-4" />
+                </Link>
+              </Button>
+            </div>
           </div>
         </section>
 
         {/* FAQ */}
-        <section className="border-t border-slate-200 py-16">
+        <section className="py-14">
           <h2 className="text-center text-2xl font-bold tracking-tight sm:text-3xl">
             자주 묻는 질문
           </h2>
@@ -307,9 +364,14 @@ export default function LandingPage() {
             {faqs.map((f) => (
               <details
                 key={f.q}
-                className="rounded-xl border border-slate-200/70 bg-white p-4 [&_summary]:cursor-pointer"
+                className="group rounded-xl border border-slate-200/70 bg-white p-4 shadow-sm transition-colors open:border-violet-200 [&_summary]:cursor-pointer"
               >
-                <summary className="font-medium">{f.q}</summary>
+                <summary className="flex items-center justify-between font-medium">
+                  {f.q}
+                  <span className="text-violet-400 transition-transform group-open:rotate-45">
+                    +
+                  </span>
+                </summary>
                 <p className="mt-2 text-sm leading-relaxed text-slate-600">{f.a}</p>
               </details>
             ))}
@@ -317,7 +379,7 @@ export default function LandingPage() {
         </section>
 
         {/* Platforms */}
-        <section className="border-t border-slate-200 py-10">
+        <section className="py-10">
           <p className="text-center text-sm text-slate-500">지원 플랫폼</p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
             {platforms.map((p) => (
@@ -326,7 +388,7 @@ export default function LandingPage() {
                 className={cn(
                   'inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm',
                   p.active
-                    ? 'border-slate-300 bg-white font-medium text-slate-900'
+                    ? 'border-violet-200 bg-white font-medium text-slate-900 shadow-sm'
                     : 'border-slate-200 text-slate-400',
                 )}
               >
@@ -341,14 +403,28 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Final CTA */}
-        <section className="border-t border-slate-200 py-16">
-          <div className="from-primary/10 rounded-3xl bg-gradient-to-br to-fuchsia-500/10 px-6 py-14 text-center">
-            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+        {/* Final CTA — bold gradient band */}
+        <section className="py-16">
+          <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-500 px-6 py-16 text-center shadow-2xl shadow-violet-500/30">
+            <div
+              aria-hidden
+              className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-2xl"
+            />
+            <div
+              aria-hidden
+              className="absolute -bottom-20 -left-10 h-56 w-56 rounded-full bg-fuchsia-300/20 blur-2xl"
+            />
+            <h2 className="relative text-2xl font-bold tracking-tight text-white sm:text-3xl">
               지금 무료로 셀럽을 찾아보세요
             </h2>
-            <p className="mt-2 text-slate-600">회원가입 무료 · 카드 등록 없음 · 1분이면 시작</p>
-            <Button asChild size="lg" className="mt-6">
+            <p className="relative mt-3 text-violet-100">
+              회원가입 무료 · 카드 등록 없음 · 1분이면 시작
+            </p>
+            <Button
+              asChild
+              size="lg"
+              className="relative mt-6 bg-white text-violet-700 shadow-lg hover:bg-violet-50"
+            >
               <Link href="/signup">
                 무료로 시작하기 <ArrowRight className="size-4" />
               </Link>
@@ -400,13 +476,13 @@ function HeroPreview() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none select-none overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/[0.06]"
+      className="pointer-events-none select-none overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/[0.12] ring-1 ring-slate-900/5"
     >
       <div className="flex">
         {/* Mini sidebar */}
         <div className="hidden w-32 shrink-0 border-r border-slate-100 bg-slate-50/60 p-3 sm:block">
           <div className="flex items-center gap-1.5">
-            <div className="bg-primary flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white">
+            <div className="flex h-5 w-5 items-center justify-center rounded bg-gradient-to-br from-violet-600 to-fuchsia-500 text-[10px] font-bold text-white">
               S
             </div>
             <span className="text-xs font-semibold">Scout OS</span>
@@ -417,7 +493,7 @@ function HeroPreview() {
                 key={n}
                 className={cn(
                   'rounded-md px-2 py-1 text-[11px]',
-                  i === 0 ? 'bg-primary/10 text-primary font-medium' : 'text-slate-400',
+                  i === 0 ? 'bg-violet-100 font-medium text-violet-700' : 'text-slate-400',
                 )}
               >
                 {n}
@@ -433,7 +509,7 @@ function HeroPreview() {
               <p className="text-[13px] font-semibold">대시보드</p>
               <p className="text-[10px] text-slate-400">오늘도 좋은 셀럽을 발견해보세요</p>
             </div>
-            <div className="bg-primary rounded-md px-2 py-1 text-[10px] font-medium text-white">
+            <div className="rounded-md bg-gradient-to-r from-violet-600 to-fuchsia-500 px-2 py-1 text-[10px] font-medium text-white">
               + 새 캠페인
             </div>
           </div>
