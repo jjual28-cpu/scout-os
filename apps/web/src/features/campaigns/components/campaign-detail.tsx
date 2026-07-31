@@ -5,9 +5,11 @@ import {
   ArrowUpDown,
   Copy,
   EyeOff,
+  MessageSquareText,
   RefreshCw,
   Sparkles,
   Star,
+  Tag,
   Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -22,6 +24,7 @@ import { DiscoverCard } from '@/features/search/components/discover-card';
 import { isDefaultHidden } from '@/features/search/creator-status';
 import { toStage } from '@/features/search/crm-stages';
 import { type DiscoverOpportunity } from '@/features/search/discover-mock';
+import { useInboxReplyMap, replyKey } from '@/features/search/hooks/use-inbox-reply-map';
 import { useOutreach } from '@/features/search/hooks/use-outreach';
 import { toDiscoverOpportunity, type InstagramCreator } from '@/features/search/instagram';
 
@@ -152,6 +155,7 @@ export function CampaignDetail({ id }: { id: string }) {
   const router = useRouter();
   const c = useCampaign(id);
   const outreach = useOutreach();
+  const { map: replyMap } = useInboxReplyMap();
 
   const [sort, setSort] = useState<SortKey>('rank');
   // 기본으로 전부 보인다 — 연락완료 등으로 셀럽이 조용히 사라지면 오히려 헷갈린다는
@@ -413,11 +417,13 @@ export function CampaignDetail({ id }: { id: string }) {
             <ul className="dark:divide-border/60 divide-y divide-slate-100">
               {dmHistory.map(({ r, rec }) => {
                 const stg = toStage(rec!.status);
+                const reply = replyMap.get(replyKey(r.externalId));
+                const preview = reply?.text || rec!.replyNote || '';
                 return (
                   <li key={r.externalId}>
                     <Link
                       href={`/creators/${encodeURIComponent(r.externalId)}`}
-                      className="dark:hover:bg-muted/40 flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-slate-50/70"
+                      className="dark:hover:bg-muted/40 flex items-start justify-between gap-3 px-4 py-3 transition-colors hover:bg-slate-50/70"
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">@{r.username}</p>
@@ -425,12 +431,33 @@ export function CampaignDetail({ id }: { id: string }) {
                           {rec!.contactedAt
                             ? `연락 ${new Date(rec!.contactedAt).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}`
                             : 'DM 준비됨'}
-                          {rec!.replyNote ? ` · ${rec!.replyNote.slice(0, 30)}` : ''}
+                          {preview ? ` · ${preview.slice(0, 30)}` : ''}
                         </p>
+                        {rec!.tags.length > 0 ? (
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            {rec!.tags.slice(0, 4).map((t) => (
+                              <span
+                                key={t}
+                                className="bg-primary/10 text-primary inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+                              >
+                                <Tag className="size-2.5" />
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
-                      <span className="dark:bg-muted dark:text-muted-foreground shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                        {stg}
-                      </span>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        {reply ? (
+                          <span className="bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium">
+                            <MessageSquareText className="size-3" />
+                            답장{reply.unread > 0 ? ` · 새 ${reply.unread}` : ''}
+                          </span>
+                        ) : null}
+                        <span className="dark:bg-muted dark:text-muted-foreground rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                          {stg}
+                        </span>
+                      </div>
                     </Link>
                   </li>
                 );
