@@ -24,14 +24,14 @@ export const PLANS: Record<PlanKey, Plan> = {
     key: 'basic',
     name: '베이직',
     monthlySearches: 100,
-    priceMonthly: 19800,
+    priceMonthly: 39000,
     tagline: '월 100회 검색',
   },
   pro: {
     key: 'pro',
     name: '프로',
     monthlySearches: 300,
-    priceMonthly: 39800,
+    priceMonthly: 79000,
     tagline: '월 300회 검색',
   },
 };

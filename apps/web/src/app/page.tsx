@@ -95,8 +95,8 @@ const compare = [
 
 const plans = [
   { name: '무료', price: '0원', unit: '', desc: '월 1회 검색 · 카드 등록 없음', highlight: false },
-  { name: '베이직', price: '19,800원', unit: '/월', desc: '월 100회 검색', highlight: true },
-  { name: '프로', price: '39,800원', unit: '/월', desc: '월 300회 검색', highlight: false },
+  { name: '베이직', price: '39,000원', unit: '/월', desc: '월 100회 검색', highlight: true },
+  { name: '프로', price: '79,000원', unit: '/월', desc: '월 300회 검색', highlight: false },
 ];
 
 const faqs = [
