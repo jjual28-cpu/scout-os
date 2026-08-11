@@ -401,33 +401,36 @@ export default function LandingPage() {
         />
         <div className="relative mx-auto w-full max-w-6xl px-6">
           <Reveal>
-            <h2 className="text-center text-2xl font-bold tracking-tight text-white sm:text-3xl">
+            <h2 className="text-center text-3xl font-bold tracking-tight text-white sm:text-4xl">
               체험단·공구와 뭐가 다른가요?
             </h2>
-            <p className="mt-3 text-center text-slate-400">
+            <p className="mt-4 text-center text-base text-slate-400 sm:text-lg">
               수수료 없이, 진짜 영향력 있는 셀럽을 직접 골라 연락하세요.
             </p>
           </Reveal>
           <Reveal
             delay={120}
-            className="mx-auto mt-10 max-w-2xl overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-2xl backdrop-blur"
+            className="mx-auto mt-12 max-w-4xl overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-2xl backdrop-blur"
           >
-            <div className="grid grid-cols-3 text-sm font-semibold">
-              <div className="p-4 text-slate-500"> </div>
-              <div className="p-4 text-center text-slate-400">체험단·공구 대행</div>
-              <div className="bg-gradient-to-b from-violet-500 to-fuchsia-500 p-4 text-center text-white shadow-lg shadow-fuchsia-500/30">
+            <div className="grid grid-cols-3 text-base font-semibold sm:text-lg">
+              <div className="p-5 text-slate-500 sm:p-6"> </div>
+              <div className="p-5 text-center text-slate-400 sm:p-6">체험단·공구 대행</div>
+              <div className="bg-gradient-to-b from-violet-500 to-fuchsia-500 p-5 text-center text-white shadow-lg shadow-fuchsia-500/30 sm:p-6">
                 Scout OS
               </div>
             </div>
             {compare.map((row) => (
-              <div key={row.label} className="grid grid-cols-3 border-t border-white/10 text-sm">
-                <div className="p-4 font-medium text-white">{row.label}</div>
-                <div className="flex items-center gap-1.5 p-4 text-slate-500">
-                  <X className="size-4 shrink-0 text-slate-600" />
+              <div
+                key={row.label}
+                className="grid grid-cols-3 border-t border-white/10 text-sm sm:text-base"
+              >
+                <div className="p-5 font-semibold text-white sm:p-6">{row.label}</div>
+                <div className="flex items-center gap-2 p-5 text-slate-500 sm:p-6">
+                  <X className="size-5 shrink-0 text-slate-600" />
                   {row.them}
                 </div>
-                <div className="flex items-center gap-1.5 bg-gradient-to-r from-violet-500/10 to-fuchsia-500/10 p-4 font-medium text-white">
-                  <Check className="size-4 shrink-0 text-fuchsia-400" />
+                <div className="flex items-center gap-2 bg-gradient-to-r from-violet-500/10 to-fuchsia-500/10 p-5 font-medium text-white sm:p-6">
+                  <Check className="size-5 shrink-0 text-fuchsia-400" />
                   {row.us}
                 </div>
               </div>
@@ -440,36 +443,36 @@ export default function LandingPage() {
       <div className="relative mx-auto w-full max-w-6xl px-6">
         {/* Pricing — tinted panel, elevated 인기 plan */}
         <section id="pricing" className="py-16">
-          <Reveal className="rounded-[2rem] bg-gradient-to-b from-slate-50 to-white p-8 ring-1 ring-slate-100 sm:p-12">
-            <h2 className="text-center text-2xl font-bold tracking-tight sm:text-3xl">
+          <Reveal className="rounded-[2rem] bg-gradient-to-b from-slate-50 to-white p-8 ring-1 ring-slate-100 sm:p-14">
+            <h2 className="text-center text-3xl font-bold tracking-tight sm:text-4xl">
               합리적인 가격
             </h2>
-            <p className="mt-2 text-center text-slate-600">
+            <p className="mt-3 text-center text-base text-slate-600 sm:text-lg">
               부담 없이 무료로 써보고, 필요하면 그때 올리세요. 연간 결제 시 2개월 무료.
             </p>
-            <div className="mx-auto mt-10 grid max-w-3xl items-center gap-5 sm:grid-cols-3">
+            <div className="mx-auto mt-12 grid max-w-4xl items-center gap-6 sm:grid-cols-3">
               {plans.map((p, i) => (
                 <Reveal
                   key={p.name}
                   delay={i * 90}
                   className={cn(
-                    'rounded-2xl border bg-white p-6 transition-all hover:-translate-y-1',
+                    'rounded-3xl border bg-white p-7 transition-all hover:-translate-y-1 sm:p-8',
                     p.highlight
                       ? 'border-violet-300 shadow-xl shadow-violet-500/10 ring-1 ring-violet-200 sm:-translate-y-2 sm:hover:-translate-y-3'
                       : 'border-slate-200/70 shadow-sm hover:shadow-lg',
                   )}
                 >
                   {p.highlight ? (
-                    <span className="inline-block rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-500 px-2.5 py-0.5 text-[11px] font-semibold text-white">
+                    <span className="inline-block rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-500 px-3 py-1 text-xs font-semibold text-white">
                       인기
                     </span>
                   ) : null}
-                  <p className="mt-2 font-semibold">{p.name}</p>
-                  <p className="mt-1">
-                    <span className="text-2xl font-bold tracking-tight">{p.price}</span>
-                    <span className="text-sm text-slate-500">{p.unit}</span>
+                  <p className="mt-3 text-lg font-semibold">{p.name}</p>
+                  <p className="mt-1.5">
+                    <span className="text-3xl font-bold tracking-tight sm:text-4xl">{p.price}</span>
+                    <span className="text-base text-slate-500">{p.unit}</span>
                   </p>
-                  <p className="mt-1.5 text-sm text-slate-600">{p.desc}</p>
+                  <p className="mt-2 text-base text-slate-600">{p.desc}</p>
                 </Reveal>
               ))}
             </div>
