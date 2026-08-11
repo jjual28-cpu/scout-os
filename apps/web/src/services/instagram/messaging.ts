@@ -37,6 +37,35 @@ export async function sendMessage(
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
+/**
+ * 이 계정의 메시지 웹훅을 앱에 구독시킨다 — OAuth 직후 1회 필요.
+ * 이 호출을 안 하면 연동을 해도 셀럽 답장이 웹훅으로 안 들어온다(Instagram Login API).
+ * best-effort: 실패해도 연동 자체는 유지하고, 설정 카드의 "답장 수신 재연결"로 재시도 가능.
+ * @returns 구독 성공 여부(success 필드).
+ */
+export async function subscribeMessagingWebhook(
+  igUserId: string,
+  accessToken: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const url = new URL(`${GRAPH}/${encodeURIComponent(igUserId)}/subscribed_apps`);
+    url.searchParams.set('subscribed_fields', 'messages');
+    url.searchParams.set('access_token', accessToken);
+    const res = await fetch(url.toString(), { method: 'POST' });
+    const json = (await res.json().catch(() => null)) as {
+      success?: boolean;
+      error?: { message?: string };
+    } | null;
+    if (!res.ok || json?.success === false) {
+      const msg = json?.error?.message || `웹훅 구독 오류 (${res.status})`;
+      return { ok: false, error: msg };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : '웹훅 구독 실패' };
+  }
+}
+
 /** IGSID → username (best-effort). 실패하면 null (권한·버전 따라 없을 수 있음). */
 export async function fetchPeerUsername(
   peerId: string,

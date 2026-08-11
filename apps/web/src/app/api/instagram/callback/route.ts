@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 
 import { env, isInstagramConfigured, isSupabaseConfigured } from '@/lib/env';
 import { saveConnection } from '@/services/instagram/connection-service';
+import { subscribeMessagingWebhook } from '@/services/instagram/messaging';
 import { exchangeCode } from '@/services/instagram/oauth';
 
 export const dynamic = 'force-dynamic';
@@ -40,6 +41,12 @@ export const GET = async (request: NextRequest) => {
     const redirectUri = `${env.NEXT_PUBLIC_APP_URL}/api/instagram/callback`;
     const tokens = await exchangeCode(code, redirectUri);
     await saveConnection({ userId: user.id, ...tokens });
+
+    // 이 계정의 메시지 웹훅을 앱에 구독 — 이게 있어야 셀럽 답장이 실제로 들어온다.
+    // best-effort: 실패해도 연동은 성공 처리(설정의 "답장 수신 재연결"로 재시도 가능).
+    const sub = await subscribeMessagingWebhook(tokens.igUserId, tokens.accessToken);
+    if (!sub.ok) console.error(`[instagram] webhook subscribe failed: ${sub.error}`);
+
     return back('connected');
   } catch (err) {
     console.error(`[instagram] callback failed: ${String(err)}`);

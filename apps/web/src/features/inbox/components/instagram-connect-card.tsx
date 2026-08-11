@@ -29,6 +29,18 @@ export function InstagramConnectCard() {
     })();
   }, []);
 
+  // 웹훅 구독 재시도(복구용). OAuth 직후 구독이 실패했을 때 답장 수신을 다시 켠다.
+  const [subState, setSubState] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
+  const resubscribe = async () => {
+    setSubState('loading');
+    try {
+      const res = await fetch('/api/instagram/subscribe', { method: 'POST' });
+      setSubState(res.ok ? 'ok' : 'error');
+    } catch {
+      setSubState('error');
+    }
+  };
+
   return (
     <div className="space-y-3">
       <p className="text-muted-foreground text-xs leading-relaxed">
@@ -53,11 +65,36 @@ export function InstagramConnectCard() {
           관리자가 인스타 앱(Meta)을 설정하면 연결할 수 있어요.
         </p>
       ) : status.connected ? (
-        <p className="inline-flex items-center gap-1.5 text-sm">
-          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 font-medium text-emerald-600 dark:text-emerald-400">
-            {status.username ? `@${status.username}` : ''} 연결됨
-          </span>
-        </p>
+        <div className="space-y-2">
+          <p className="inline-flex items-center gap-1.5 text-sm">
+            <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 font-medium text-emerald-600 dark:text-emerald-400">
+              {status.username ? `@${status.username}` : ''} 연결됨
+            </span>
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={resubscribe}
+              disabled={subState === 'loading'}
+            >
+              {subState === 'loading' ? '재연결 중…' : '답장 수신 재연결'}
+            </Button>
+            {subState === 'ok' ? (
+              <span className="text-xs text-emerald-600">답장 수신이 켜졌어요.</span>
+            ) : subState === 'error' ? (
+              <span className="text-destructive text-xs">
+                재연결 실패 — 잠시 후 다시 시도해 주세요.
+              </span>
+            ) : null}
+          </div>
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            답장이 안 들어오면 위{' '}
+            <span className="text-foreground font-medium">답장 수신 재연결</span>을 눌러 주세요.
+            (인스타 웹훅 구독을 다시 겁니다)
+          </p>
+        </div>
       ) : (
         <Button type="button" onClick={() => (window.location.href = '/api/instagram/authorize')}>
           <Instagram className="size-4" />
