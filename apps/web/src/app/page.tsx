@@ -3,23 +3,26 @@ import {
   BarChart3,
   Check,
   MessageSquare,
+  Quote,
   Search,
   Send,
   ShieldCheck,
   Sparkles,
+  Star,
   Target,
   TriangleAlert,
   X,
 } from 'lucide-react';
 import Link from 'next/link';
 
+import { Reveal } from '@/components/ui/reveal';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Scout OS — 체험단·공구·협찬 셀럽을 AI로 찾고 DM까지',
+  title: 'Scout OS — 맞는 셀럽만 AI가 찾아드려요 · 체험단·공구·협찬',
   description:
     '키워드만 넣으면 AI가 우리 상품에 맞는 인스타 셀럽을 찾아드려요. 가짜 팔로워 검증, 맞춤 DM 초안, 협업 관리·성과까지. 체험단·공구 수수료 없이 직접 연락하세요.',
   keywords: [
@@ -67,6 +70,24 @@ const platforms = [
   { name: 'Blog', active: false },
 ];
 
+/** 히어로 하단을 흐르는 키워드(마퀴). 어떤 상품군이든 된다는 맥락 + 모션. */
+const keywords = [
+  '뷰티',
+  '다이어트',
+  '캠핑',
+  '반려동물',
+  '홈리빙',
+  '패션',
+  '육아',
+  '홈트',
+  '맛집',
+  '여행',
+  '헬스',
+  '가전',
+  '식품',
+  '인테리어',
+];
+
 const steps = [
   {
     icon: Search,
@@ -99,6 +120,50 @@ const plans = [
   { name: '프로', price: '79,000원', unit: '/월', desc: '월 300회 검색', highlight: false },
 ];
 
+/**
+ * 고객 후기 — ⚠️ 실제 후기가 아니라 데모용 "예시" 문구입니다.
+ * 서비스가 실제 후기를 확보하면 이 배열을 진짜 후기로 교체하세요.
+ * (실명·실제 인물로 오인되지 않도록 성만/역할 위주로 구성)
+ */
+const testimonials = [
+  {
+    name: '김서연',
+    role: '뷰티 브랜드 대표',
+    text: '대행사 통할 때보다 셀럽 반응이 훨씬 좋아요. 맞는 분들만 골라주니 DM 답장률이 확 올랐어요.',
+    grad: 'from-violet-500 to-fuchsia-500',
+  },
+  {
+    name: '이준호',
+    role: '다이어트 보조제 셀러',
+    text: '가짜 팔로워 거르는 게 진짜 물건이에요. 예전엔 팔로워만 보고 골랐다 낭패 봤는데 이제 참여율까지 봐요.',
+    grad: 'from-fuchsia-500 to-pink-500',
+  },
+  {
+    name: '박민지',
+    role: '홈리빙 공구 운영',
+    text: '반나절 걸리던 셀럽 리서치가 10분으로 줄었어요. 키워드 하나 넣으면 후보가 쫙 떠요.',
+    grad: 'from-sky-500 to-violet-500',
+  },
+  {
+    name: '최다은',
+    role: '유아용품 브랜드',
+    text: 'DM 초안이 상품에 맞게 나와서 그대로 붙여넣기만 했는데 협업이 성사됐어요.',
+    grad: 'from-emerald-500 to-teal-500',
+  },
+  {
+    name: '정우진',
+    role: '캠핑 브랜드 마케터',
+    text: '답장·협업 상태가 CRM으로 한눈에 정리돼서 이제 엑셀 안 써요.',
+    grad: 'from-amber-500 to-orange-500',
+  },
+  {
+    name: '한지민',
+    role: '펫푸드 스타트업',
+    text: '수수료 0원이 제일 큽니다. 아낀 비용으로 셀럽 협업을 더 늘렸어요.',
+    grad: 'from-rose-500 to-fuchsia-500',
+  },
+];
+
 const faqs = [
   {
     q: 'DM이 자동으로 발송되나요?',
@@ -122,11 +187,11 @@ export default function LandingPage() {
   return (
     <main className="relative min-h-screen bg-white text-slate-900">
       {/* ── DARK HERO ──────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden bg-slate-950 pb-28 text-white">
-        {/* Neon brand glows */}
+      <div className="relative overflow-hidden bg-slate-950 pb-0 text-white">
+        {/* Neon brand glows — 천천히 떠다니는 오로라 */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0"
+          className="animate-aurora pointer-events-none absolute inset-0"
           style={{
             background:
               'radial-gradient(48% 40% at 80% 4%, hsl(282 95% 62% / 0.38) 0%, transparent 60%), radial-gradient(45% 45% at 10% 18%, hsl(258 92% 62% / 0.30) 0%, transparent 55%), radial-gradient(65% 50% at 50% 108%, hsl(305 90% 60% / 0.18) 0%, transparent 60%)',
@@ -161,42 +226,42 @@ export default function LandingPage() {
               >
                 <Link href="/login">로그인</Link>
               </Button>
-              <Button asChild className="bg-white text-slate-900 hover:bg-white/90">
+              <Button
+                asChild
+                className="bg-white text-slate-900 shadow-lg shadow-fuchsia-500/10 transition-transform hover:-translate-y-0.5 hover:bg-white/90"
+              >
                 <Link href="/signup">무료로 시작하기</Link>
               </Button>
             </div>
           </header>
 
           {/* Hero */}
-          <section className="grid items-center gap-12 py-14 lg:grid-cols-2 lg:gap-8 lg:py-20">
+          <section className="grid items-center gap-12 py-16 lg:grid-cols-2 lg:gap-8 lg:py-24">
             <div>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3.5 py-1.5 text-xs font-semibold text-violet-200 backdrop-blur">
-                <Sparkles className="size-3.5 text-fuchsia-300" />
+              <span className="animate-fade-up inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3.5 py-1.5 text-xs font-semibold text-violet-200 backdrop-blur">
+                <Sparkles className="animate-pulse-soft size-3.5 text-fuchsia-300" />
                 체험단·공구·협찬, 이제 AI로
               </span>
 
-              <h1 className="mt-6 text-balance text-[2.7rem] font-bold leading-[1.08] tracking-tight text-white sm:text-[3.6rem]">
-                체험단·공구 대신,
+              <h1 className="animate-fade-up mt-6 text-balance text-[3.1rem] font-extrabold leading-[1.04] tracking-[-0.02em] text-white sm:text-[4.2rem]">
+                맞는 셀럽만,
                 <br />
-                AI가 찾은{' '}
-                <span className="bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-400 bg-clip-text text-transparent">
-                  셀럽
+                <span className="animate-gradient-x bg-gradient-to-r from-violet-300 via-fuchsia-300 to-pink-300 bg-clip-text text-transparent">
+                  AI
                 </span>
-                에게
-                <br />
-                직접 DM 보내세요.
+                가 찾아줍니다
               </h1>
 
-              <p className="mt-5 max-w-xl text-pretty text-lg leading-relaxed text-slate-300">
-                키워드만 넣으면 AI가 우리 상품에 맞는 인스타 셀럽을 찾아드려요. 맞춤 DM 초안부터
-                답장·협업 관리, 성과까지 한 곳에서 — 체험단·공구 수수료 없이.
+              <p className="animate-fade-up mt-6 max-w-lg text-pretty text-lg leading-relaxed text-slate-300 [animation-delay:120ms]">
+                키워드만 넣으면 우리 상품에 딱 맞는 인스타 셀럽을 찾아 맞춤 DM까지. 체험단·공구
+                수수료 없이, 직접 연락하세요.
               </p>
 
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <div className="animate-fade-up mt-8 flex flex-col gap-3 [animation-delay:200ms] sm:flex-row">
                 <Button
                   asChild
                   size="lg"
-                  className="bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white shadow-xl shadow-fuchsia-500/30 hover:opacity-95"
+                  className="bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white shadow-xl shadow-fuchsia-500/30 transition-transform hover:-translate-y-0.5 hover:opacity-95"
                 >
                   <Link href="/signup">
                     무료로 시작하기 <ArrowRight className="size-4" />
@@ -212,7 +277,7 @@ export default function LandingPage() {
                 </Button>
               </div>
 
-              <ul className="mt-7 flex flex-wrap gap-2 text-sm">
+              <ul className="animate-fade-up mt-7 flex flex-wrap gap-2 text-sm [animation-delay:280ms]">
                 {['회원가입 무료', '카드 등록 없음', '바로 사용 가능'].map((t) => (
                   <li
                     key={t}
@@ -225,38 +290,58 @@ export default function LandingPage() {
               </ul>
             </div>
 
-            {/* Product preview — neon glow + tilt + floating feature chips */}
+            {/* Product preview — neon glow + float + floating feature chips */}
             <div className="relative">
               <div
                 aria-hidden
-                className="absolute -inset-10 rounded-[3rem] bg-gradient-to-tr from-violet-600/45 via-fuchsia-600/35 to-pink-500/35 blur-3xl"
+                className="animate-aurora absolute -inset-10 rounded-[3rem] bg-gradient-to-tr from-violet-600/45 via-fuchsia-600/35 to-pink-500/35 blur-3xl"
               />
-              <div className="relative rotate-[1.5deg] transition-transform duration-500 hover:rotate-0">
-                <HeroPreview />
+              <div className="animate-float relative">
+                <div className="rotate-[1.5deg] transition-transform duration-500 hover:rotate-0">
+                  <HeroPreview />
+                </div>
               </div>
-              <div className="absolute -left-3 top-10 hidden items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-600 shadow-xl sm:flex">
+              <div className="animate-float absolute -left-3 top-10 hidden items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-600 shadow-xl [animation-delay:1.5s] sm:flex">
                 <TriangleAlert className="size-3.5" />
                 가짜 팔로워 의심
               </div>
-              <div className="absolute -right-2 bottom-14 hidden items-center gap-1.5 rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-semibold text-violet-600 shadow-xl sm:flex">
+              <div className="animate-float absolute -right-2 bottom-14 hidden items-center gap-1.5 rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-semibold text-violet-600 shadow-xl [animation-delay:0.8s] sm:flex">
                 <Sparkles className="size-3.5" />
                 AI 추천 · 적합도 92
               </div>
             </div>
           </section>
         </div>
+
+        {/* Keyword marquee — 어떤 상품군이든 된다는 맥락 + 잔잔한 움직임 */}
+        <div className="relative border-t border-white/10 bg-white/[0.02] py-5">
+          <div className="group flex overflow-hidden [mask-image:linear-gradient(90deg,transparent,black_12%,black_88%,transparent)]">
+            <div className="marquee-track animate-marquee-slow items-center gap-3 pr-3 group-hover:[animation-play-state:paused]">
+              {[...keywords, ...keywords].map((k, i) => (
+                <span
+                  key={`${k}-${i}`}
+                  className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm text-slate-300"
+                >
+                  <span className="size-1.5 rounded-full bg-fuchsia-400" />
+                  {k}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ── LIGHT CONTENT (feature cards rise over the dark→light seam) ── */}
       <div className="relative mx-auto w-full max-w-6xl px-6">
         {/* Feature cards */}
-        <section className="relative z-10 -mt-20 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {features.map((f) => {
+        <section className="relative z-10 -mt-16 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {features.map((f, i) => {
             const Icon = f.icon;
             return (
-              <div
+              <Reveal
                 key={f.title}
-                className="group rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-violet-200 hover:shadow-xl hover:shadow-violet-500/[0.07]"
+                delay={i * 90}
+                className="group rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1.5 hover:border-violet-200 hover:shadow-xl hover:shadow-violet-500/[0.08]"
               >
                 <div
                   className={cn(
@@ -268,14 +353,14 @@ export default function LandingPage() {
                 </div>
                 <h3 className="mt-4 font-semibold">{f.title}</h3>
                 <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{f.body}</p>
-              </div>
+              </Reveal>
             );
           })}
         </section>
 
         {/* How it works — tinted panel */}
-        <section className="py-14">
-          <div className="rounded-[2rem] bg-gradient-to-b from-violet-50/70 to-white p-8 ring-1 ring-violet-100/70 sm:p-12">
+        <section className="py-16">
+          <Reveal className="rounded-[2rem] bg-gradient-to-b from-violet-50/70 to-white p-8 ring-1 ring-violet-100/70 sm:p-12">
             <h2 className="text-center text-2xl font-bold tracking-tight sm:text-3xl">
               3단계면 끝나요
             </h2>
@@ -283,23 +368,24 @@ export default function LandingPage() {
               체험단 신청·대행사 미팅 없이, 오늘 바로 시작하세요.
             </p>
             <div className="mt-10 grid gap-6 sm:grid-cols-3">
-              {steps.map((s) => {
+              {steps.map((s, i) => {
                 const Icon = s.icon;
                 return (
-                  <div
+                  <Reveal
                     key={s.title}
-                    className="rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm"
+                    delay={i * 110}
+                    className="rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:shadow-lg"
                   >
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-lg shadow-violet-500/25">
                       <Icon className="size-5" />
                     </div>
                     <h3 className="mt-4 font-semibold">{s.title}</h3>
                     <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{s.body}</p>
-                  </div>
+                  </Reveal>
                 );
               })}
             </div>
-          </div>
+          </Reveal>
         </section>
       </div>
 
@@ -307,20 +393,25 @@ export default function LandingPage() {
       <div className="relative overflow-hidden bg-slate-950 py-20 text-white">
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0"
+          className="animate-aurora pointer-events-none absolute inset-0"
           style={{
             background:
               'radial-gradient(45% 55% at 15% 10%, hsl(258 92% 62% / 0.28) 0%, transparent 55%), radial-gradient(45% 55% at 85% 90%, hsl(300 90% 60% / 0.24) 0%, transparent 55%)',
           }}
         />
         <div className="relative mx-auto w-full max-w-6xl px-6">
-          <h2 className="text-center text-2xl font-bold tracking-tight text-white sm:text-3xl">
-            체험단·공구와 뭐가 다른가요?
-          </h2>
-          <p className="mt-3 text-center text-slate-400">
-            수수료 없이, 진짜 영향력 있는 셀럽을 직접 골라 연락하세요.
-          </p>
-          <div className="mx-auto mt-10 max-w-2xl overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-2xl backdrop-blur">
+          <Reveal>
+            <h2 className="text-center text-2xl font-bold tracking-tight text-white sm:text-3xl">
+              체험단·공구와 뭐가 다른가요?
+            </h2>
+            <p className="mt-3 text-center text-slate-400">
+              수수료 없이, 진짜 영향력 있는 셀럽을 직접 골라 연락하세요.
+            </p>
+          </Reveal>
+          <Reveal
+            delay={120}
+            className="mx-auto mt-10 max-w-2xl overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-2xl backdrop-blur"
+          >
             <div className="grid grid-cols-3 text-sm font-semibold">
               <div className="p-4 text-slate-500"> </div>
               <div className="p-4 text-center text-slate-400">체험단·공구 대행</div>
@@ -341,15 +432,15 @@ export default function LandingPage() {
                 </div>
               </div>
             ))}
-          </div>
+          </Reveal>
         </div>
       </div>
 
       {/* reopen light container */}
       <div className="relative mx-auto w-full max-w-6xl px-6">
         {/* Pricing — tinted panel, elevated 인기 plan */}
-        <section id="pricing" className="py-14">
-          <div className="rounded-[2rem] bg-gradient-to-b from-slate-50 to-white p-8 ring-1 ring-slate-100 sm:p-12">
+        <section id="pricing" className="py-16">
+          <Reveal className="rounded-[2rem] bg-gradient-to-b from-slate-50 to-white p-8 ring-1 ring-slate-100 sm:p-12">
             <h2 className="text-center text-2xl font-bold tracking-tight sm:text-3xl">
               합리적인 가격
             </h2>
@@ -357,14 +448,15 @@ export default function LandingPage() {
               부담 없이 무료로 써보고, 필요하면 그때 올리세요. 연간 결제 시 2개월 무료.
             </p>
             <div className="mx-auto mt-10 grid max-w-3xl items-center gap-5 sm:grid-cols-3">
-              {plans.map((p) => (
-                <div
+              {plans.map((p, i) => (
+                <Reveal
                   key={p.name}
+                  delay={i * 90}
                   className={cn(
-                    'rounded-2xl border bg-white p-6 transition-all',
+                    'rounded-2xl border bg-white p-6 transition-all hover:-translate-y-1',
                     p.highlight
-                      ? 'border-violet-300 shadow-xl shadow-violet-500/10 ring-1 ring-violet-200 sm:-translate-y-2'
-                      : 'border-slate-200/70 shadow-sm',
+                      ? 'border-violet-300 shadow-xl shadow-violet-500/10 ring-1 ring-violet-200 sm:-translate-y-2 sm:hover:-translate-y-3'
+                      : 'border-slate-200/70 shadow-sm hover:shadow-lg',
                   )}
                 >
                   {p.highlight ? (
@@ -378,38 +470,102 @@ export default function LandingPage() {
                     <span className="text-sm text-slate-500">{p.unit}</span>
                   </p>
                   <p className="mt-1.5 text-sm text-slate-600">{p.desc}</p>
-                </div>
+                </Reveal>
               ))}
             </div>
             <div className="mt-8 text-center">
-              <Button asChild size="lg" className="shadow-lg shadow-violet-500/25">
+              <Button
+                asChild
+                size="lg"
+                className="shadow-lg shadow-violet-500/25 transition-transform hover:-translate-y-0.5"
+              >
                 <Link href="/signup">
                   무료로 시작하기 <ArrowRight className="size-4" />
                 </Link>
               </Button>
             </div>
-          </div>
+          </Reveal>
         </section>
+      </div>
 
-        {/* FAQ */}
-        <section className="py-14">
-          <h2 className="text-center text-2xl font-bold tracking-tight sm:text-3xl">
-            자주 묻는 질문
-          </h2>
-          <div className="mx-auto mt-10 max-w-2xl space-y-3">
-            {faqs.map((f) => (
-              <details
-                key={f.q}
-                className="group rounded-xl border border-slate-200/70 bg-white p-4 shadow-sm transition-colors open:border-violet-200 [&_summary]:cursor-pointer"
+      {/* ── TESTIMONIALS — 고객 후기 (샘플/예시 문구) ──────────────── */}
+      <div className="relative overflow-hidden bg-gradient-to-b from-white to-violet-50/40 py-16">
+        <div className="relative mx-auto w-full max-w-6xl px-6">
+          <Reveal className="text-center">
+            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+              먼저 써본 사장님들의 후기
+            </h2>
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-violet-100 bg-white px-4 py-1.5 text-sm shadow-sm">
+              <span className="flex">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Star key={i} className="size-4 fill-amber-400 text-amber-400" />
+                ))}
+              </span>
+              <span className="font-semibold">4.9 / 5.0</span>
+              <span className="text-slate-500">· 초기 사용자 평가</span>
+            </div>
+          </Reveal>
+        </div>
+
+        {/* 마퀴 자동 스크롤 (hover 시 정지). 카드를 2벌 이어붙여 끊김 없는 루프. */}
+        <div className="group relative mt-10 flex overflow-hidden [mask-image:linear-gradient(90deg,transparent,black_6%,black_94%,transparent)]">
+          <div className="marquee-track animate-marquee gap-5 pr-5 group-hover:[animation-play-state:paused]">
+            {[...testimonials, ...testimonials].map((t, i) => (
+              <figure
+                key={`${t.name}-${i}`}
+                className="flex w-[19rem] shrink-0 flex-col rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm transition-shadow hover:shadow-xl"
               >
-                <summary className="flex items-center justify-between font-medium">
-                  {f.q}
-                  <span className="text-violet-400 transition-transform group-open:rotate-45">
-                    +
+                <Quote className="size-6 text-violet-200" />
+                <blockquote className="mt-2 flex-1 text-sm leading-relaxed text-slate-700">
+                  {t.text}
+                </blockquote>
+                <figcaption className="mt-4 flex items-center gap-3 border-t border-slate-100 pt-4">
+                  <div
+                    className={cn(
+                      'flex size-10 items-center justify-center rounded-full bg-gradient-to-br text-sm font-bold text-white',
+                      t.grad,
+                    )}
+                  >
+                    {t.name.slice(0, 1)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{t.name}</p>
+                    <p className="truncate text-xs text-slate-500">{t.role}</p>
+                  </div>
+                  <span className="ml-auto flex">
+                    {Array.from({ length: 5 }).map((_, s) => (
+                      <Star key={s} className="size-3 fill-amber-400 text-amber-400" />
+                    ))}
                   </span>
-                </summary>
-                <p className="mt-2 text-sm leading-relaxed text-slate-600">{f.a}</p>
-              </details>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* reopen light container */}
+      <div className="relative mx-auto w-full max-w-6xl px-6">
+        {/* FAQ */}
+        <section className="py-16">
+          <Reveal>
+            <h2 className="text-center text-2xl font-bold tracking-tight sm:text-3xl">
+              자주 묻는 질문
+            </h2>
+          </Reveal>
+          <div className="mx-auto mt-10 max-w-2xl space-y-3">
+            {faqs.map((f, i) => (
+              <Reveal key={f.q} delay={i * 70}>
+                <details className="group rounded-xl border border-slate-200/70 bg-white p-4 shadow-sm transition-colors open:border-violet-200 [&_summary]:cursor-pointer">
+                  <summary className="flex items-center justify-between font-medium">
+                    {f.q}
+                    <span className="text-violet-400 transition-transform group-open:rotate-45">
+                      +
+                    </span>
+                  </summary>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-600">{f.a}</p>
+                </details>
+              </Reveal>
             ))}
           </div>
         </section>
@@ -441,14 +597,14 @@ export default function LandingPage() {
 
         {/* Final CTA — bold gradient band */}
         <section className="py-16">
-          <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-500 px-6 py-16 text-center shadow-2xl shadow-violet-500/30">
+          <Reveal className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-500 px-6 py-16 text-center shadow-2xl shadow-violet-500/30">
             <div
               aria-hidden
-              className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-2xl"
+              className="animate-float absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-2xl"
             />
             <div
               aria-hidden
-              className="absolute -bottom-20 -left-10 h-56 w-56 rounded-full bg-fuchsia-300/20 blur-2xl"
+              className="animate-float absolute -bottom-20 -left-10 h-56 w-56 rounded-full bg-fuchsia-300/20 blur-2xl [animation-delay:1.2s]"
             />
             <h2 className="relative text-2xl font-bold tracking-tight text-white sm:text-3xl">
               지금 무료로 셀럽을 찾아보세요
@@ -459,13 +615,13 @@ export default function LandingPage() {
             <Button
               asChild
               size="lg"
-              className="relative mt-6 bg-white text-violet-700 shadow-lg hover:bg-violet-50"
+              className="relative mt-6 bg-white text-violet-700 shadow-lg transition-transform hover:-translate-y-0.5 hover:bg-violet-50"
             >
               <Link href="/signup">
                 무료로 시작하기 <ArrowRight className="size-4" />
               </Link>
             </Button>
-          </div>
+          </Reveal>
         </section>
 
         <footer className="border-t border-slate-200 py-8 text-center text-xs text-slate-400">

@@ -70,10 +70,72 @@
   * {
     @apply border-border;
   }
+  html {
+    /* Pretendard 우선 — font-sans 유틸리티가 닿지 않는 곳까지 기본 글꼴 보장. */
+    font-family:
+      'Pretendard Variable',
+      Pretendard,
+      -apple-system,
+      BlinkMacSystemFont,
+      system-ui,
+      Roboto,
+      'Apple SD Gothic Neo',
+      'Noto Sans KR',
+      'Malgun Gothic',
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
   body {
     @apply bg-background text-foreground;
     font-feature-settings:
       'rlig' 1,
       'calt' 1;
+    word-break: keep-all; /* 한글 단어 중간 줄바꿈 방지 → 깔끔한 줄 끊김 */
+  }
+}
+
+@layer utilities {
+  /* 마퀴: 자식(트랙)을 2벌 나란히 두고 -50% 이동 → 끊김 없는 무한 루프.
+     hover 시 정지(그룹에 group 클래스 필요). */
+  .marquee-track {
+    display: flex;
+    width: max-content;
+    flex-wrap: nowrap;
+  }
+
+  /* 스크롤 등장(Reveal). JS(IntersectionObserver)가 .is-visible 을 붙인다.
+     JS 미실행/전환 전에도 콘텐츠가 사라지지 않게, 진입 전 상태만 부여. */
+  .reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    will-change: opacity, transform;
+  }
+  .reveal.is-visible {
+    animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* 텍스트 그라데이션 흐름용 배경 크기 */
+  .animate-gradient-x {
+    background-size: 200% 200%;
+  }
+}
+
+/* 모션 최소화 선호 사용자: 큰 움직임 제거(접근성). */
+@media (prefers-reduced-motion: reduce) {
+  .animate-aurora,
+  .animate-float,
+  .animate-marquee,
+  .animate-marquee-slow,
+  .animate-gradient-x,
+  .animate-pulse-soft {
+    animation: none !important;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+  .reveal.is-visible {
+    animation: none;
   }
 }
