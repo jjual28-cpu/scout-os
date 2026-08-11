@@ -25,6 +25,32 @@ export type InboxThread = {
   unread: number;
 };
 
+/**
+ * 메시지 목록 → 상대(peer)별 스레드. 최근 메시지 순으로 정렬한다.
+ * 훅(useInbox)과 테스트가 공유하는 순수 함수 — React·Supabase 의존 없음.
+ */
+export function buildThreads(messages: InboxMessage[]): InboxThread[] {
+  const byPeer = new Map<string, InboxMessage[]>();
+  for (const m of messages) {
+    const list = byPeer.get(m.peerId) ?? [];
+    list.push(m);
+    byPeer.set(m.peerId, list);
+  }
+  const arr: InboxThread[] = [];
+  for (const [peerId, list] of byPeer) {
+    const last = list[list.length - 1]!;
+    arr.push({
+      peerId,
+      peerUsername: list.find((m) => m.peerUsername)?.peerUsername ?? null,
+      messages: list,
+      last,
+      unread: list.filter((m) => m.direction === 'in' && !m.isRead).length,
+    });
+  }
+  // 최근 메시지 순.
+  return arr.sort((a, b) => b.last.createdAt.localeCompare(a.last.createdAt));
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any -- DB rows loosely typed */
 function rowToMsg(r: any): InboxMessage {
   return {
@@ -143,27 +169,7 @@ export async function markInboxRead(peerId: string): Promise<void> {
 export function useInbox() {
   const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
-  const threads = useMemo<InboxThread[]>(() => {
-    const byPeer = new Map<string, InboxMessage[]>();
-    for (const m of snap.messages) {
-      const list = byPeer.get(m.peerId) ?? [];
-      list.push(m);
-      byPeer.set(m.peerId, list);
-    }
-    const arr: InboxThread[] = [];
-    for (const [peerId, list] of byPeer) {
-      const last = list[list.length - 1]!;
-      arr.push({
-        peerId,
-        peerUsername: list.find((m) => m.peerUsername)?.peerUsername ?? null,
-        messages: list,
-        last,
-        unread: list.filter((m) => m.direction === 'in' && !m.isRead).length,
-      });
-    }
-    // 최근 메시지 순.
-    return arr.sort((a, b) => b.last.createdAt.localeCompare(a.last.createdAt));
-  }, [snap.messages]);
+  const threads = useMemo<InboxThread[]>(() => buildThreads(snap.messages), [snap.messages]);
 
   const unreadTotal = useMemo(
     () => snap.messages.filter((m) => m.direction === 'in' && !m.isRead).length,

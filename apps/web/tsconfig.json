@@ -1,5 +1,5 @@
 {
-  "extends": "@scout-os/config/typescript/next",
+  "extends": "../../packages/config/typescript/next.json",
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
