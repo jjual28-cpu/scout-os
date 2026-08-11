@@ -12,14 +12,23 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     <div className="grid min-h-screen lg:grid-cols-2">
       {/* Brand panel — dark hero tone, hidden on small screens */}
       <div className="relative hidden overflow-hidden bg-slate-950 text-white lg:flex lg:flex-col lg:justify-between lg:p-12">
-        {/* Neon brand glows */}
+        {/* Neon brand glows — 천천히 떠다니는 오로라 */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0"
+          className="animate-aurora pointer-events-none absolute inset-0"
           style={{
             background:
               'radial-gradient(50% 45% at 15% 8%, hsl(258 92% 62% / 0.38) 0%, transparent 58%), radial-gradient(55% 50% at 92% 96%, hsl(300 90% 60% / 0.30) 0%, transparent 58%)',
           }}
+        />
+        {/* Floating glow orbs — 움직이는 장식 */}
+        <div
+          aria-hidden
+          className="animate-float pointer-events-none absolute -left-16 top-24 h-56 w-56 rounded-full bg-violet-600/25 blur-3xl"
+        />
+        <div
+          aria-hidden
+          className="animate-float pointer-events-none absolute -right-10 bottom-16 h-64 w-64 rounded-full bg-fuchsia-500/20 blur-3xl [animation-delay:1.4s]"
         />
         {/* Dot grid */}
         <div
@@ -43,32 +52,33 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </div>
 
         <div className="relative z-10 max-w-md">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3.5 py-1.5 text-xs font-semibold text-violet-200 backdrop-blur">
-            <Sparkles className="size-3.5 text-fuchsia-300" />
+          <span className="animate-fade-up inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3.5 py-1.5 text-xs font-semibold text-violet-200 backdrop-blur">
+            <Sparkles className="animate-pulse-soft size-3.5 text-fuchsia-300" />
             체험단·공구·협찬, 이제 AI로
           </span>
 
-          <h2 className="mt-6 text-balance text-4xl font-bold leading-[1.12] tracking-tight text-white">
-            체험단·공구 대신,
+          <h2 className="animate-fade-up mt-6 text-balance text-[3.2rem] font-extrabold leading-[1.05] tracking-[-0.02em] text-white [animation-delay:80ms]">
+            맞는 셀럽만,
             <br />
-            AI가 찾은{' '}
-            <span className="bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-400 bg-clip-text text-transparent">
-              셀럽
+            <span className="animate-gradient-x bg-gradient-to-r from-violet-300 via-fuchsia-300 to-pink-300 bg-clip-text text-transparent">
+              AI
             </span>
-            에게
-            <br />
-            직접 DM 보내세요.
+            가 찾아줍니다
           </h2>
-          <p className="mt-4 text-pretty leading-relaxed text-slate-300">
-            키워드만 넣으면 AI가 우리 상품에 맞는 인스타 셀럽을 찾아드려요. 체험단·공구 수수료 없이,
-            한 곳에서.
+          <p className="animate-fade-up mt-5 text-pretty leading-relaxed text-slate-300 [animation-delay:160ms]">
+            키워드만 넣으면 우리 상품에 맞는 인스타 셀럽을 찾아 맞춤 DM까지. 체험단·공구 수수료
+            없이, 한 곳에서.
           </p>
 
           <ul className="mt-8 space-y-4">
-            {highlights.map((h) => {
+            {highlights.map((h, i) => {
               const Icon = h.icon;
               return (
-                <li key={h.text} className="flex items-center gap-3">
+                <li
+                  key={h.text}
+                  className="animate-fade-up flex items-center gap-3"
+                  style={{ animationDelay: `${240 + i * 90}ms` }}
+                >
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/10 text-fuchsia-300">
                     <Icon className="size-4" />
                   </span>
