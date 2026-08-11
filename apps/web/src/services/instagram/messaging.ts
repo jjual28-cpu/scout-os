@@ -105,3 +105,45 @@ export function verifySignature(
     return false;
   }
 }
+
+/** Meta signed_request 페이로드. user_id 는 Instagram-scoped id(= ig_user_id). */
+export type SignedRequest = { user_id: string; algorithm?: string; issued_at?: number };
+
+/**
+ * Meta signed_request 파싱·검증 — 데이터 삭제 콜백·Deauthorize 콜백이 공유한다.
+ * 형식은 `<base64url 서명>.<base64url 페이로드>`. 서명은 app secret 을 키로 한
+ * 페이로드(인코딩된 문자열) 의 HMAC-SHA256. 타이밍-세이프 비교. 검증 실패면 null.
+ * (웹훅의 X-Hub-Signature-256 과 다른 형식이라 별도 함수 — 서명이 hex 가 아니라 base64url.)
+ */
+export function parseSignedRequest(signedRequest: string, appSecret: string): SignedRequest | null {
+  const parts = signedRequest.split('.');
+  if (parts.length !== 2) return null;
+  const [encodedSig, payload] = parts;
+  if (!encodedSig || !payload) return null;
+
+  let sig: Buffer;
+  try {
+    sig = Buffer.from(encodedSig, 'base64url');
+  } catch {
+    return null;
+  }
+  const expected = createHmac('sha256', appSecret).update(payload).digest();
+  if (sig.length !== expected.length) return null;
+  try {
+    if (!timingSafeEqual(sig, expected)) return null;
+  } catch {
+    return null;
+  }
+
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
+      user_id?: string | number;
+      algorithm?: string;
+      issued_at?: number;
+    };
+    if (data?.user_id == null) return null;
+    return { ...data, user_id: String(data.user_id) };
+  } catch {
+    return null;
+  }
+}

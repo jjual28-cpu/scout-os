@@ -16,6 +16,16 @@ export type SaveMessageInput = {
   mid?: string | null;
 };
 
+/**
+ * 한 사용자의 인스타 메시지 전부 삭제 — 데이터 삭제 요청 콜백에서 호출.
+ * (연동 해제만으로는 지난 대화가 남으므로, 삭제 요청 시 대화까지 함께 지운다.) service_role.
+ */
+export async function deleteUserMessages(userId: string): Promise<void> {
+  const admin = createAdminClient();
+  const { error } = await admin.from('instagram_messages').delete().eq('user_id', userId);
+  if (error) throw new Error(`인스타 메시지 삭제 실패: ${error.message}`);
+}
+
 export async function saveMessage(input: SaveMessageInput): Promise<void> {
   const admin = createAdminClient();
   const { error } = await admin.from('instagram_messages').upsert(

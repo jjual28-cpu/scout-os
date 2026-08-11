@@ -41,6 +41,25 @@ export function InstagramConnectCard() {
     }
   };
 
+  // 연동 해제 — 저장된 액세스 토큰·연동정보를 삭제한다(개인정보처리방침 이행).
+  const [disState, setDisState] = useState<'idle' | 'loading'>('idle');
+  const disconnect = async () => {
+    if (
+      !window.confirm(
+        '인스타그램 연결을 해제할까요? 저장된 액세스 토큰이 삭제되고 답장 수신이 중지됩니다.',
+      )
+    ) {
+      return;
+    }
+    setDisState('loading');
+    try {
+      const res = await fetch('/api/instagram/disconnect', { method: 'POST' });
+      if (res.ok) setStatus((s) => (s ? { ...s, connected: false, username: null } : s));
+    } finally {
+      setDisState('idle');
+    }
+  };
+
   return (
     <div className="space-y-3">
       <p className="text-muted-foreground text-xs leading-relaxed">
@@ -88,6 +107,16 @@ export function InstagramConnectCard() {
                 재연결 실패 — 잠시 후 다시 시도해 주세요.
               </span>
             ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={disconnect}
+              disabled={disState === 'loading'}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              {disState === 'loading' ? '해제 중…' : '연결 해제'}
+            </Button>
           </div>
           <p className="text-muted-foreground text-xs leading-relaxed">
             답장이 안 들어오면 위{' '}
