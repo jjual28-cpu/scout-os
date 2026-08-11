@@ -74,6 +74,18 @@ export function useAuth() {
           setState({ loading: false, error: translateAuthError(error.message) });
           return false;
         }
+        // 이미 가입된(확인 완료) 이메일이면 Supabase 는 이메일 열거 방지 정책상 error/session
+        // 없이 빈 identities 를 돌려준다. 이걸 "메일 발송 완료"로 오인하지 않게 여기서 잡아
+        // 로그인을 안내한다. (그대로 두면 메일도 안 오고 이미 가입됨 안내도 안 뜬다)
+        const alreadyRegistered =
+          !!data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0;
+        if (alreadyRegistered) {
+          setState({
+            loading: false,
+            error: '이미 가입된 이메일이에요. 로그인해 주세요.',
+          });
+          return false;
+        }
         // When email confirmation is enabled, there is no active session yet.
         if (!data.session) {
           setState({ loading: false, error: null });
