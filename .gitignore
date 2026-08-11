@@ -57,3 +57,4 @@ ScoutOS_영업제안서*
 *.pptx
 *.mp4
 *.gif
+.env*
