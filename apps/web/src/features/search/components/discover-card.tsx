@@ -98,8 +98,23 @@ export function DiscoverCard({
       <OpportunityBody result={item} profileHref={instagramUrl} />
 
       {/* 진짜 영향력 신호 — 한국/해외 · 참여율 · 가짜 팔로워 의심 · 연락처(이메일) */}
-      {item.koreanLikely || item.engagementRate != null || item.fakeSuspect || item.email ? (
+      {item.koreanLikely ||
+      item.engagementRate != null ||
+      item.fakeSuspect ||
+      item.email ||
+      item.externalUrl ? (
         <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+          {item.externalUrl ? (
+            <a
+              href={item.externalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2 py-0.5 text-xs font-medium text-violet-600 hover:underline dark:text-violet-300"
+            >
+              🔗 쇼핑몰
+            </a>
+          ) : null}
           {item.koreanLikely ? (
             <span
               className="dark:bg-muted inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600 dark:text-slate-300"

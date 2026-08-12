@@ -137,6 +137,13 @@ function normalize(raw: any): InstagramCreator | null {
     postsCount: pickNum(o, ['postsCount', 'mediaCount', 'edge_owner_to_timeline_media']),
     isVerified: Boolean(o.verified ?? o.isVerified ?? o.is_verified),
     category: pickStr(o, ['businessCategoryName', 'category', 'categoryName']),
+    externalUrl:
+      pickStr(o, ['externalUrl', 'externalUrlShimmed']) ??
+      pickStr((Array.isArray(o.bioLinks) ? o.bioLinks[0] : {}) as Record<string, any>, [
+        'url',
+        'lprUrl',
+      ]),
+    isBusinessAccount: Boolean(o.isBusinessAccount ?? o.isBusiness ?? o.is_business_account),
     ...recentActivity(o),
     rawData: raw,
   };

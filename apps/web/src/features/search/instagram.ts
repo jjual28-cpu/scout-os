@@ -23,6 +23,10 @@ export type InstagramCreator = {
   postsCount: number | null;
   isVerified: boolean;
   category: string | null;
+  /** 바이오의 외부 링크(쇼핑몰/자사몰 URL) — 브랜드 판별 핵심 신호. 없으면 null. */
+  externalUrl?: string | null;
+  /** 인스타 비즈니스(프로) 계정 여부 — 브랜드 신호(단, 크리에이터도 프로계정일 수 있음). */
+  isBusinessAccount?: boolean;
   /**
    * Recent-activity signals from the profile's latest posts — the difference
    * between a genuinely rising creator and a big-but-dead account. All optional/
@@ -134,6 +138,8 @@ export function toDiscoverOpportunity(creator: InstagramCreator): DiscoverOpport
     reasons: recommendReasons(creator),
     isVerified: creator.isVerified,
     category: creator.category,
+    externalUrl: creator.externalUrl ?? null,
+    isBusinessAccount: creator.isBusinessAccount ?? false,
     postsCount: creator.postsCount,
     biography: creator.biography,
     engagementRate: er,

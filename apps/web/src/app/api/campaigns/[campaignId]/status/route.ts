@@ -209,6 +209,56 @@ function looksLikeBrandOrOrg(c: InstagramCreator): boolean {
   return cat.length > 0 && ORG_CATEGORY.some((w) => cat.includes(w));
 }
 
+/** 제품 브랜드 카테고리(개인 크리에이터·지역서비스가 아닌 '제품/쇼핑/브랜드'). */
+const BRAND_CATEGORY = [
+  'product/service',
+  'brand',
+  'e-commerce',
+  'shopping',
+  'retail',
+  'cosmetics',
+  'health/beauty',
+];
+/** 개인 크리에이터 카테고리(브랜드가 아님). */
+const CREATOR_CATEGORY = [
+  'digital creator',
+  'content creator',
+  'creator',
+  'public figure',
+  'blogger',
+  'video creator',
+  'personal blog',
+  'artist',
+];
+/** 재판매/입점 열림 신호 — 공구 셀러가 팔 수 있는 브랜드의 강한 신호. */
+const RESELLER_WORDS = [
+  '도매',
+  '총판',
+  '위탁판매',
+  '위탁',
+  '입점문의',
+  '입점',
+  '셀러모집',
+  '공구문의',
+  '공구환영',
+  '벤더',
+  'b2b',
+];
+function hasResellerSignal(c: InstagramCreator): boolean {
+  const h = hay(c);
+  return RESELLER_WORDS.some((w) => h.includes(w));
+}
+/** 제품 파는 브랜드로 보이는가 — 쇼핑링크·브랜드 카테고리·비즈니스+브랜드신호 중 하나. */
+function looksLikeBrand(c: InstagramCreator): boolean {
+  const cat = (c.category ?? '').toLowerCase();
+  if (c.externalUrl) return true; // 쇼핑몰/자사몰 링크 = 가장 강한 브랜드 신호
+  if (BRAND_CATEGORY.some((w) => cat.includes(w))) return true;
+  if (hasResellerSignal(c)) return true;
+  const nameHay = `${c.username} ${c.displayName}`.toLowerCase();
+  if (BRAND_ORG_NAME.some((w) => nameHay.includes(w))) return true; // 공식/official/브랜드
+  return false;
+}
+
 /**
 /** 협업/공구 가치가 없는 초소형·빈 계정 최소 기준. 팔로워 37·게시물 1 같은
  *  방금 만든/버려진 계정을 걸러낸다. 값을 '아는' 경우에만 적용(모르면 통과). */
@@ -228,12 +278,16 @@ function tooSmall(c: InstagramCreator): boolean {
  */
 function rejectForTarget(c: InstagramCreator, target: SearchTarget): boolean {
   if (target === 'brand') {
-    // 신생 브랜드는 팔로워가 적을 수 있어 '팔로워 규모' 필터는 걸지 않는다. 하지만
-    // 게시물이 사실상 없는 죽은/빈 계정과, 제품 브랜드가 아닌 지역 시술·방문 매장
-    // (피부관리·눈썹반영구·에스테틱 등)은 제외한다 — 이걸 안 하면 '세종피부관리',
-    // '게시물 0개' 같은 계정이 브랜드 결과를 오염시킨다.
+    // 신생 브랜드는 팔로워가 적을 수 있어 규모 필터는 안 건다. 하지만 죽은 계정·지역
+    // 시술샵은 제외하고, '브랜드 신호(쇼핑링크·제품카테고리·재판매·공식명)'가 하나도
+    // 없는 순수 크리에이터/개인 계정도 제외한다.
     if (c.postsCount != null && c.postsCount < MIN_POSTS) return true;
     if (looksLikeLocalBiz(c)) return true;
+    const cat = (c.category ?? '').toLowerCase();
+    // 개인 크리에이터 카테고리 + 브랜드 신호 전무 → 제외.
+    if (CREATOR_CATEGORY.some((w) => cat.includes(w)) && !looksLikeBrand(c)) return true;
+    // 브랜드 신호가 하나도 없으면(카테고리도 비고 링크도 없음) 제외 — 이름검색 잡음 제거.
+    if (!looksLikeBrand(c)) return true;
     return false;
   }
   if (tooSmall(c)) return true;
@@ -375,6 +429,8 @@ async function saveCreators(
       postsCount: c.postsCount,
       isVerified: c.isVerified,
       category: c.category,
+      externalUrl: c.externalUrl ?? null,
+      isBusinessAccount: c.isBusinessAccount ?? false,
       lastPostAt: c.lastPostAt ?? null,
       recentAvgLikes: c.recentAvgLikes ?? null,
       recentAvgComments: c.recentAvgComments ?? null,
@@ -460,6 +516,8 @@ async function applyAiMatch(
         postsCount: s.postsCount ?? null,
         isVerified: Boolean(s.isVerified),
         category: s.category ?? null,
+        externalUrl: s.externalUrl ?? null,
+        isBusinessAccount: Boolean(s.isBusinessAccount),
         lastPostAt: s.lastPostAt ?? null,
         recentAvgLikes: s.recentAvgLikes ?? null,
         recentAvgComments: s.recentAvgComments ?? null,

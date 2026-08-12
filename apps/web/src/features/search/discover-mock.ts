@@ -9,6 +9,10 @@ export type DiscoverOpportunity = SearchResult & {
   /** Real-creator fields carried through for filters / sort / summary. */
   isVerified?: boolean;
   category?: string | null;
+  /** 바이오 외부 링크(쇼핑몰). 브랜드 카드에 🔗 칩으로 노출. */
+  externalUrl?: string | null;
+  /** 비즈니스(프로) 계정 여부. */
+  isBusinessAccount?: boolean;
   postsCount?: number | null;
   biography?: string | null;
   /** AI fit verdict (0~100 + one-line reason). Undefined ⇒ AI hasn't judged it. */
