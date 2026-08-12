@@ -278,16 +278,15 @@ function tooSmall(c: InstagramCreator): boolean {
  */
 function rejectForTarget(c: InstagramCreator, target: SearchTarget): boolean {
   if (target === 'brand') {
-    // 신생 브랜드는 팔로워가 적을 수 있어 규모 필터는 안 건다. 하지만 죽은 계정·지역
-    // 시술샵은 제외하고, '브랜드 신호(쇼핑링크·제품카테고리·재판매·공식명)'가 하나도
-    // 없는 순수 크리에이터/개인 계정도 제외한다.
+    // 신생 브랜드는 팔로워가 적을 수 있어 규모 필터는 안 건다. '확실한 쓰레기'만 제외하고
+    // 나머지는 살린다(브랜드 신호가 있는 계정은 AI/looksLikeBrand로 위에 정렬). 하드하게
+    // '브랜드 신호 없으면 무조건 제외'는 데이터에 따라 결과를 0으로 만들어서 안 건다.
+    //   - 죽은/빈 계정, 지역 시술샵 제외.
+    //   - 개인 크리에이터 카테고리 + 브랜드 신호 전무 → 제외(명백한 크리에이터만).
     if (c.postsCount != null && c.postsCount < MIN_POSTS) return true;
     if (looksLikeLocalBiz(c)) return true;
     const cat = (c.category ?? '').toLowerCase();
-    // 개인 크리에이터 카테고리 + 브랜드 신호 전무 → 제외.
     if (CREATOR_CATEGORY.some((w) => cat.includes(w)) && !looksLikeBrand(c)) return true;
-    // 브랜드 신호가 하나도 없으면(카테고리도 비고 링크도 없음) 제외 — 이름검색 잡음 제거.
-    if (!looksLikeBrand(c)) return true;
     return false;
   }
   if (tooSmall(c)) return true;
@@ -752,39 +751,6 @@ export const POST = withErrorHandling(
         creators = creators.filter((cr) => !rejectForTarget(cr, target));
         creators = spreadByFollowers(creators, TARGET);
         await saveCreators(sb, userId, campaignId, query, creators, 0);
-        const { count } = await existingResults(sb, userId, campaignId);
-        await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null, target);
-        await markSucceeded(sb, campaignId, count);
-        return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
-      }
-
-      // ── Brand mode — 2-stage 해시태그→작성자→상세 (제품 브랜드 발굴) ──────────
-      //    kickoff는 '브랜드 소유 해시태그' 게시물(stage2Input). 그 작성자를 상세조회해
-      //    looksLikeBrand(쇼핑링크·제품카테고리·재판매신호)로 거른다. 이름검색은 브랜드를
-      //    잘 못 찾아 크리에이터·지역샵만 나오던 문제를 해결. tagged와 동일한 2-스테이지.
-      if (target === 'brand') {
-        if (stage === 1) {
-          // 이 데이터셋은 해시태그 POSTS — 값은 그 글을 쓴 작성자(브랜드 후보).
-          const authors = authorsFromPosts(items, []).slice(0, stage3Cap(TARGET));
-          if (authors.length === 0) {
-            await markSucceeded(sb, campaignId, 0);
-            return ok({ status: 'succeeded' as const, resultCount: 0, progress: 100 });
-          }
-          if (!(await claimStage(sb, campaignId, 1, c.apify_run_id, 2))) {
-            return ok(runningBody(2)); // 다른 폴이 이미 다음 단계를 시작함
-          }
-          const started = await startActorRun(stage3Input(authors));
-          await attachRun(sb, campaignId, started);
-          return ok(runningBody(2));
-        }
-        // Stage 2 — 상세 프로필 → looksLikeBrand 필터 → 저장 → 판정 → 완료.
-        const enrichedBrand = profilesFromItems(items);
-        const brands = spreadByFollowers(
-          enrichedBrand.filter((cr) => !rejectForTarget(cr, target)),
-          TARGET,
-        );
-        await saveCreators(sb, userId, campaignId, query, brands, 0);
-        await upsertPool('instagram', enrichedBrand);
         const { count } = await existingResults(sb, userId, campaignId);
         await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null, target);
         await markSucceeded(sb, campaignId, count);

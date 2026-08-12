@@ -12,7 +12,6 @@ import { looksNatural, planSearch, type SearchPlan } from '@/services/ai/query';
 import {
   normalizeHandle,
   stage1Input,
-  stage2Input,
   startActorRun,
   taggedActor,
   taggedInput,
@@ -326,13 +325,9 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
                 youtubeInput(isMulti ? multiKeywords : [rawQuery], body.limit ?? DEFAULT_LIMIT),
                 youtubeActorId(),
               )
-            : target === 'brand'
-              ? // 브랜드 발굴: 이름검색 대신 '브랜드 소유 해시태그' 게시물부터 시작해
-                //   그 작성자를 상세조회→looksLikeBrand로 거른다(status 라우트 브랜드 분기).
-                await startActorRun(stage2Input(rawQuery, plan?.hashtags))
-              : await startActorRun(
-                  stage1Input(plan?.searchTerm || rawQuery, body.limit ?? DEFAULT_LIMIT),
-                );
+            : await startActorRun(
+                stage1Input(plan?.searchTerm || rawQuery, body.limit ?? DEFAULT_LIMIT),
+              );
     await supabase
       .from('campaigns')
       .update({
