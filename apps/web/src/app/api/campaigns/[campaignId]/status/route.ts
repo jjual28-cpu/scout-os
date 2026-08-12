@@ -227,7 +227,15 @@ function tooSmall(c: InstagramCreator): boolean {
  *  - brand : 신생 브랜드는 팔로워가 적을 수 있어 크기·업체 필터를 적용하지 않음.
  */
 function rejectForTarget(c: InstagramCreator, target: SearchTarget): boolean {
-  if (target === 'brand') return false;
+  if (target === 'brand') {
+    // 신생 브랜드는 팔로워가 적을 수 있어 '팔로워 규모' 필터는 걸지 않는다. 하지만
+    // 게시물이 사실상 없는 죽은/빈 계정과, 제품 브랜드가 아닌 지역 시술·방문 매장
+    // (피부관리·눈썹반영구·에스테틱 등)은 제외한다 — 이걸 안 하면 '세종피부관리',
+    // '게시물 0개' 같은 계정이 브랜드 결과를 오염시킨다.
+    if (c.postsCount != null && c.postsCount < MIN_POSTS) return true;
+    if (looksLikeLocalBiz(c)) return true;
+    return false;
+  }
   if (tooSmall(c)) return true;
   if (looksLikeLocalBiz(c)) return true;
   if (looksLikeBrandOrOrg(c)) return true;
