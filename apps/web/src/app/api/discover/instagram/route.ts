@@ -12,6 +12,7 @@ import { looksNatural, planSearch, type SearchPlan } from '@/services/ai/query';
 import {
   normalizeHandle,
   stage1Input,
+  stage2Input,
   startActorRun,
   taggedActor,
   taggedInput,
@@ -279,7 +280,13 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
         .update({ search_plan: plan })
         .eq('id', created.id)
         .eq('status', 'running');
-    } else if (platform === 'instagram' && mode === 'keyword' && looksNatural(rawQuery)) {
+    } else if (
+      platform === 'instagram' &&
+      mode === 'keyword' &&
+      // 브랜드는 짧은 키워드여도 항상 AI로 '브랜드 소유 해시태그'를 뽑는다(이름검색이 아니라
+      // 해시태그로 발굴하므로 해시태그가 필수). 그 외에는 문장일 때만 AI 번역.
+      (looksNatural(rawQuery) || target === 'brand')
+    ) {
       try {
         plan = await planSearch(
           userId,
@@ -319,9 +326,13 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
                 youtubeInput(isMulti ? multiKeywords : [rawQuery], body.limit ?? DEFAULT_LIMIT),
                 youtubeActorId(),
               )
-            : await startActorRun(
-                stage1Input(plan?.searchTerm || rawQuery, body.limit ?? DEFAULT_LIMIT),
-              );
+            : target === 'brand'
+              ? // 브랜드 발굴: 이름검색 대신 '브랜드 소유 해시태그' 게시물부터 시작해
+                //   그 작성자를 상세조회→looksLikeBrand로 거른다(status 라우트 브랜드 분기).
+                await startActorRun(stage2Input(rawQuery, plan?.hashtags))
+              : await startActorRun(
+                  stage1Input(plan?.searchTerm || rawQuery, body.limit ?? DEFAULT_LIMIT),
+                );
     await supabase
       .from('campaigns')
       .update({

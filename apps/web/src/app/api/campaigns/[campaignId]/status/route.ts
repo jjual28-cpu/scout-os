@@ -758,6 +758,39 @@ export const POST = withErrorHandling(
         return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
       }
 
+      // ── Brand mode — 2-stage 해시태그→작성자→상세 (제품 브랜드 발굴) ──────────
+      //    kickoff는 '브랜드 소유 해시태그' 게시물(stage2Input). 그 작성자를 상세조회해
+      //    looksLikeBrand(쇼핑링크·제품카테고리·재판매신호)로 거른다. 이름검색은 브랜드를
+      //    잘 못 찾아 크리에이터·지역샵만 나오던 문제를 해결. tagged와 동일한 2-스테이지.
+      if (target === 'brand') {
+        if (stage === 1) {
+          // 이 데이터셋은 해시태그 POSTS — 값은 그 글을 쓴 작성자(브랜드 후보).
+          const authors = authorsFromPosts(items, []).slice(0, stage3Cap(TARGET));
+          if (authors.length === 0) {
+            await markSucceeded(sb, campaignId, 0);
+            return ok({ status: 'succeeded' as const, resultCount: 0, progress: 100 });
+          }
+          if (!(await claimStage(sb, campaignId, 1, c.apify_run_id, 2))) {
+            return ok(runningBody(2)); // 다른 폴이 이미 다음 단계를 시작함
+          }
+          const started = await startActorRun(stage3Input(authors));
+          await attachRun(sb, campaignId, started);
+          return ok(runningBody(2));
+        }
+        // Stage 2 — 상세 프로필 → looksLikeBrand 필터 → 저장 → 판정 → 완료.
+        const enrichedBrand = profilesFromItems(items);
+        const brands = spreadByFollowers(
+          enrichedBrand.filter((cr) => !rejectForTarget(cr, target)),
+          TARGET,
+        );
+        await saveCreators(sb, userId, campaignId, query, brands, 0);
+        await upsertPool('instagram', enrichedBrand);
+        const { count } = await existingResults(sb, userId, campaignId);
+        await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null, target);
+        await markSucceeded(sb, campaignId, count);
+        return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
+      }
+
       // ── Tagged mode — the same 3-stage machine, two stages long ─────────────
       //    1 = posts tagging the brand → author usernames
       //    2 = enrich those authors → profiles → done
@@ -820,16 +853,8 @@ export const POST = withErrorHandling(
         await saveCreators(sb, userId, campaignId, query, creators, 0);
         await upsertPool('instagram', stage1All);
         const { count } = await existingResults(sb, userId, campaignId);
-
-        // 브랜드 찾기는 stage1(계정 이름 검색)만으로 끝낸다. stage2(해시태그→작성자)는
-        // '해시태그 글을 쓴 사람(=크리에이터)'을 데려와 브랜드 검색을 오염시키고, Apify
-        // 실행이 하나 더 붙어 느려진다(연쇄 중 하나만 멈춰도 클라이언트 10분 타임아웃에
-        // 걸려 자동 취소=실패). 브랜드 공식계정은 애초에 이름 검색에서 나온다.
-        if (target === 'brand') {
-          await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null, target);
-          await markSucceeded(sb, campaignId, count);
-          return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
-        }
+        // (브랜드 검색은 위 target==='brand' 분기에서 해시태그→작성자→상세로 처리되므로
+        //  여기 keyword stage1 이름검색에는 도달하지 않는다.)
 
         if (count >= Math.min(TARGET, SEARCH_MIN_SUFFICIENT)) {
           await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null, target);
