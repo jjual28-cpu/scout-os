@@ -1739,15 +1739,6 @@ export function CreatorSearch() {
                 onSubmit={() => void runSearch(input)}
                 disabled={phase === 'searching'}
               />
-              {/* Users type like they're asking an assistant — say so, since the
-                  box looks like an ordinary keyword field. */}
-              <p className="text-muted-foreground flex items-start gap-1.5 text-[11px] leading-snug">
-                <Sparkles className="text-primary mt-px size-3 shrink-0" />
-                <span>
-                  AI에게 말하듯 문장으로 써도 돼요. AI가 인스타에서 찾을 수 있는 키워드로 바꿔서
-                  검색해요.
-                </span>
-              </p>
               <PlatformSelector platform={platform} onSelect={setPlatform} compact />
             </div>
 
