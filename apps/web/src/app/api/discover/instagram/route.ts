@@ -28,6 +28,10 @@ const PLATFORM = 'instagram';
 /** Matches the Discover client's limit (today's effective search target). */
 const DEFAULT_LIMIT = 30;
 const CACHE_WINDOW_MS = 24 * 60 * 60 * 1000;
+/** A 'running' campaign older than this is dead (browser closed mid-scrape) —
+ *  never reuse it and never let it block a fresh search. Mirrors the client's
+ *  STALL_MS and the status route's STALE_MS so all three agree. */
+const STALE_RUNNING_MS = 10 * 60 * 1000;
 
 const bodySchema = z.object({
   query: z.string().trim().max(100).optional(),
@@ -164,6 +168,14 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   }
 
   const qNorm = normalizeQuery(rawQuery);
+
+  // 0) Clean up dead searches first. A scrape takes minutes; if the browser was
+  //    closed before it finished, that Campaign sits 'running' forever. Those
+  //    corpses (a) get resurrected by findRunning below and then instantly
+  //    cancelled on restore, and (b) hold the one-running unique lock so a fresh
+  //    search of the same term can't start — the exact "같은 검색어가 계속 중단"
+  //    bug. Fail any of this user's stale-running campaigns before searching.
+  await failStaleRunning(supabase, userId);
 
   // 1) Same-query run already in flight → reuse it, never start a second Actor.
   const running = await findRunning(supabase, userId, qNorm, target, mode, platform);
@@ -393,11 +405,42 @@ async function checkSearchLimit(
 }
 
 /**
- * A same-user/platform/query campaign that is still running → its id.
+ * Fail this user's dead 'running' campaigns — ones stuck past STALE_RUNNING_MS
+ * because the browser closed before the scrape was collected. Marking them
+ * 'failed' releases the one-running unique lock and stops findRunning from
+ * resurrecting a corpse. Runs once at the start of every search (cheap: one
+ * conditional UPDATE, no-op when nothing is stale).
+ */
+async function failStaleRunning(
+  supabase: Awaited<ReturnType<typeof getSupabase>>,
+  userId: string,
+): Promise<void> {
+  const cutoff = new Date(Date.now() - STALE_RUNNING_MS).toISOString();
+  const now = new Date().toISOString();
+  await supabase
+    .from('campaigns')
+    .update({
+      status: 'failed',
+      error: '검색이 시간 내에 끝나지 않아 자동 종료됐어요. 다시 검색해 주세요.',
+      completed_at: now,
+      updated_at: now,
+      apify_run_id: null, // releases the running-unique lock
+    })
+    .eq('user_id', userId)
+    .eq('status', 'running')
+    .lt('started_at', cutoff);
+}
+
+/**
+ * A same-user/platform/query campaign that is STILL running (and fresh) → its id.
  *
  * target/mode are part of the key: the same word searched for brands is a
  * different search from the same word searched for creators, and reusing one
  * for the other returns exactly what the user didn't ask for.
+ *
+ * Freshness guard: only reuse a run started within STALE_RUNNING_MS. A corpse
+ * older than that must never be resurrected (failStaleRunning normally already
+ * marked it failed; this is defense-in-depth against a timing race).
  */
 async function findRunning(
   supabase: Awaited<ReturnType<typeof getSupabase>>,
@@ -407,6 +450,7 @@ async function findRunning(
   mode: 'keyword' | 'tagged',
   platform: string = PLATFORM,
 ): Promise<string | null> {
+  const fresh = new Date(Date.now() - STALE_RUNNING_MS).toISOString();
   const { data } = await supabase
     .from('campaigns')
     .select('id')
@@ -416,6 +460,7 @@ async function findRunning(
     .eq('search_target', target)
     .eq('search_mode', mode)
     .eq('status', 'running')
+    .gte('started_at', fresh)
     .limit(1);
   return (data as any[] | null)?.[0]?.id ?? null;
 }
