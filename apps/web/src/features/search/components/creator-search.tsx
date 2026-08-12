@@ -646,6 +646,10 @@ export function CreatorSearch() {
     setLimitHit(null);
     setAiError(null);
     setPhase('searching');
+    // 새 검색의 '시작 시각'을 지금으로 리셋한다. 안 하면 화면에 떠 있던 옛 캠페인(예:
+    // 캐시로 12분 전 결과가 열려 있던 경우)의 startedAt이 그대로 남아, '10분 넘으면
+    // 중단' 타이머가 새 검색을 시작하자마자(1초도 안 돼) 취소해버린다. (재검색 즉시중단 버그)
+    setTimes({ startedAt: new Date().toISOString(), completedAt: null });
     trackSearch(q); // 활성화 지표(GA4)
     setSelected(new Set());
     setCached(false);
