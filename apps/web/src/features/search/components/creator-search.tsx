@@ -120,10 +120,6 @@ const PLATFORMS = [
 
 type Phase = 'idle' | 'searching' | 'done';
 
-/** How long the UI waits before declaring a search dead. Mirrors the server's
- *  own stale window (status route STALE_MS) so the two agree. */
-const STALL_MS = 10 * 60 * 1000;
-
 /** Two discovery entrances. `tagged` finds creators who already tag a brand —
  *  proof they do brand work, which a hashtag match can't tell you. */
 type SearchMode = 'keyword' | 'tagged';
@@ -608,24 +604,11 @@ export function CreatorSearch() {
     setError(reason);
   }, []);
 
-  /**
-   * Client-side give-up. Finishing a search depends on the poller reaching the
-   * status route; if any link in that chain misbehaves the screen would sit on
-   * "검색 중" indefinitely (it once showed 30분 경과). The UI refuses to lie —
-   * past the server's own stale window it cancels and says so.
-   */
-  const gaveUp = useRef(false);
-  useEffect(() => {
-    if (phase !== 'searching') {
-      gaveUp.current = false;
-      return;
-    }
-    if (!campaignId || !times.startedAt || gaveUp.current) return;
-    const startedMs = new Date(times.startedAt).getTime();
-    if (!Number.isFinite(startedMs) || now - startedMs <= STALL_MS) return;
-    gaveUp.current = true;
-    void cancelSearch(campaignId, '검색이 너무 오래 걸려 중단했어요. 다시 검색해 주세요.');
-  }, [phase, campaignId, times.startedAt, now, cancelSearch]);
+  // NOTE: 예전엔 여기서 "시작 후 STALL_MS 지나면 클라이언트가 검색을 자동 중단"했는데,
+  // 그 타이머가 화면에 떠 있던 옛 캠페인의 startedAt을 기준으로 계산해 '새 검색을
+  // 시작하자마자 1초 만에 중단'시키는 버그를 반복해서 만들었다. 서버(status 라우트)가
+  // 이미 STALE_MS 넘은 running 캠페인을 실패 처리하고, 글로벌 폴러가 그걸 화면에
+  // 반영하므로 클라이언트 자동 중단은 불필요 → 제거했다. (수동 '중단' 버튼은 유지.)
 
   /**
    * Start a search. The POST returns a campaignId within ~1s — it never waits for
