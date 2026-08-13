@@ -33,9 +33,9 @@ type NavItem = { title: string; href: string; icon: LucideIcon };
 
 const NAV: NavItem[] = [
   { title: '대시보드', href: '/home', icon: LayoutDashboard },
-  { title: 'AI 직원', href: '/ai-employee', icon: Sparkles },
   { title: '셀럽 찾기', href: '/discover', icon: Compass },
   { title: '캠페인', href: '/campaigns', icon: Megaphone },
+  { title: 'AI 직원', href: '/ai-employee', icon: Sparkles },
   { title: '협업 관리', href: '/crm', icon: KanbanSquare },
   { title: 'DM 발송', href: '/dm-queue', icon: Send },
   { title: '받은 답장', href: '/inbox', icon: Inbox },
