@@ -15,7 +15,6 @@ import {
   RefreshCw,
   Search,
   SearchX,
-  ShoppingCart,
   SlidersHorizontal,
   Sparkles,
   Store,
@@ -130,14 +129,17 @@ type SearchMode = 'keyword' | 'tagged';
  * and each rejects what the other wants. The server judges by this, so getting
  * it wrong throws away precisely the results the user came for.
  */
-type SearchTarget = 'creator' | 'brand' | 'gonggu';
+// 검색 대상은 2가지: 크리에이터(협업할 사람 — 셀럽·공구 셀러 포함) / 브랜드(제품 파는 회사).
+// 예전 'gonggu'(공구전문)는 크리에이터로 흡수 — 별도 모드가 리테일/업체를 허용해 결과에
+// 업체가 섞이던 문제 때문. 옛 값('gonggu')이 들어오면 모두 'creator'로 맵핑한다.
+type SearchTarget = 'creator' | 'brand';
 
 const TARGET_KEY = 'scout:search-target';
 
 function readStoredTarget(): SearchTarget | null {
   try {
     const v = localStorage.getItem(TARGET_KEY);
-    return v === 'brand' || v === 'gonggu' ? v : 'creator';
+    return v === 'brand' ? 'brand' : 'creator'; // 'gonggu' 등 옛 값 → creator
   } catch {
     return null; // storage blocked (private mode / embedded) — just use the default
   }
@@ -436,10 +438,9 @@ export function CreatorSearch() {
         search_target: string | null;
       };
       setAiError(c.ai_error);
-      // 토글은 '보고 있는 캠페인이 무슨 목적으로 검색됐는지'를 보여줘야 한다. 안 그러면
-      // AI 직원(공구)으로 넘어와도 이전 로컬 선택(셀럽)이 남아 잘못 표시된다.
-      if (c.search_target === 'gonggu' || c.search_target === 'brand') setTarget(c.search_target);
-      else if (c.search_target === 'creator') setTarget('creator');
+      // 토글은 '보고 있는 캠페인이 무슨 목적으로 검색됐는지'를 보여준다.
+      // 옛 'gonggu' 캠페인은 크리에이터로 표시(2타겟 통합).
+      setTarget(c.search_target === 'brand' ? 'brand' : 'creator');
 
       setCampaignId(c.id);
       setLastViewedCampaign(c.id); // Discover reopens this session next time
@@ -1882,14 +1883,13 @@ function SearchField({
 }
 
 const TARGETS: { id: SearchTarget; label: string; icon: typeof UserRound; hint: string }[] = [
-  { id: 'creator', label: '셀럽 찾기', icon: UserRound, hint: '협업 제안할 크리에이터를 찾아요' },
   {
-    id: 'gonggu',
-    label: '공구전문',
-    icon: ShoppingCart,
-    hint: '공동구매를 돌리는 셀러를 찾아요 (소개글의 공구 일정·주문 안내로 판별)',
+    id: 'creator',
+    label: '크리에이터',
+    icon: UserRound,
+    hint: '협업 제안할 크리에이터를 찾아요 (판매 업체·브랜드는 제외)',
   },
-  { id: 'brand', label: '브랜드 찾기', icon: Store, hint: '제품을 파는 브랜드 계정을 찾아요' },
+  { id: 'brand', label: '브랜드', icon: Store, hint: '제품을 파는 브랜드 계정을 찾아요' },
 ];
 
 /**
@@ -1914,7 +1914,7 @@ function TargetToggle({
   // 상단 배치용 큰 3택 카드 — 아이콘·라벨·설명을 카드 안에 크게.
   if (prominent) {
     return (
-      <div role="group" aria-label="검색 대상" className="grid gap-2.5 sm:grid-cols-3">
+      <div role="group" aria-label="검색 대상" className="grid gap-2.5 sm:grid-cols-2">
         {TARGETS.map((t) => {
           const active = target === t.id;
           const Icon = t.icon;
@@ -1957,7 +1957,7 @@ function TargetToggle({
       <div
         role="group"
         aria-label="검색 대상"
-        className="bg-card grid grid-cols-3 gap-0.5 rounded-full border p-1"
+        className="bg-card grid grid-cols-2 gap-0.5 rounded-full border p-1"
       >
         {TARGETS.map((t) => {
           const active = target === t.id;

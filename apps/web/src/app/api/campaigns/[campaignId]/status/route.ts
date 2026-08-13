@@ -271,9 +271,30 @@ function tooSmall(c: InstagramCreator): boolean {
 }
 
 /**
+ * 아이디/이름에 박힌 '제품 브랜드' 마커 — 개인 크리에이터는 이런 단어를 이름에 안 쓴다
+ * (예: 제니하우스 코스메틱, (주)에스겔 코스메틱, 레시피 코스메틱). 크리에이터 검색에서
+ * 이런 업체가 섞이던 문제(사용자 피드백)를 잡는다. 오탐 적은 확실한 단어만.
+ */
+const PRODUCT_BRAND_NAME = [
+  '코스메틱',
+  'cosmetic', // cosmetics 포함
+  '화장품',
+  '(주)',
+  '㈜',
+  '주식회사',
+  '컴퍼니',
+  ' inc',
+  ' co.',
+];
+function looksLikeProductBrandName(c: InstagramCreator): boolean {
+  const nh = `${c.username} ${c.displayName}`.toLowerCase();
+  return PRODUCT_BRAND_NAME.some((w) => nh.includes(w));
+}
+
+/**
  * 목적별 결과 제외 판정 — 수집된 후보를 저장 전에 거른다.
- *  - creator/gonggu/both: 초소형·빈 계정 + 로컬 시술매장 + 브랜드본사/공식채널/정보성 제외.
- *    creator는 리테일/판매 계정도 제외(gonggu/both는 셀러가 목표라 리테일은 살림).
+ *  - creator: 초소형·빈 계정 + 로컬 시술매장 + 브랜드본사/공식채널/정보성 + 리테일/판매 +
+ *    이름에 제품브랜드 단어 박힌 업체 제외 (2타겟 통합: 셀럽+공구 → 크리에이터).
  *  - brand : 신생 브랜드는 팔로워가 적을 수 있어 크기·업체 필터를 적용하지 않음.
  */
 function rejectForTarget(c: InstagramCreator, target: SearchTarget): boolean {
@@ -292,7 +313,8 @@ function rejectForTarget(c: InstagramCreator, target: SearchTarget): boolean {
   if (tooSmall(c)) return true;
   if (looksLikeLocalBiz(c)) return true;
   if (looksLikeBrandOrOrg(c)) return true;
-  if (target === 'creator' && looksLikeRetail(c)) return true;
+  if (looksLikeProductBrandName(c)) return true; // 이름에 코스메틱·(주) 등 = 업체
+  if (looksLikeRetail(c)) return true; // 도매·유통·쇼핑몰·위탁판매 등 판매 계정 제외
   return false;
 }
 
