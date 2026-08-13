@@ -285,9 +285,16 @@ export async function readDataset(datasetId: string): Promise<any[]> {
 
 // ── Stage inputs (identical shapes to the synchronous pipeline) ─────────────
 
+/**
+ * 프로필당 가져올 최근 게시물 수. resultsLimit 은 "URL(프로필)당 게시물 수"라,
+ * 이걸 크게 두면 프로필마다 십수 개 게시물을 긁어 스크랩 시간이 폭증한다.
+ * 참여율(최근 평균 좋아요·댓글)은 3개면 충분 → 속도의 핵심 레버.
+ */
+const POSTS_PER_PROFILE = 3;
+
 /** Stage 1 — user/profile search for the keyword.
- *  상세 스크랩은 프로필당 ~9초(최근 게시물 동반)라 개수가 곧 시간이다.
- *  24→16으로 상한을 낮춰 ~3.5분→~2.2분. (조기종료 10명은 대개 유지) */
+ *  searchLimit = 찾을 프로필 수, resultsLimit = 프로필당 게시물 수(작게!). 이 둘을
+ *  분리해 프로필당 게시물을 16→3으로 줄이면 상세 스크랩이 크게 빨라진다(참여율 유지). */
 export function stage1Input(query: string, limit?: number) {
   const target = Math.min(Math.max(limit ?? TARGET, 1), 16);
   return {
@@ -295,7 +302,7 @@ export function stage1Input(query: string, limit?: number) {
     searchType: 'user',
     searchLimit: target,
     resultsType: 'details',
-    resultsLimit: target,
+    resultsLimit: POSTS_PER_PROFILE,
   };
 }
 
@@ -347,12 +354,14 @@ export function normalizeHandle(raw: string): string {
   return validUsername(clean) ? clean : '';
 }
 
-/** Stage 3 — enrich post-author usernames into full profile details. */
+/** Stage 3 — enrich post-author usernames into full profile details.
+ *  프로필 개수는 directUrls 길이로 정해진다. resultsLimit 은 프로필당 게시물 수라
+ *  usernames.length(=수십)로 두면 프로필마다 수십 개를 긁어 폭발한다 → 작게(3). */
 export function stage3Input(usernames: string[]) {
   return {
     directUrls: usernames.map((u) => `https://www.instagram.com/${u}/`),
     resultsType: 'details',
-    resultsLimit: usernames.length,
+    resultsLimit: POSTS_PER_PROFILE,
   };
 }
 
