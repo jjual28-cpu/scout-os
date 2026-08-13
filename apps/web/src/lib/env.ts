@@ -72,6 +72,10 @@ export const env = {
   // billed to the operator; all users share it, capped per-user per-day. The key
   // never reaches the browser. Undefined ⇒ AI features report "not configured".
   OPENROUTER_API_KEY: optional(nonEmpty, process.env.OPENROUTER_API_KEY),
+  // Google AI Studio (Gemini) — 무료 티어(카드 불필요). 설정 시 OpenRouter 대신 이걸
+  // 우선 사용. aistudio.google.com → Get API key. OpenAI 호환 엔드포인트로 호출한다.
+  GOOGLE_AI_API_KEY: optional(nonEmpty, process.env.GOOGLE_AI_API_KEY),
+  GOOGLE_AI_MODEL: process.env.GOOGLE_AI_MODEL ?? 'gemini-2.0-flash',
   // 기본값을 flash로 — lite는 '넛츠 검색에 복지단체/자사몰이 섞여도 통과'처럼 주제
   // 관련성·업체 판별이 약했다. flash는 아이디+소개+링크를 종합 판단해 훨씬 잘 거른다.
   // (검색 1회당 몇 원 차이, 하루 상한으로 폭주 방지.) env로 언제든 오버라이드 가능.

@@ -12,6 +12,9 @@ import { env } from '@/lib/env';
  */
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
+/** Google AI Studio(Gemini)의 OpenAI 호환 엔드포인트 — 무료 티어로 같은 코드로 호출. */
+export const GOOGLE_ENDPOINT =
+  'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 
 type GenArgs = {
   system?: string;
@@ -24,14 +27,28 @@ type GenArgs = {
   images?: string[];
 };
 
+/** 프로바이더 선택(OpenRouter 기본 / Google 등). 없으면 OpenRouter로 동작(기존 그대로). */
+export type CallOpts = {
+  /** 요청 엔드포인트. 미지정 시 OpenRouter. */
+  endpoint?: string;
+  /** 모델 강제 지정(있으면 args.model·기본모델보다 우선 — Google 슬러그 대응). */
+  model?: string;
+  /** response_format(json_object) 전송 여부. Google 호환 이슈 대비 끌 수 있음. */
+  jsonFormat?: boolean;
+};
+
 /* eslint-disable @typescript-eslint/no-explicit-any -- OpenRouter JSON is untyped external data */
 
 type TextPart = { type: 'text'; text: string };
 type ImagePart = { type: 'image_url'; image_url: { url: string } };
 type UserContent = string | (TextPart | ImagePart)[];
 
-/** Call OpenRouter chat completions and return the text. Throws AppError on failure. */
-export async function callOpenRouter(apiKey: string, args: GenArgs): Promise<string> {
+/** Call a chat-completions endpoint (OpenRouter 기본, opts로 Google 등 전환) and return the text. */
+export async function callOpenRouter(
+  apiKey: string,
+  args: GenArgs,
+  opts?: CallOpts,
+): Promise<string> {
   const messages: { role: 'system' | 'user'; content: UserContent }[] = [];
   if (args.system) messages.push({ role: 'system', content: args.system });
 
@@ -46,17 +63,19 @@ export async function callOpenRouter(apiKey: string, args: GenArgs): Promise<str
     messages.push({ role: 'user', content: args.prompt });
   }
 
+  const sendJsonFormat = args.json && (opts?.jsonFormat ?? true);
   const body: Record<string, unknown> = {
-    model: args.model || env.OPENROUTER_MODEL,
+    // opts.model(강제) > args.model > 기본. Google 사용 시 opts.model 로 gemini 슬러그를 넣는다.
+    model: opts?.model || args.model || env.OPENROUTER_MODEL,
     messages,
     max_tokens: args.maxTokens ?? 1024,
     temperature: args.temperature ?? 0.7,
-    ...(args.json ? { response_format: { type: 'json_object' } } : {}),
+    ...(sendJsonFormat ? { response_format: { type: 'json_object' } } : {}),
   };
 
   let res: Response;
   try {
-    res = await fetch(ENDPOINT, {
+    res = await fetch(opts?.endpoint ?? ENDPOINT, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,

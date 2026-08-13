@@ -3,7 +3,7 @@ import 'server-only';
 import { AppError } from '@/lib/api/response';
 import { env } from '@/lib/env';
 
-import { callOpenRouter } from './openrouter';
+import { callOpenRouter, GOOGLE_ENDPOINT } from './openrouter';
 import { bumpUsage } from './usage';
 
 /**
@@ -29,7 +29,9 @@ export type RunAiArgs = {
 };
 
 export async function runAi(userId: string, args: RunAiArgs): Promise<string> {
-  const key = env.OPENROUTER_API_KEY;
+  // Google(무료) 키가 있으면 그걸 우선 사용, 없으면 OpenRouter. 둘 다 없으면 미설정.
+  const googleKey = env.GOOGLE_AI_API_KEY;
+  const key = googleKey ?? env.OPENROUTER_API_KEY;
   if (!key) {
     throw new AppError('AI_NOT_CONFIGURED', 'AI가 아직 설정되지 않았습니다.', 503);
   }
@@ -43,5 +45,14 @@ export async function runAi(userId: string, args: RunAiArgs): Promise<string> {
     );
   }
 
+  if (googleKey) {
+    // Google Gemini(OpenAI 호환). 모델은 gemini 슬러그로 강제, response_format은 호환
+    // 이슈 대비 끄고(파서가 코드펜스 JSON도 흡수) 안전하게 호출.
+    return callOpenRouter(googleKey, args, {
+      endpoint: GOOGLE_ENDPOINT,
+      model: env.GOOGLE_AI_MODEL,
+      jsonFormat: false,
+    });
+  }
   return callOpenRouter(key, args);
 }
