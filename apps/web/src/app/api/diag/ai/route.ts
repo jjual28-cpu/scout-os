@@ -6,28 +6,37 @@ import { callOpenRouter, GOOGLE_ENDPOINT } from '@/services/ai/openrouter';
 export const dynamic = 'force-dynamic';
 
 /**
- * 임시 진단용 — AI 키/모델이 실제로 동작하는지 확인한다. 키 값은 노출 안 함.
- * googleTest: 진짜 Gemini 호출 1번을 쏴서 OK/FAIL(에러 메시지)을 돌려준다. 원인파악 후 삭제.
+ * 임시 진단용 — 어떤 Gemini 모델명이 실제로 동작하는지 여러 개 테스트한다.
+ * 키 값은 노출 안 함. 원인파악(정확한 모델명) 후 삭제.
  */
+const CANDIDATES = [
+  'gemini-2.0-flash',
+  'gemini-2.5-flash',
+  'gemini-1.5-flash',
+  'gemini-flash-latest',
+  'gemini-2.5-flash-latest',
+  'gemini-2.0-flash-001',
+];
+
 export const GET = async () => {
-  let googleTest = 'no key';
+  const modelTests: Record<string, string> = {};
   if (env.GOOGLE_AI_API_KEY) {
-    try {
-      const r = await callOpenRouter(
-        env.GOOGLE_AI_API_KEY,
-        { prompt: '한 단어로만 답하세요: ok', maxTokens: 10, temperature: 0 },
-        { endpoint: GOOGLE_ENDPOINT, model: env.GOOGLE_AI_MODEL, jsonFormat: false },
-      );
-      googleTest = `OK: ${r.slice(0, 60)}`;
-    } catch (e) {
-      googleTest = `FAIL: ${e instanceof Error ? e.message : String(e)}`;
+    for (const m of CANDIDATES) {
+      try {
+        const r = await callOpenRouter(
+          env.GOOGLE_AI_API_KEY,
+          { prompt: 'ok', maxTokens: 5, temperature: 0 },
+          { endpoint: GOOGLE_ENDPOINT, model: m, jsonFormat: false },
+        );
+        modelTests[m] = `OK: ${r.slice(0, 20)}`;
+      } catch (e) {
+        modelTests[m] = `FAIL: ${(e instanceof Error ? e.message : String(e)).slice(0, 60)}`;
+      }
     }
   }
   return NextResponse.json({
     googleKey: Boolean(env.GOOGLE_AI_API_KEY),
-    googleModel: env.GOOGLE_AI_MODEL,
-    openrouterKey: Boolean(env.OPENROUTER_API_KEY),
-    aiDailyLimit: env.AI_DAILY_LIMIT,
-    googleTest,
+    currentModel: env.GOOGLE_AI_MODEL,
+    modelTests,
   });
 };
