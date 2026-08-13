@@ -493,6 +493,10 @@ async function findCached(
     .eq('search_target', target)
     .eq('search_mode', mode)
     .eq('status', 'succeeded')
+    // AI 판정이 실패(오류)했던 캠페인은 캐시로 재사용하지 않는다. 안 그러면 AI가 잠깐
+    // 꺼졌을 때 만들어진 '노란 경고 + 저품질' 결과가 1시간 동안 계속 되돌아와, 재검색을
+    // 해도 경고가 안 사라진다. ai_error 없는(정상 판정) 캠페인만 캐시로 인정.
+    .is('ai_error', null)
     .order('created_at', { ascending: false })
     .limit(5);
 
