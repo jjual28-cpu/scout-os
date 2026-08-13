@@ -285,9 +285,11 @@ export async function readDataset(datasetId: string): Promise<any[]> {
 
 // ── Stage inputs (identical shapes to the synchronous pipeline) ─────────────
 
-/** Stage 1 — user/profile search for the keyword. */
+/** Stage 1 — user/profile search for the keyword.
+ *  상세 스크랩은 프로필당 ~9초(최근 게시물 동반)라 개수가 곧 시간이다.
+ *  24→16으로 상한을 낮춰 ~3.5분→~2.2분. (조기종료 10명은 대개 유지) */
 export function stage1Input(query: string, limit?: number) {
-  const target = Math.min(Math.max(limit ?? TARGET, 1), 24);
+  const target = Math.min(Math.max(limit ?? TARGET, 1), 16);
   return {
     search: query,
     searchType: 'user',
@@ -389,7 +391,7 @@ export function authorsFromPosts(items: any[], exclude: Iterable<string>): strin
 /** Search-quality knobs shared with the state machine (unchanged values). */
 export const SEARCH_TARGET = TARGET;
 export const SEARCH_MIN_SUFFICIENT = MIN_SUFFICIENT;
-/** Stage-3 enrichment cap. 상세 스크랩 대상 수 — 목표+버퍼만, 상한도 축소해 속도↑. */
+/** Stage-3 enrichment cap. 상세 스크랩(프로필당 ~9초)이라 개수=시간. 목표+소버퍼, 상한 16. */
 export function stage3Cap(need: number): number {
-  return Math.min(Math.max(need, 0) + 4, 24);
+  return Math.min(Math.max(need, 0) + 2, 16);
 }
