@@ -26,6 +26,23 @@ export function formatPercent(value: number | null | undefined, fractionDigits =
   return `${value.toFixed(fractionDigits)}%`;
 }
 
+/**
+ * 인스타/FB CDN 이미지 URL을 앱의 이미지 프록시(/api/img)로 감싼다. 인스타 CDN은
+ * referer 로 핫링크를 막아 브라우저 <img>로 직접 부르면 일부가 안 뜨는데, 서버가 대신
+ * 받아오면 전부 뜬다. 인스타/FB CDN URL만 감싸고 그 외(또는 null)는 그대로 돌려준다.
+ */
+const IMG_PROXY_HOST = /(^|\.)(cdninstagram\.com|fbcdn\.net|instagram\.com)$/i;
+export function proxiedImg(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const h = new URL(url).hostname;
+    if (IMG_PROXY_HOST.test(h)) return `/api/img?u=${encodeURIComponent(url)}`;
+  } catch {
+    /* not a parseable URL — return as-is */
+  }
+  return url;
+}
+
 /** Build a URL-friendly slug from an arbitrary string. */
 export function slugify(input: string): string {
   return input

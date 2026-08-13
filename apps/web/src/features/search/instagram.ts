@@ -1,4 +1,4 @@
-import { formatCompactNumber } from '@/lib/utils';
+import { formatCompactNumber, proxiedImg } from '@/lib/utils';
 
 import { type DiscoverOpportunity } from './discover-mock';
 import { recommendReasons } from './recommend';
@@ -133,7 +133,7 @@ export function toDiscoverOpportunity(creator: InstagramCreator): DiscoverOpport
     recommendedAction: '제품 시딩 후 협업 제안하기',
     discoveredAt: '오늘',
     profileUrl: creator.profileUrl,
-    profileImageUrl: creator.profileImageUrl,
+    profileImageUrl: proxiedImg(creator.profileImageUrl),
     followersCount: creator.followersCount,
     reasons: recommendReasons(creator),
     isVerified: creator.isVerified,
