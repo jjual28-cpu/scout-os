@@ -27,7 +27,10 @@ export const maxDuration = 60;
 const PLATFORM = 'instagram';
 /** Matches the Discover client's limit (today's effective search target). */
 const DEFAULT_LIMIT = 30;
-const CACHE_WINDOW_MS = 24 * 60 * 60 * 1000;
+// 같은 검색어 재사용(캐시) 창. 예전 24h는 너무 길어 "몇 시간 전 옛 결과"가 계속 떠서
+// 코드·AI를 바꿔도 안 바뀐 것처럼 보이는 혼란을 반복시켰다(옛 ai_error 경고까지 그대로).
+// 1시간으로 줄여, 방금 한 검색만 캐시(중복비용 방지)하고 그보다 오래된 건 항상 새로 돈다.
+const CACHE_WINDOW_MS = 60 * 60 * 1000;
 /** A 'running' campaign older than this is dead (browser closed mid-scrape) —
  *  never reuse it and never let it block a fresh search. Mirrors the client's
  *  STALL_MS and the status route's STALE_MS so all three agree. */
