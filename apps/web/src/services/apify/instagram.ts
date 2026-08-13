@@ -21,10 +21,14 @@ const APIFY_BASE = 'https://api.apify.com/v2';
 
 /** First-pass target (also the hard cap). Keeps Apify cost bounded. */
 const TARGET = 20;
-/** If user-search alone yields at least this many, skip the expansion calls. */
-const MIN_SUFFICIENT = 12;
-/** Posts to scrape across the expanded hashtags in the fallback pass. */
-const POSTS_LIMIT = 50;
+/**
+ * If user-search(Stage 1)만으로 이 수만큼 나오면 해시태그·상세 확장(Stage 2·3)을 생략.
+ * 목표가 "최소 10명"이라 10으로 맞춘다 — 콜드스타트가 런당 20~40초라 순차 런 수를 줄이는
+ * 게 스크랩량 축소보다 훨씬 빠르다. 10을 넘겨 확보되는 흔한 검색은 1런(~1분)에 끝난다.
+ */
+const MIN_SUFFICIENT = 10;
+/** Posts to scrape across the expanded hashtags in the fallback pass. (속도 위해 축소) */
+const POSTS_LIMIT = 30;
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- Apify dataset items are untyped external JSON */
 
@@ -385,7 +389,7 @@ export function authorsFromPosts(items: any[], exclude: Iterable<string>): strin
 /** Search-quality knobs shared with the state machine (unchanged values). */
 export const SEARCH_TARGET = TARGET;
 export const SEARCH_MIN_SUFFICIENT = MIN_SUFFICIENT;
-/** Stage-3 enrichment cap (mirrors the synchronous pipeline's buffer). */
+/** Stage-3 enrichment cap. 상세 스크랩 대상 수 — 목표+버퍼만, 상한도 축소해 속도↑. */
 export function stage3Cap(need: number): number {
-  return Math.min(Math.max(need, 0) + 6, 40);
+  return Math.min(Math.max(need, 0) + 4, 24);
 }

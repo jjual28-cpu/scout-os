@@ -336,8 +336,9 @@ export const dynamic = 'force-dynamic';
 // Only reads a finished dataset + saves rows — never waits on an Apify run.
 export const maxDuration = 60;
 
-/** Matches the limit the Discover client sends (today's effective search target). */
-const TARGET = 30;
+/** 저장·확장 상한. apify 서비스 TARGET(20)과 통일. 조기종료 기준은 min(TARGET,
+ *  SEARCH_MIN_SUFFICIENT)=10 → "최소 10명" 확보 즉시 완료(불필요한 확장 런 방지). */
+const TARGET = 20;
 /** A running campaign with no progress for this long is considered stale. */
 const STALE_MS = 10 * 60 * 1000;
 
