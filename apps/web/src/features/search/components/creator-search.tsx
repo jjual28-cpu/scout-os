@@ -1574,10 +1574,14 @@ export function CreatorSearch() {
                 AI가 거른 {aiRejectedCount}명 {hideRejected ? '숨김' : '표시 중'}
               </FilterChip>
             ) : null}
-            {hiddenHandledCount > 0 ? (
-              <FilterChip active={!hideHandled} onClick={() => setHideHandled((v) => !v)}>
+            {/* 이미 연락·저장한 셀럽 빼기 — 결과가 있으면 항상 노출(버튼 존재를 알 수 있게).
+                켜면 활성색으로 강조되고 검색 간 유지된다. 뺄 대상이 없으면 효과만 없다. */}
+            {items.length > 0 ? (
+              <FilterChip active={hideHandled} onClick={() => setHideHandled((v) => !v)}>
                 <EyeOff className="size-3.5" />
-                이미 연락·저장한 {hiddenHandledCount}명 {hideHandled ? '숨김' : '표시 중'}
+                {hideHandled
+                  ? `연락·저장한 셀럽 뺌${hiddenHandledCount > 0 ? ` · ${hiddenHandledCount}명 숨김` : ''}`
+                  : '이미 연락·저장한 셀럽 빼기'}
               </FilterChip>
             ) : null}
             {visualJudgedCount > 0 ? (
