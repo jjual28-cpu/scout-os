@@ -38,7 +38,7 @@ const COMMON_HEAD = `당신은 한국 인스타그램 검색 전문가입니다.
 const COMMON_TAIL = `오직 JSON만 출력하세요. 설명 금지.
 형식: {"searchTerm":"...","hashtags":["...","..."],"intent":"..."}`;
 
-export const SYSTEM_CREATOR = `${COMMON_HEAD}
+const SYSTEM_CREATOR = `${COMMON_HEAD}
 
 이번 검색의 목표는 **브랜드가 협업 제안을 보낼 크리에이터(셀럽)** 를 찾는 것입니다.
 
