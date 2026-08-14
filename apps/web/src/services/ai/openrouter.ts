@@ -73,22 +73,43 @@ export async function callOpenRouter(
     ...(sendJsonFormat ? { response_format: { type: 'json_object' } } : {}),
   };
 
-  let res: Response;
-  try {
-    res = await fetch(opts?.endpoint ?? ENDPOINT, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        // Optional attribution — helps on the OpenRouter dashboard.
-        'HTTP-Referer': env.NEXT_PUBLIC_APP_URL,
-        'X-Title': env.NEXT_PUBLIC_APP_NAME,
-      },
-      body: JSON.stringify(body),
-    });
-  } catch {
-    throw new AppError('AI_NETWORK', 'AI 서버에 연결하지 못했습니다.', 502);
+  // 무료 Gemini는 과부하 시 503(간헐적)을 자주 준다 — 실제 판정처럼 큰 호출일수록 더.
+  // 일시적 상태(429 한도/500·502·503·504 과부하)는 짧은 백오프로 재시도하면 대개 성공한다.
+  const RETRY_STATUS = new Set([429, 500, 502, 503, 504, 529]);
+  const MAX_ATTEMPTS = 4;
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  let res: Response | null = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      res = await fetch(opts?.endpoint ?? ENDPOINT, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          // Optional attribution — helps on the OpenRouter dashboard.
+          'HTTP-Referer': env.NEXT_PUBLIC_APP_URL,
+          'X-Title': env.NEXT_PUBLIC_APP_NAME,
+        },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      // 네트워크 실패도 일시적일 수 있으니 재시도, 마지막 시도면 포기.
+      if (attempt < MAX_ATTEMPTS) {
+        await sleep(600 * attempt);
+        continue;
+      }
+      throw new AppError('AI_NETWORK', 'AI 서버에 연결하지 못했습니다.', 502);
+    }
+    // 과부하·한도 → 백오프 후 재시도(마지막 시도면 아래 !res.ok 처리로 떨어진다).
+    // 800ms → 1600ms → 2400ms (총 대기 최대 ~4.8초, 서버리스 시간 안에서 안전).
+    if (RETRY_STATUS.has(res.status) && attempt < MAX_ATTEMPTS) {
+      await sleep(800 * attempt);
+      continue;
+    }
+    break;
   }
+  if (!res) throw new AppError('AI_NETWORK', 'AI 서버에 연결하지 못했습니다.', 502);
 
   if (!res.ok) {
     // The response BODY never contains the key (it's only in the request header),
