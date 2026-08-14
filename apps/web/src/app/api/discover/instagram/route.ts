@@ -12,6 +12,7 @@ import { looksNatural, planSearch, type SearchPlan } from '@/services/ai/query';
 import {
   normalizeHandle,
   stage1Input,
+  stage2Input,
   startActorRun,
   taggedActor,
   taggedInput,
@@ -341,6 +342,29 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       })
       .eq('id', created.id)
       .eq('status', 'running');
+
+    // ── 해시태그 런 프리페치(속도) ────────────────────────────────────────────
+    //   인스타 키워드 검색은 stage1(이름검색 상세, ~2분)이 부족하면 stage2(해시태그
+    //   글)를 그제서야 시작해 왔다. 그 해시태그 런을 지금(이름검색과 병렬로) 미리 돌려두면,
+    //   stage1이 끝났을 때 이미 완료돼 있어 stage2가 기다릴 필요가 없다(그만큼 단축).
+    //   실패해도 무시 — status가 기존대로 stage2를 새로 시작한다(회귀 없음).
+    if (platform === 'instagram' && mode === 'keyword') {
+      try {
+        const tagRun = await startActorRun(stage2Input(rawQuery, plan?.hashtags));
+        await supabase
+          .from('campaigns')
+          .update({
+            search_plan: {
+              ...(plan ?? {}),
+              tagRun: { runId: tagRun.runId, datasetId: tagRun.datasetId },
+            },
+          })
+          .eq('id', created.id)
+          .eq('status', 'running');
+      } catch (err) {
+        console.error(`[discover] tag prefetch failed (campaign ${created.id}): ${String(err)}`);
+      }
+    }
   } catch (err) {
     // Never leave a Campaign stuck 'running' — release the lock and surface why.
     const message = err instanceof Error ? err.message : '검색을 시작하지 못했습니다.';

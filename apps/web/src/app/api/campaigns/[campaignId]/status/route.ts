@@ -756,6 +756,8 @@ export const POST = withErrorHandling(
       searchTerm?: string;
       hashtags?: string[];
       intent?: string;
+      /** discover가 이름검색과 병렬로 미리 시작해 둔 해시태그 런(프리페치, 속도용). */
+      tagRun?: { runId: string; datasetId: string };
     } | null;
     /** What the AI should judge fit against — the intent, not "…찾아줘". */
     const matchContext = plan?.intent || query;
@@ -853,8 +855,12 @@ export const POST = withErrorHandling(
         if (!(await claimStage(sb, campaignId, 1, c.apify_run_id, 2))) {
           return ok(runningBody(2)); // another poll won the claim
         }
-        // AI's real hashtags when the user wrote a sentence; rule-based otherwise.
-        const started = await startActorRun(stage2Input(query, plan?.hashtags));
+        // 프리페치된 해시태그 런이 있으면 새 런을 시작하지 않고 그걸 stage2 런으로 붙인다.
+        // (이름검색과 병렬로 이미 돌아 완료돼 있으므로 stage2가 기다릴 필요가 없다 → 단축.)
+        // 없으면 기존대로 새로 시작: AI 실제 해시태그(문장검색) 또는 규칙기반(단순 키워드).
+        const started = plan?.tagRun?.runId
+          ? { runId: plan.tagRun.runId, datasetId: plan.tagRun.datasetId }
+          : await startActorRun(stage2Input(query, plan?.hashtags));
         await attachRun(sb, campaignId, started);
         return ok(runningBody(2));
       }
