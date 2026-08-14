@@ -78,6 +78,17 @@ const LOCAL_BIZ_SIGNALS = [
   '왁싱샵',
   '태닝샵',
   '마사지샵',
+  '마사지본점',
+  '스웨디시',
+  '타이마사지',
+  '태국마사지',
+  '아로마마사지',
+  '감성마사지',
+  '커플마사지',
+  '로미로미',
+  '경락',
+  '지압',
+  '1인샵',
   '슈가링',
   '피부관리실',
   '성형외과',
@@ -309,6 +320,10 @@ function rejectForTarget(c: InstagramCreator, target: SearchTarget): boolean {
     //   - 개인 크리에이터 카테고리 + 브랜드 신호 전무 → 제외(명백한 크리에이터만).
     if (c.postsCount != null && c.postsCount < MIN_POSTS) return true;
     if (looksLikeLocalBiz(c)) return true;
+    // 브랜드 신호(쇼핑링크·브랜드카테고리·공식이름 등)가 전혀 없는 초소형·잡계정 제외.
+    // 신생 브랜드라도 최소 링크·게시물은 있다 — 팔로워 17·게시물 2짜리 잡계정(블로그
+    // 홍보 등)이 '신생 브랜드'라는 배려를 타고 통과하던 문제. 신호 있으면 크기 무관 통과.
+    if (tooSmall(c) && !looksLikeBrand(c)) return true;
     const cat = (c.category ?? '').toLowerCase();
     if (CREATOR_CATEGORY.some((w) => cat.includes(w)) && !looksLikeBrand(c)) return true;
     return false;
