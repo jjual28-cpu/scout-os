@@ -646,7 +646,8 @@ export function CreatorSearch() {
     chooseSizeBand('all');
     setExcludeTerms([]);
     setHideRejected(true);
-    setHideHandled(false);
+    // hideHandled(연락·저장한 셀럽 빼기)는 새 검색에서도 유지한다 — "매번 새로운 셀럽만"
+    // 보려고 켠 사용자 의도를 검색마다 끄면 안 된다(누르면 계속 빼기). 초기화 버튼으론 끔.
     setHideVisualReject(false);
 
     const meta = draftMeta.current;
@@ -748,11 +749,15 @@ export function CreatorSearch() {
     setSelected(new Set());
   };
 
-  // Creators hidden ONLY because they're already handled (연락완료/답변/협업/제외).
-  // The DB keeps the full result set — this filter is screen-only.
+  // 이미 "관여한" 셀럽 = 연락함(연락완료/답변/협업/제외) 또는 저장함. 새 검색에서 같은
+  // 사람이 반복해 나오지 않게 이 버튼으로 빼둔다. DB엔 전체가 남고 화면에서만 숨긴다.
+  const isEngaged = useCallback(
+    (id: string) => isDefaultHidden(outreach.records[id]?.status) || saved.isSaved(id),
+    [outreach.records, saved],
+  );
   const hiddenHandledCount = useMemo(
-    () => items.filter((it) => isDefaultHidden(outreach.records[it.id]?.status)).length,
-    [items, outreach.records],
+    () => items.filter((it) => isEngaged(it.id)).length,
+    [items, isEngaged],
   );
 
   // Accounts the AI judged as not a real fit (info/news/unrelated). Hidden by
@@ -767,7 +772,7 @@ export function CreatorSearch() {
   const visible = useMemo(() => {
     const filtered = items.filter((it) => {
       if (hideRejected && it.aiVerdict === 'reject') return false;
-      if (hideHandled && isDefaultHidden(outreach.records[it.id]?.status)) return false;
+      if (hideHandled && isEngaged(it.id)) return false;
       const f = it.followersCount ?? 0;
       if (buckets.size && ![...buckets].some((b) => inBucket(f, b))) return false;
       if (toggles.has('verified') && !it.isVerified) return false;
@@ -826,6 +831,7 @@ export function CreatorSearch() {
     sizeBand,
     excludeTerms,
     outreach.records,
+    isEngaged,
   ]);
 
   /** 비주얼 판정된 결과가 하나라도 있는지 (판정순·부적합숨김 UI 노출 여부). */
@@ -1571,7 +1577,7 @@ export function CreatorSearch() {
             {hiddenHandledCount > 0 ? (
               <FilterChip active={!hideHandled} onClick={() => setHideHandled((v) => !v)}>
                 <EyeOff className="size-3.5" />
-                이미 연락한 {hiddenHandledCount}명 {hideHandled ? '숨김' : '표시 중'}
+                이미 연락·저장한 {hiddenHandledCount}명 {hideHandled ? '숨김' : '표시 중'}
               </FilterChip>
             ) : null}
             {visualJudgedCount > 0 ? (
