@@ -3,7 +3,7 @@ import { CreatorSearch } from '@/features/search';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Creator Discovery',
+  title: '크리에이터·브랜드 찾기',
   description: '원하는 주제나 키워드로 인스타그램 크리에이터를 검색하세요.',
 };
 
