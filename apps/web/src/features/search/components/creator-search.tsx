@@ -736,19 +736,6 @@ export function CreatorSearch() {
     }
   }
 
-  /** 다른 검색 시작 — clear the view only; the campaign and its results stay. */
-  const startNewSearch = () => {
-    setPhase('idle');
-    setItems([]);
-    setKeyword('');
-    setInput('');
-    setCampaignId(null);
-    setCached(false);
-    setError(null);
-    setAiError(null);
-    setSelected(new Set());
-  };
-
   // 이미 "관여한" 셀럽 = 연락함(연락완료/답변/협업/제외) 또는 저장함. 새 검색에서 같은
   // 사람이 반복해 나오지 않게 이 버튼으로 빼둔다. DB엔 전체가 남고 화면에서만 숨긴다.
   const isEngaged = useCallback(
@@ -1438,9 +1425,19 @@ export function CreatorSearch() {
                 <Sparkles className="size-4" />
                 비주얼로 보기
               </Button>
-              <Button type="button" variant="outline" size="sm" onClick={startNewSearch}>
-                <Search className="size-4" />
-                다른 검색 시작
+              {/* 이미 연락·저장한 셀럽 빼기 — 켜면 관여한 셀럽을 결과에서 제외(검색 간 유지).
+                  눈에 잘 띄게 상단 버튼 줄에 둔다. ('다른 검색 시작'은 검색칸에 새로 치면
+                  되므로 제거.) */}
+              <Button
+                type="button"
+                size="sm"
+                variant={hideHandled ? 'default' : 'outline'}
+                onClick={() => setHideHandled((v) => !v)}
+                className={hideHandled ? '' : 'border-primary/40 text-primary'}
+                title="이미 연락했거나 저장한 셀럽을 결과에서 빼요. 켜두면 다음 검색에도 유지돼 매번 새로운 셀럽만 봅니다."
+              >
+                <EyeOff className="size-4" />
+                {hideHandled ? '연락·저장한 셀럽 뺀 상태' : '이미 연락·저장한 셀럽 빼기'}
               </Button>
               <Button type="button" size="sm" onClick={() => void runSearch(keyword, true)}>
                 <RefreshCw className="size-4" />
@@ -1572,16 +1569,6 @@ export function CreatorSearch() {
               <FilterChip active={!hideRejected} onClick={() => setHideRejected((v) => !v)}>
                 <Sparkles className="size-3.5" />
                 AI가 거른 {aiRejectedCount}명 {hideRejected ? '숨김' : '표시 중'}
-              </FilterChip>
-            ) : null}
-            {/* 이미 연락·저장한 셀럽 빼기 — 결과가 있으면 항상 노출(버튼 존재를 알 수 있게).
-                켜면 활성색으로 강조되고 검색 간 유지된다. 뺄 대상이 없으면 효과만 없다. */}
-            {items.length > 0 ? (
-              <FilterChip active={hideHandled} onClick={() => setHideHandled((v) => !v)}>
-                <EyeOff className="size-3.5" />
-                {hideHandled
-                  ? `연락·저장한 셀럽 뺌${hiddenHandledCount > 0 ? ` · ${hiddenHandledCount}명 숨김` : ''}`
-                  : '이미 연락·저장한 셀럽 빼기'}
               </FilterChip>
             ) : null}
             {visualJudgedCount > 0 ? (
