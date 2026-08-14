@@ -8,7 +8,7 @@ import { normalizeQuery } from '@/lib/normalize-query';
 import { PLANS, toPlanKey } from '@/features/billing/plans';
 import { aiErrorMessage } from '@/services/ai/errors';
 import { type BrandContext, type SearchTarget } from '@/services/ai/match';
-import { looksNatural, planSearch, type SearchPlan } from '@/services/ai/query';
+import { planSearch, type SearchPlan } from '@/services/ai/query';
 import {
   normalizeHandle,
   stage1Input,
@@ -283,13 +283,11 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
         .update({ search_plan: plan })
         .eq('id', created.id)
         .eq('status', 'running');
-    } else if (
-      platform === 'instagram' &&
-      mode === 'keyword' &&
-      // 브랜드는 짧은 키워드여도 항상 AI로 '브랜드 소유 해시태그'를 뽑는다(이름검색이 아니라
-      // 해시태그로 발굴하므로 해시태그가 필수). 그 외에는 문장일 때만 AI 번역.
-      (looksNatural(rawQuery) || target === 'brand')
-    ) {
+    } else if (platform === 'instagram' && mode === 'keyword') {
+      // 인스타 키워드 검색은 항상 AI로 '진짜 활발한 해시태그'를 뽑는다. 단순 키워드
+      // ("여행")도 예외 없이 — 규칙기반 폴백(#여행스타그램·#여행그램 등)은 여행 사진 올린
+      // 일반인만 잔뜩 데려와 진짜 여행 크리에이터를 놓쳤다. AI가 #여행에디터·#여행유튜버
+      // 같은 실제 커뮤니티 태그를 만들어 발굴 품질을 끌어올린다. (실패 시 폴백은 그대로.)
       try {
         plan = await planSearch(
           userId,
