@@ -365,8 +365,8 @@ ${candidateBlock(creators, target)}`;
             : SYSTEM_CREATOR,
     prompt,
     json: true,
-    // ~24 candidates × a short verdict each; leaves room without runaway cost.
-    maxTokens: 2000,
+    // 후보 전원 verdict를 빠짐없이 담아야 한다(빠지면 미검토로 숨겨짐). 여유있게.
+    maxTokens: 3200,
     temperature: 0.2,
   });
 

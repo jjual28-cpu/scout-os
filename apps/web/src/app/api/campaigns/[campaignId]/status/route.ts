@@ -71,6 +71,9 @@ const LOCAL_BIZ_SIGNALS = [
   '미용실',
   '헤어샵',
   '헤어살롱',
+  '헤어디자이너',
+  '헤어모델',
+  '미용사',
   '바버샵',
   '왁싱샵',
   '태닝샵',
@@ -575,17 +578,29 @@ async function applyAiMatch(
 
     // Persist per creator. Sequential updates keep it simple and are cheap at
     // ~24 rows; a failure on one row must not abort the rest.
+    //
+    // AI가 verdict를 안 준 후보(응답에서 빠짐)는 예전엔 그냥 통과(null)돼 화면에 떴다 —
+    // 헤어디자이너·힙합댄서가 '여행' 검색에 뜬 원인. AI가 배치를 심사하고도 안 뽑았다면
+    // 주제와 안 맞을 확률이 높으니 reject로 숨긴다(제외는 '제외 포함'으로 다시 볼 수 있음).
+    // → AI가 보증한 계정만 기본 노출 = 정확도 우선.
     for (const c of creators) {
       const m = verdicts.get(c.username.toLowerCase());
-      if (!m) continue;
+      const patch = m
+        ? {
+            ai_score: m.score,
+            ai_verdict: m.verdict,
+            ai_reason: m.reason,
+            ai_audience: m.audience || null,
+          }
+        : {
+            ai_score: 0,
+            ai_verdict: 'reject' as const,
+            ai_reason: '검색 주제와 맞지 않아 제외',
+            ai_audience: null,
+          };
       const { error } = await sb
         .from('campaign_results')
-        .update({
-          ai_score: m.score,
-          ai_verdict: m.verdict,
-          ai_reason: m.reason,
-          ai_audience: m.audience || null,
-        })
+        .update(patch)
         .eq('user_id', userId)
         .eq('campaign_id', campaignId)
         .eq('creator_id', c.id);
