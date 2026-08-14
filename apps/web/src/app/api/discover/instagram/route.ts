@@ -316,54 +316,60 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       }
     }
 
-    const started =
-      mode === 'tagged'
-        ? await startActorRun(taggedInput([rawQuery]), taggedActor())
-        : platform === 'tiktok'
-          ? await startActorRun(
-              tiktokInput(isMulti ? multiKeywords : [rawQuery], body.limit ?? DEFAULT_LIMIT),
-              tiktokActorId(),
-            )
-          : platform === 'youtube'
-            ? await startActorRun(
-                youtubeInput(isMulti ? multiKeywords : [rawQuery], body.limit ?? DEFAULT_LIMIT),
-                youtubeActorId(),
-              )
-            : await startActorRun(
-                stage1Input(plan?.searchTerm || rawQuery, body.limit ?? DEFAULT_LIMIT),
-              );
-    await supabase
-      .from('campaigns')
-      .update({
-        apify_run_id: started.runId,
-        apify_dataset_id: started.datasetId,
-        apify_stage: 1,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', created.id)
-      .eq('status', 'running');
-
-    // ── 해시태그 런 프리페치(속도) ────────────────────────────────────────────
-    //   인스타 키워드 검색은 stage1(이름검색 상세, ~2분)이 부족하면 stage2(해시태그
-    //   글)를 그제서야 시작해 왔다. 그 해시태그 런을 지금(이름검색과 병렬로) 미리 돌려두면,
-    //   stage1이 끝났을 때 이미 완료돼 있어 stage2가 기다릴 필요가 없다(그만큼 단축).
-    //   실패해도 무시 — status가 기존대로 stage2를 새로 시작한다(회귀 없음).
     if (platform === 'instagram' && mode === 'keyword') {
-      try {
-        const tagRun = await startActorRun(stage2Input(rawQuery, plan?.hashtags));
-        await supabase
-          .from('campaigns')
-          .update({
-            search_plan: {
-              ...(plan ?? {}),
-              tagRun: { runId: tagRun.runId, datasetId: tagRun.datasetId },
-            },
-          })
-          .eq('id', created.id)
-          .eq('status', 'running');
-      } catch (err) {
-        console.error(`[discover] tag prefetch failed (campaign ${created.id}): ${String(err)}`);
-      }
+      // ── 겹침(overlap) 검색 — 느린 상세 스크랩 2개를 병렬로 ──────────────────
+      //   기존엔 이름검색 상세(~2분)가 끝나야 해시태그→작성자 상세(~2분)를 시작해 순차로
+      //   ~4분+ 걸렸다. 여기선 두 상세 스크랩을 겹쳐 돌린다:
+      //     primary = 해시태그 글(빠름) → 곧바로 작성자 상세보강(stage3)으로 이어짐
+      //     background = 이름검색 상세(느림) — 지금 같이 시작해 병렬로 진행
+      //   상세보강과 이름검색이 겹쳐 돌아, 마지막 stage3에서 둘을 합친다 → ~1.5분 단축.
+      //   (사용자가 고른 '단계 동시 실행': 품질 100% 유지, Apify 항상 2회.)
+      const [tagStarted, nameStarted] = await Promise.all([
+        startActorRun(stage2Input(rawQuery, plan?.hashtags)),
+        startActorRun(stage1Input(plan?.searchTerm || rawQuery, body.limit ?? DEFAULT_LIMIT)),
+      ]);
+      await supabase
+        .from('campaigns')
+        .update({
+          apify_run_id: tagStarted.runId,
+          apify_dataset_id: tagStarted.datasetId,
+          apify_stage: 1,
+          search_plan: {
+            ...(plan ?? {}),
+            flow: 'overlap',
+            nameRun: { runId: nameStarted.runId, datasetId: nameStarted.datasetId },
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', created.id)
+        .eq('status', 'running');
+    } else {
+      const started =
+        mode === 'tagged'
+          ? await startActorRun(taggedInput([rawQuery]), taggedActor())
+          : platform === 'tiktok'
+            ? await startActorRun(
+                tiktokInput(isMulti ? multiKeywords : [rawQuery], body.limit ?? DEFAULT_LIMIT),
+                tiktokActorId(),
+              )
+            : platform === 'youtube'
+              ? await startActorRun(
+                  youtubeInput(isMulti ? multiKeywords : [rawQuery], body.limit ?? DEFAULT_LIMIT),
+                  youtubeActorId(),
+                )
+              : await startActorRun(
+                  stage1Input(plan?.searchTerm || rawQuery, body.limit ?? DEFAULT_LIMIT),
+                );
+      await supabase
+        .from('campaigns')
+        .update({
+          apify_run_id: started.runId,
+          apify_dataset_id: started.datasetId,
+          apify_stage: 1,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', created.id)
+        .eq('status', 'running');
     }
   } catch (err) {
     // Never leave a Campaign stuck 'running' — release the lock and surface why.

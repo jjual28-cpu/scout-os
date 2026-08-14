@@ -756,11 +756,15 @@ export const POST = withErrorHandling(
       searchTerm?: string;
       hashtags?: string[];
       intent?: string;
-      /** discover가 이름검색과 병렬로 미리 시작해 둔 해시태그 런(프리페치, 속도용). */
-      tagRun?: { runId: string; datasetId: string };
+      /** 'overlap'이면 상세 스크랩 2개를 병렬로 돌리는 겹침 검색(속도). */
+      flow?: string;
+      /** 겹침 검색에서 이름검색 상세를 백그라운드로 돌린 런. 끝에서 합쳐 마무리한다. */
+      nameRun?: { runId: string; datasetId: string };
     } | null;
     /** What the AI should judge fit against — the intent, not "…찾아줘". */
     const matchContext = plan?.intent || query;
+    /** 겹침 검색 — 상세 스크랩 2개(해시태그 보강 + 이름검색)를 병렬로 돌린다. */
+    const overlap = plan?.flow === 'overlap';
 
     const platform: string = c.platform ?? 'instagram';
 
@@ -824,6 +828,66 @@ export const POST = withErrorHandling(
         return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
       }
 
+      // ── 겹침(overlap) 키워드 검색 — 상세 스크랩 2개를 병렬로 ────────────────
+      //   primary는 해시태그 글(stage1) → 작성자 상세보강(stage3). 이름검색 상세는
+      //   discover가 백그라운드(plan.nameRun)로 이미 병렬 시작했다. stage3에서 둘을 합친다.
+      if (overlap) {
+        // Stage 1 — 해시태그 글 → 작성자 → 상세보강(stage3) 시작.
+        if (stage === 1) {
+          const authors = authorsFromPosts(items, []);
+          const toEnrich = authors.slice(0, stage3Cap(TARGET));
+          if (!(await claimStage(sb, campaignId, 1, c.apify_run_id, 3))) {
+            return ok(runningBody(3)); // another poll won the claim
+          }
+          // 작성자가 있으면 상세보강 런을, 없으면 이름검색 런을 primary로 붙인다(그거라도
+          // 완료를 기다렸다 합치도록). 어느 쪽이든 stage3가 nameRun까지 마저 수집해 마무리.
+          const next =
+            toEnrich.length > 0
+              ? await startActorRun(stage3Input(toEnrich))
+              : plan?.nameRun
+                ? { runId: plan.nameRun.runId, datasetId: plan.nameRun.datasetId }
+                : null;
+          if (next) await attachRun(sb, campaignId, next);
+          return ok(runningBody(3));
+        }
+
+        // Stage 3 — 상세보강(primary) 완료 → 보강결과 + 백그라운드 이름검색결과 합쳐 마무리.
+        const enriched = profilesFromItems(items);
+        let nameProfiles: InstagramCreator[] = [];
+        if (plan?.nameRun?.datasetId) {
+          const nameStatus = await getRunStatus(plan.nameRun.runId);
+          const stillRunning =
+            nameStatus &&
+            (nameStatus.status === 'READY' ||
+              nameStatus.status === 'RUNNING' ||
+              nameStatus.status === 'ABORTING');
+          if (stillRunning) {
+            // 이름검색이 아직 진행 중 — 잠깐 더 기다렸다 합친다(대개 보강보다 먼저 끝난다).
+            if (!stale) return ok(runningBody(3));
+            // stale이면 이름검색 없이 진행(무한 대기 방지).
+          } else if (nameStatus?.status === 'SUCCEEDED') {
+            const nameItems = await readDataset(plan.nameRun.datasetId);
+            nameProfiles = profilesFromItems(nameItems);
+          }
+          // FAILED/기타 → 이름검색 없이 보강결과만으로 진행.
+        }
+
+        // 두 소스 합치고(중복 제거) 목적별 제외 + 규모 골고루 → 저장 → 판정 → 완료.
+        const merged = [...enriched, ...nameProfiles];
+        const dedup = [...new Map(merged.map((cr) => [cr.username.toLowerCase(), cr])).values()];
+        const seed = (plan?.searchTerm || query).toLowerCase();
+        const kept = dedup.filter(
+          (cr) =>
+            !rejectForTarget(cr, target) && !(target === 'creator' && looksLikeSeller(cr, seed)),
+        );
+        await saveCreators(sb, userId, campaignId, query, spreadByFollowers(kept, TARGET), 0);
+        await upsertPool('instagram', merged); // 풀 캐시엔 원본 유지
+        const { count } = await existingResults(sb, userId, campaignId);
+        await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null, target);
+        await markSucceeded(sb, campaignId, count);
+        return ok({ status: 'succeeded' as const, resultCount: count, progress: 100 });
+      }
+
       // ── Keyword mode ───────────────────────────────────────────────────────
       // Stage 1 — profile (account-name) search results.
       if (stage === 1) {
@@ -855,12 +919,8 @@ export const POST = withErrorHandling(
         if (!(await claimStage(sb, campaignId, 1, c.apify_run_id, 2))) {
           return ok(runningBody(2)); // another poll won the claim
         }
-        // 프리페치된 해시태그 런이 있으면 새 런을 시작하지 않고 그걸 stage2 런으로 붙인다.
-        // (이름검색과 병렬로 이미 돌아 완료돼 있으므로 stage2가 기다릴 필요가 없다 → 단축.)
-        // 없으면 기존대로 새로 시작: AI 실제 해시태그(문장검색) 또는 규칙기반(단순 키워드).
-        const started = plan?.tagRun?.runId
-          ? { runId: plan.tagRun.runId, datasetId: plan.tagRun.datasetId }
-          : await startActorRun(stage2Input(query, plan?.hashtags));
+        // AI's real hashtags when the user wrote a sentence; rule-based otherwise.
+        const started = await startActorRun(stage2Input(query, plan?.hashtags));
         await attachRun(sb, campaignId, started);
         return ok(runningBody(2));
       }
