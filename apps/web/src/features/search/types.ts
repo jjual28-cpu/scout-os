@@ -29,6 +29,8 @@ export type SearchResult = {
   followersCount?: number | null;
   /** AI recommendation reasons (data-derived) — shown instead of the raw score. */
   reasons?: string[];
+  /** 바이오의 쇼핑몰/자사몰 링크 — 브랜드 카드에 🔗 칩으로 노출(진짜 브랜드 신호). */
+  externalUrl?: string | null;
 };
 
 /** A user's judgement on a saved opportunity. */

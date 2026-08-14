@@ -1,6 +1,7 @@
 import {
   BookHeart,
   Check,
+  ExternalLink,
   FileText,
   Instagram,
   Lightbulb,
@@ -145,6 +146,25 @@ export function OpportunityBody({
             {platformMeta.label} 보기
           </span>,
         )}
+        {/* 쇼핑몰 링크 — 바이오에 스토어/자사몰 링크가 있으면 '진짜 브랜드'의 가장 강한
+            신호. 클릭하면 새 탭으로 스토어를 열어 브랜드인지 바로 확인할 수 있다. */}
+        {result.externalUrl ? (
+          <a
+            href={
+              /^https?:\/\//i.test(result.externalUrl)
+                ? result.externalUrl
+                : `https://${result.externalUrl}`
+            }
+            target="_blank"
+            rel="noopener noreferrer nofollow"
+            onClick={(e) => e.stopPropagation()}
+            title={result.externalUrl}
+            className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/10 px-2.5 py-1.5 text-sm font-medium text-emerald-600 ring-1 ring-emerald-500/20 transition-colors hover:bg-emerald-500/20 dark:text-emerald-400"
+          >
+            <ExternalLink className="size-3.5" />
+            쇼핑몰
+          </a>
+        ) : null}
       </div>
 
       {/* AI 추천 이유 chips */}
