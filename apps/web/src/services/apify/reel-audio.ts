@@ -80,7 +80,13 @@ export function audioFromReel(post: any): ReelAudio | null {
 
   const audioId = str(mi, ['audio_id', 'audioId', 'id', 'audio_cluster_id', 'music_canonical_id']);
   const songName = str(mi, ['song_name', 'songName', 'title', 'music_asset_title']);
-  const artistName = str(mi, ['artist_name', 'artistName', 'display_artist', 'ig_artist_username']);
+  const artistName = str(mi, [
+    'artist_name',
+    'artistName',
+    'artist',
+    'display_artist',
+    'ig_artist_username',
+  ]);
   const usesOriginal = Boolean(mi.uses_original_audio ?? mi.usesOriginalAudio ?? false);
 
   // 음원 식별 불가(곡명·아이디 모두 없음) → 트렌드 집계에 못 씀.
