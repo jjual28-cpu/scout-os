@@ -59,6 +59,7 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith('/ai-employee') ||
     pathname.startsWith('/products') ||
     pathname.startsWith('/discover') ||
+    pathname.startsWith('/trends') ||
     pathname.startsWith('/search') ||
     pathname.startsWith('/saved') ||
     pathname.startsWith('/outreach') ||

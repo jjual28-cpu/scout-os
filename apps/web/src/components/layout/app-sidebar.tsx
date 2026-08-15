@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   LogOut,
   Megaphone,
+  Music2,
   Package,
   Send,
   Sparkles,
@@ -34,6 +35,7 @@ type NavItem = { title: string; href: string; icon: LucideIcon };
 const NAV: NavItem[] = [
   { title: '대시보드', href: '/home', icon: LayoutDashboard },
   { title: '셀럽 찾기', href: '/discover', icon: Compass },
+  { title: '트렌드 음원', href: '/trends', icon: Music2 },
   { title: '캠페인', href: '/campaigns', icon: Megaphone },
   { title: 'AI 직원', href: '/ai-employee', icon: Sparkles },
   { title: '협업 관리', href: '/crm', icon: KanbanSquare },
