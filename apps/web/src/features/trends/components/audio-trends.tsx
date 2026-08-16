@@ -1,6 +1,6 @@
 'use client';
 
-import { ExternalLink, Music2, RefreshCw, TrendingUp } from 'lucide-react';
+import { ExternalLink, Music2, RefreshCw, Search, TrendingUp } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -45,6 +45,7 @@ function sortRows(rows: Row[], tab: Tab): Row[] {
 
 export function AudioTrends() {
   const [scope, setScope] = useState('전체');
+  const [input, setInput] = useState('');
   const [tab, setTab] = useState<Tab>('used');
   const [rows, setRows] = useState<Row[]>([]);
   const [capturedOn, setCapturedOn] = useState<string | null>(null);
@@ -78,16 +79,19 @@ export function AudioTrends() {
     void load(scope);
   }, [scope, load]);
 
-  /** 지금 갱신 — 릴스를 새로 긁어 음원 집계(스크랩 시작 → 완료까지 폴링). */
-  async function refresh() {
-    if (refreshing) return;
+  /** 검색 — 이 키워드의 릴스를 새로 긁어 음원 집계(스크랩 시작 → 완료까지 폴링). */
+  async function runScrape(raw: string) {
+    const s = raw.trim();
+    if (!s || refreshing) return;
+    setScope(s);
+    setInput(s);
     setRefreshing(true);
     setError(null);
     try {
       const startRes = await fetch('/api/trends/audio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scope }),
+        body: JSON.stringify({ scope: s }),
       });
       const startJson = (await startRes.json().catch(() => null)) as {
         data?: { runId?: string; datasetId?: string };
@@ -106,7 +110,7 @@ export function AudioTrends() {
         const cRes = await fetch('/api/trends/audio/collect', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ runId, datasetId, scope }),
+          body: JSON.stringify({ runId, datasetId, scope: s }),
         });
         const cJson = (await cRes.json().catch(() => null)) as {
           data?: { done?: boolean; failed?: boolean; rows?: Row[]; capturedOn?: string | null };
@@ -134,29 +138,51 @@ export function AudioTrends() {
 
   return (
     <div className="mx-auto max-w-4xl px-5 py-8">
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold">
-            <Music2 className="text-primary size-6" />
-            트렌드 음원
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            릴스에서 지금 많이 쓰이는 · 조회수 높은 · 뜨고 있는 음원. (긁은 릴스 표본 기반 추정)
-          </p>
-        </div>
-        <Button type="button" size="sm" onClick={() => void refresh()} disabled={refreshing}>
-          <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
-          {refreshing ? '릴스 긁는 중… (몇 분 걸려요)' : '지금 갱신'}
-        </Button>
+      <div className="mb-4">
+        <h1 className="flex items-center gap-2 text-2xl font-bold">
+          <Music2 className="text-primary size-6" />
+          트렌드 음원
+        </h1>
+        <p className="text-muted-foreground mt-1 text-sm">
+          분야·키워드로 검색하면 그 릴스에서 많이 쓰이는 · 고조회 · 뜨고 있는 음원을 찾아요. (긁은
+          릴스 표본 기반 추정)
+        </p>
       </div>
 
-      {/* 분야 선택 */}
+      {/* 검색 — 키워드로 릴스 긁어 음원 집계 */}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void runScrape(input);
+        }}
+        className="mb-3 flex gap-2"
+      >
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="분야·키워드로 검색 (예: 뷰티, 여행, 운동, 강아지)"
+          className="border-input bg-background focus-visible:ring-ring flex-1 rounded-lg border px-3 py-2 text-sm outline-none focus-visible:ring-2"
+        />
+        <Button type="submit" disabled={refreshing || !input.trim()}>
+          {refreshing ? (
+            <RefreshCw className="size-4 animate-spin" />
+          ) : (
+            <Search className="size-4" />
+          )}
+          {refreshing ? '릴스 긁는 중…' : '검색'}
+        </Button>
+      </form>
+
+      {/* 빠른 분야 — 누르면 저장된 결과를 바로 보여줌(검색은 위 버튼) */}
       <div className="mb-4 flex flex-wrap gap-1.5">
         {SCOPES.map((s) => (
           <button
             key={s}
             type="button"
-            onClick={() => setScope(s)}
+            onClick={() => {
+              setInput(s);
+              setScope(s);
+            }}
             className={cn(
               'rounded-full border px-3 py-1 text-sm transition-colors',
               scope === s
@@ -201,8 +227,8 @@ export function AudioTrends() {
         <div className="text-muted-foreground rounded-xl border border-dashed py-16 text-center text-sm">
           아직 이 분야 데이터가 없어요.
           <br />
-          <span className="text-foreground font-medium">지금 갱신</span>을 눌러 릴스를 긁으면 음원이
-          집계돼요. (급상승은 며칠 스냅샷이 쌓이면 나와요)
+          위에서 <span className="text-foreground font-medium">검색</span>하면 릴스를 긁어 음원을
+          집계해요. (급상승은 며칠 스냅샷이 쌓이면 나와요)
         </div>
       ) : (
         <ol className="space-y-2">
