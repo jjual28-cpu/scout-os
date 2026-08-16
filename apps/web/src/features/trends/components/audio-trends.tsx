@@ -99,9 +99,9 @@ export function AudioTrends() {
         setRefreshing(false);
         return;
       }
-      // 완료까지 폴링(최대 ~4분).
+      // 완료까지 폴링(최대 ~8분). 인스타 릴스 해시태그 스크랩은 느릴 수 있음(때로 throttle).
       const startedAt = Date.now();
-      while (Date.now() - startedAt < 240_000) {
+      while (Date.now() - startedAt < 480_000) {
         await new Promise((r) => setTimeout(r, 5000));
         const cRes = await fetch('/api/trends/audio/collect', {
           method: 'POST',
@@ -146,7 +146,7 @@ export function AudioTrends() {
         </div>
         <Button type="button" size="sm" onClick={() => void refresh()} disabled={refreshing}>
           <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
-          {refreshing ? '긁는 중…' : '지금 갱신'}
+          {refreshing ? '릴스 긁는 중… (몇 분 걸려요)' : '지금 갱신'}
         </Button>
       </div>
 
