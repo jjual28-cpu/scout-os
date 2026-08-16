@@ -27,7 +27,10 @@ export const GET = async (request: Request) => {
   }
 
   // 2) 새로 소량 스크랩 시작 → ~45초 인라인 폴링 → 되면 바로 분석, 안 되면 runId 반환.
-  const started = await startActorRun(reelsAudioInput(['뷰티릴스', '릴스추천'], 20));
+  //    ?tags=뷰티,릴스추천&limit=8 로 태그·개수 조절(셀럽 검색이 쓰는 topical 태그로 속도 확인).
+  const tags = (url.searchParams.get('tags') || '뷰티').split(',').map((t) => t.trim());
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 8, 1), 50);
+  const started = await startActorRun(reelsAudioInput(tags, limit));
   const begin = Date.now();
   while (Date.now() - begin < 45_000) {
     await sleep(5000);
