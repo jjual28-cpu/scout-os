@@ -50,7 +50,6 @@ export const GET = async (request: Request) => {
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function inspect(items: any[]) {
-  const first = items?.[0] ?? null;
   const withMusic = (items ?? []).filter((it) => audioFromReel(it) != null).length;
   // 앞쪽 아이템들의 음원 관련 후보 필드를 그대로 노출.
   const samples = (items ?? []).slice(0, 3).map((it) => ({
