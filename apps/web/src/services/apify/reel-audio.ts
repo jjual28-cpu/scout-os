@@ -52,47 +52,56 @@ function num(o: Record<string, any>, keys: string[]): number {
   return 0;
 }
 
-/** 게시물의 조회수(릴스는 재생수). 여러 필드명 방어. */
+/** 게시물의 도달수 — 릴스면 재생수, 사진/캐러셀이면 좋아요수로 대체(둘 다 없으면 0). */
 function reelViews(post: Record<string, any>): number {
-  return num(post, [
-    'videoPlayCount',
-    'videoViewCount',
-    'playCount',
-    'viewsCount',
-    'videoViewsCount',
-    'views',
-  ]);
+  const v = num(post, ['videoPlayCount', 'videoViewCount', 'playCount', 'viewsCount', 'views']);
+  if (v > 0) return v;
+  return num(post, ['likesCount', 'likeCount']);
 }
 
 /**
- * 게시물 1개 → 음원 정보. 릴스가 아니거나(음원 없음) 음원 메타가 비면 null.
- * Apify instagram-scraper의 릴스 출력은 `musicInfo`{song_name,artist_name,audio_id,
- * uses_original_audio}를 담는다. 실필드명은 배포 후 실데이터로 확정(다중키 방어).
+ * 게시물 1개 → 음원 정보. 음원 메타가 없으면 null.
+ *
+ * Apify instagram-scraper의 실제 구조(2026-08 확인)는 중첩돼 있다:
+ *   musicInfo.audio_type ('licensed_music' | 'original_sounds')
+ *   musicInfo.music_info.music_asset_info { audio_id, display_artist, title, ig_username }
+ *   musicInfo.audio_canonical_id (그 음원의 정규 ID)
+ * 오리지널 오디오는 original_sound_info 로 올 수 있어 둘 다 방어. (사진·캐러셀에도 음원이
+ * 붙으므로 릴스가 아니어도 음원 트렌드 집계에 유효.)
  */
 export function audioFromReel(post: any): ReelAudio | null {
   if (!post || typeof post !== 'object') return null;
   const p = post as Record<string, any>;
-  const mi = (p.musicInfo ??
-    p.music_info ??
-    p.music ??
-    p.clips_music_attribution_info ??
-    {}) as Record<string, any>;
+  const mi = (p.musicInfo ?? p.music_info ?? p.music ?? {}) as Record<string, any>;
+  if (!mi || typeof mi !== 'object') return null;
 
-  const audioId = str(mi, ['audio_id', 'audioId', 'id', 'audio_cluster_id', 'music_canonical_id']);
-  const songName = str(mi, ['song_name', 'songName', 'title', 'music_asset_title']);
-  const artistName = str(mi, [
-    'artist_name',
-    'artistName',
-    'artist',
+  const info = (mi.music_info ?? mi) as Record<string, any>;
+  const asset = (info.music_asset_info ?? info.original_sound_info ?? info) as Record<string, any>;
+
+  const audioType = str(mi, ['audio_type']) ?? '';
+  const usesOriginal =
+    audioType.includes('original') ||
+    Boolean(mi.uses_original_audio) ||
+    Boolean(asset.original_audio_title);
+
+  const audioId =
+    str(asset, ['audio_id', 'audio_asset_id', 'id']) ??
+    str(mi, ['audio_canonical_id']) ??
+    str(info, ['audio_canonical_id']);
+  const songName = str(asset, ['title', 'song_name', 'music_asset_title', 'original_audio_title']);
+  const artistName = str(asset, [
     'display_artist',
+    'artist_name',
+    'artist',
     'ig_artist_username',
+    'ig_username',
   ]);
-  const usesOriginal = Boolean(mi.uses_original_audio ?? mi.usesOriginalAudio ?? false);
 
-  // 음원 식별 불가(곡명·아이디 모두 없음) → 트렌드 집계에 못 씀.
-  if (!audioId && !songName) return null;
+  // 음원 식별 불가(아이디·곡명·아티스트 모두 없음) → 집계 불가.
+  if (!audioId && !songName && !artistName) return null;
 
-  const audioKey = audioId || `${songName ?? ''}|${artistName ?? ''}`.toLowerCase();
+  const audioKey =
+    audioId || `${songName ?? ''}|${artistName ?? ''}`.toLowerCase().replace(/\s+/g, '');
   const owner =
     str(p, ['ownerUsername']) ?? str((p.owner as Record<string, any>) ?? {}, ['username']);
   const shortCode = str(p, ['shortCode', 'shortcode']);
