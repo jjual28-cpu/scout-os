@@ -18,9 +18,9 @@ export const BUSINESS = {
   /** 사업장 주소 */
   address: '서울시 동대문구 왕산로 239',
   /** 고객센터 전화 */
-  phone: '010-6339-2236',
+  phone: '010-9650-5333',
   /** 고객 문의 이메일 */
-  email: 'jjual28@gmail.com',
+  email: 'flownitlabs@gmail.com',
   /** 개인정보 보호책임자 */
   privacyOfficer: '이주연',
   /** 약관·정책 최종 개정일 */
