@@ -28,6 +28,17 @@
   스코프: `mall.read_application, mall.read_product, mall.read_store`(상품·몰정보 읽기) 우선.
 - **[me]** Vercel env: `CAFE24_CLIENT_ID`, `CAFE24_CLIENT_SECRET`, `CAFE24_APP_...` 스캐폴딩.
 
+### ✅ Phase 0 진행상황 (2026-08-15 밤, flownitlabs 개발자센터)
+- **앱 생성 완료** (client_id 발급됨 — ⚠️ 값은 git에 안 올림, Vercel env로만).
+- **Redirect URI 입력**: `https://scout-os.kr/api/cafe24/callback` (루트 도메인이라 OK).
+- **권한(scope) 확정**: **앱(Application)·상점(Store 읽기)·상품(Product 읽기)·상품분류(Category 읽기)** 4개.
+  → 공급사(Supply)·고객식별자(Customer Identifier)는 **불필요라 삭제**(심사 거부 위험 회피). 타임존 Asia/Seoul.
+- **⏭️ 내일 이어서(회사PC)**:
+  1. 앱스토어 등록 상세정보(앱 소개·상세설명·개인정보/약관 링크) 채우기.
+  2. **이미지 제작**(앱 아이콘·대표이미지·스크린샷 등) — Claude가 만들어 줄 수 있음(디자인/이미지 툴).
+  3. client_id/secret → Vercel env(`CAFE24_CLIENT_ID`/`CAFE24_CLIENT_SECRET`) 넣기.
+  4. → 코드: Phase 1(org) 또는 Phase 2(entry/OAuth 콜백) 시작.
+
 ## Phase 1 — org 멀티테넌트 토대 (제일 큼, 신중히) — 상세
 현재는 전부 `user_id`(Supabase auth) 기준. org 레이어를 **얹되(무중단), 기존 동작은 그대로** 유지.
 핵심 전략: **org_id를 nullable로 추가 → 백필 → 앱은 "활성 org" 자동 해석 → 나중에 not null**.
