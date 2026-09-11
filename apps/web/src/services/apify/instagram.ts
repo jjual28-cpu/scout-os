@@ -224,9 +224,23 @@ export async function startActorRun(
     throw new AppError('APIFY_NETWORK', 'Instagram 검색을 시작하지 못했습니다.', 502);
   }
   if (!res.ok) {
+    // Apify 에러 본문에 정확한 이유가 있다(예: 크레딧 소진·토큰 무효·결제 필요).
+    // 토큰은 URL 쿼리에만 있고 본문엔 없으므로 그대로 로깅·표면화해도 안전.
+    const detail = await res
+      .text()
+      .then((t) => {
+        try {
+          const j = JSON.parse(t);
+          return typeof j?.error?.message === 'string' ? j.error.message : t.slice(0, 300);
+        } catch {
+          return t.slice(0, 300);
+        }
+      })
+      .catch(() => '');
+    console.error(`[apify] run start failed ${res.status}: ${detail}`);
     throw new AppError(
       'APIFY_ERROR',
-      `Instagram 검색을 시작하지 못했습니다. (오류 ${res.status})`,
+      `Instagram 검색을 시작하지 못했습니다. (오류 ${res.status}${detail ? ` · ${detail}` : ''})`,
       502,
     );
   }

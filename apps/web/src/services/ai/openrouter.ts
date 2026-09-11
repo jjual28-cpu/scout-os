@@ -77,33 +77,40 @@ export async function callOpenRouter(
   // 일시적 상태(429 한도/500·502·503·504 과부하)는 짧은 백오프로 재시도하면 대개 성공한다.
   const RETRY_STATUS = new Set([429, 500, 502, 503, 504, 529]);
   const MAX_ATTEMPTS = 4;
+  const PER_ATTEMPT_MS = 12_000; // 한 번의 호출이 이 이상 매달리면 중단(라우트 60초 정지 방지)
+  const DEADLINE = Date.now() + 26_000; // 전체 예산 — 재시도 다 합쳐도 이 안에서 끝낸다
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   let res: Response | null = null;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (Date.now() > DEADLINE) break;
+    // 응답이 안 오고 매달리는(hang) 경우까지 잡으려면 fetch 자체에 타임아웃이 필요하다.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), PER_ATTEMPT_MS);
     try {
       res = await fetch(opts?.endpoint ?? ENDPOINT, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
-          // Optional attribution — helps on the OpenRouter dashboard.
           'HTTP-Referer': env.NEXT_PUBLIC_APP_URL,
           'X-Title': env.NEXT_PUBLIC_APP_NAME,
         },
         body: JSON.stringify(body),
+        signal: ctrl.signal,
       });
     } catch {
-      // 네트워크 실패도 일시적일 수 있으니 재시도, 마지막 시도면 포기.
-      if (attempt < MAX_ATTEMPTS) {
+      // 타임아웃(abort)·네트워크 실패 — 예산 남았으면 재시도, 아니면 포기.
+      if (attempt < MAX_ATTEMPTS && Date.now() < DEADLINE) {
         await sleep(600 * attempt);
         continue;
       }
       throw new AppError('AI_NETWORK', 'AI 서버에 연결하지 못했습니다.', 502);
+    } finally {
+      clearTimeout(timer);
     }
-    // 과부하·한도 → 백오프 후 재시도(마지막 시도면 아래 !res.ok 처리로 떨어진다).
-    // 800ms → 1600ms → 2400ms (총 대기 최대 ~4.8초, 서버리스 시간 안에서 안전).
-    if (RETRY_STATUS.has(res.status) && attempt < MAX_ATTEMPTS) {
+    // 과부하·한도 → 백오프 후 재시도.
+    if (RETRY_STATUS.has(res.status) && attempt < MAX_ATTEMPTS && Date.now() < DEADLINE) {
       await sleep(800 * attempt);
       continue;
     }
