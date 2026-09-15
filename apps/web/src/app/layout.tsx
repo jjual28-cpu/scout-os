@@ -37,6 +37,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko" suppressHydrationWarning>
       <head>
+        {/* Meta 비즈니스 도메인 인증(플로닛랩스 비즈니스 포트폴리오 → App Review 고급 액세스용).
+            정적 <meta>여야 하며 JS로 동적 삽입하면 인증 실패 → head에 직접 렌더. */}
+        <meta name="facebook-domain-verification" content="n3ae8ytrtd5yzma8d8y8omcn2gc0ii" />
         {/* Pretendard — 프리미엄 무료 한글 폰트(윤고딕/애플 SD산돌고딕 계열). variable woff2, CDN 캐시. */}
         <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
         <link
