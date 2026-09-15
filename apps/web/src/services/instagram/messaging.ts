@@ -52,11 +52,16 @@ export async function subscribeMessagingWebhook(
     url.searchParams.set('subscribed_fields', 'messages');
     url.searchParams.set('access_token', accessToken);
     const res = await fetch(url.toString(), { method: 'POST' });
-    const json = (await res.json().catch(() => null)) as {
-      success?: boolean;
-      error?: { message?: string };
-    } | null;
+    const raw = await res.text();
+    let json: { success?: boolean; error?: { message?: string } } | null = null;
+    try {
+      json = JSON.parse(raw);
+    } catch {
+      /* non-JSON body */
+    }
     if (!res.ok || json?.success === false) {
+      // 정확한 원인 진단용 로그(토큰은 URL 쿼리에만 있어 본문 로깅 안전).
+      console.error(`[instagram] subscribe failed ${res.status}: ${raw.slice(0, 500)}`);
       const msg = json?.error?.message || `웹훅 구독 오류 (${res.status})`;
       return { ok: false, error: msg };
     }
