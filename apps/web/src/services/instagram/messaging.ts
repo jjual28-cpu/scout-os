@@ -47,8 +47,11 @@ export async function subscribeMessagingWebhook(
   igUserId: string,
   accessToken: string,
 ): Promise<{ ok: boolean; error?: string }> {
+  // Instagram Login API는 경로에 계정 ID를 직접 넣으면 "does not support this
+  // operation"(code 100/33)로 거부한다 — 토큰의 소유 계정을 뜻하는 `me` 로 호출해야 한다.
+  void igUserId; // 로그·시그니처 호환용으로만 유지
   try {
-    const url = new URL(`${GRAPH}/${encodeURIComponent(igUserId)}/subscribed_apps`);
+    const url = new URL(`${GRAPH}/me/subscribed_apps`);
     url.searchParams.set('subscribed_fields', 'messages');
     url.searchParams.set('access_token', accessToken);
     const res = await fetch(url.toString(), { method: 'POST' });
