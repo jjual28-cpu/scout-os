@@ -17,6 +17,7 @@ import Link from 'next/link';
 
 import { Reveal } from '@/components/ui/reveal';
 import { Button } from '@/components/ui/button';
+import { BUSINESS } from '@/features/legal/business';
 import { cn } from '@/lib/utils';
 
 import type { Metadata } from 'next';
@@ -642,7 +643,15 @@ export default function LandingPage() {
               사업자정보
             </Link>
           </div>
-          © {new Date().getFullYear()} Scout OS · AI 셀럽 발굴 · 체험단·공구·협찬 아웃리치
+          {/* 법적 상호(플로닛랩스)를 홈에 명시 — 전자상거래법 표기 + Meta 비즈니스 인증(웹사이트-비즈니스 연결 확인). */}
+          <p className="mb-1">
+            {BUSINESS.companyName} · 대표 {BUSINESS.ceo} · 사업자등록번호 {BUSINESS.bizRegNo}
+          </p>
+          <p className="mb-3">
+            {BUSINESS.address} · 통신판매업신고 {BUSINESS.mailOrderNo} · {BUSINESS.email}
+          </p>
+          © {new Date().getFullYear()} {BUSINESS.serviceName} ({BUSINESS.companyName}) · AI 셀럽
+          발굴 · 체험단·공구·협찬 아웃리치
         </footer>
       </div>
     </main>
