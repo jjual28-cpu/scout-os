@@ -644,6 +644,10 @@ export default function LandingPage() {
             </Link>
           </div>
           {/* 법적 상호(플로닛랩스)를 홈에 명시 — 전자상거래법 표기 + Meta 비즈니스 인증(웹사이트-비즈니스 연결 확인). */}
+          {/* '웹사이트=플로닛랩스가 운영'을 한 문장으로 못박아 Meta 크롤러가 연결을 명확히 읽게 한다. */}
+          <p className="mb-1 font-medium text-slate-500">
+            본 웹사이트 {BUSINESS.serviceName}는 {BUSINESS.companyName}가 운영합니다.
+          </p>
           <p className="mb-1">
             {BUSINESS.companyName} · 대표 {BUSINESS.ceo} · 사업자등록번호 {BUSINESS.bizRegNo}
           </p>
