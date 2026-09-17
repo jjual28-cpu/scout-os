@@ -73,6 +73,15 @@ export async function callOpenRouter(
     ...(sendJsonFormat ? { response_format: { type: 'json_object' } } : {}),
   };
 
+  // Gemini 2.5 계열(gemini-flash-latest 등)은 기본적으로 'thinking'(내부 추론)을 켜서 응답
+  // 토큰 예산을 추론에 먼저 쓴다. 셀럽 판정 같은 큰 호출에선 추론이 max_tokens를 다 먹어
+  // 실제 JSON 출력이 잘리거나 비어버리고(→파싱 실패→판정 전무→원본 무필터 노출), 이게
+  // "여자 검색에 남자가 뜨는" 근본 원인이었다. 분류·판정에는 추론이 불필요하니 끈다.
+  // (Google OpenAI 호환 파라미터. 미지원 모델은 무시하거나 재시도/폴백이 흡수.)
+  if (opts?.endpoint === GOOGLE_ENDPOINT) {
+    body.reasoning_effort = 'none';
+  }
+
   // 무료 Gemini는 과부하 시 503(간헐적)을 자주 준다 — 실제 판정처럼 큰 호출일수록 더.
   // 일시적 상태(429 한도/500·502·503·504 과부하)는 짧은 백오프로 재시도하면 대개 성공한다.
   const RETRY_STATUS = new Set([429, 500, 502, 503, 504, 529]);
@@ -140,8 +149,19 @@ export async function callOpenRouter(
   }
 
   const json = (await res.json().catch(() => null)) as any;
-  const content = json?.choices?.[0]?.message?.content;
-  return typeof content === 'string' ? content : '';
+  const choice = json?.choices?.[0];
+  const content = choice?.message?.content;
+  const text = typeof content === 'string' ? content : '';
+  if (!text.trim()) {
+    // 200 OK인데 본문이 빔 — thinking 모델이 추론에 토큰을 다 쓰거나(finish_reason=length)
+    // 안전필터가 출력을 막을 때 Gemini가 이렇게 준다. 예전엔 ''를 그대로 돌려줘 호출부가
+    // "판정 없음"으로 오인해 원본을 필터 없이 노출했다. 던져서 run.ts가 대체 모델로 폴백하고
+    // 그래도 실패하면 호출부가 ai_error를 남기게 한다(조용한 실패 차단).
+    const fr = choice?.finish_reason ?? 'unknown';
+    console.warn(`[ai] empty content (model=${opts?.model || body.model}, finish_reason=${fr})`);
+    throw new AppError('AI_EMPTY', `AI가 빈 응답을 반환했습니다. (${fr})`, 502);
+  }
+  return text;
 }
 
 /* eslint-enable @typescript-eslint/no-explicit-any */

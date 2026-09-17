@@ -589,7 +589,12 @@ async function applyAiMatch(
     }
 
     const verdicts = await matchCreators(userId, query, creators, brand, target);
-    if (verdicts.size === 0) return;
+    // 판정이 0개 = AI 응답이 비었거나 파싱 실패(예: thinking이 토큰을 다 써 JSON이 잘림).
+    // 예전엔 조용히 return해 '원본이 필터 없이 그대로 노출'됐다(가장 큰 오답 원인). 이제
+    // 던져서 catch가 ai_error를 남기게 한다(검색은 성공, 사용자에겐 '판정 생략' 경고 표시).
+    if (verdicts.size === 0) {
+      throw new Error('AI 판정 결과가 비어 있습니다(응답 파싱 실패).');
+    }
 
     // Persist per creator. Sequential updates keep it simple and are cheap at
     // ~24 rows; a failure on one row must not abort the rest.
