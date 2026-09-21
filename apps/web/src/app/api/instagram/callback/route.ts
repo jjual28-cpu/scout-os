@@ -1,9 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
-import { env, isInstagramConfigured, isSupabaseConfigured } from '@/lib/env';
+import { isInstagramConfigured, isSupabaseConfigured } from '@/lib/env';
 import { saveConnection } from '@/services/instagram/connection-service';
 import { subscribeMessagingWebhook } from '@/services/instagram/messaging';
 import { exchangeCode } from '@/services/instagram/oauth';
+import { appOrigin } from '@/services/instagram/origin';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,8 +18,11 @@ async function getSupabase() {
  * 쿠키 대조 후 code→토큰 교환·저장. 끝나면 /settings 로.
  */
 export const GET = async (request: NextRequest) => {
+  // authorize 와 동일한 호스트(사용자가 접속한 apex/www)로 맞춘다 — redirect_uri 가
+  // authorize 때와 정확히 같아야 토큰 교환이 되고, state·세션 쿠키도 같은 호스트라 읽힌다.
+  const origin = appOrigin(request);
   const back = (flag: 'connected' | 'fail') => {
-    const res = NextResponse.redirect(`${env.NEXT_PUBLIC_APP_URL}/settings?instagram=${flag}`);
+    const res = NextResponse.redirect(`${origin}/settings?instagram=${flag}`);
     res.cookies.delete('ig_oauth_state');
     return res;
   };
@@ -38,7 +42,7 @@ export const GET = async (request: NextRequest) => {
     } = await sb.auth.getUser();
     if (!user) return back('fail');
 
-    const redirectUri = `${env.NEXT_PUBLIC_APP_URL}/api/instagram/callback`;
+    const redirectUri = `${origin}/api/instagram/callback`;
     const tokens = await exchangeCode(code, redirectUri);
     await saveConnection({ userId: user.id, ...tokens });
 
