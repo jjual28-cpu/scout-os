@@ -90,6 +90,19 @@ export async function callOpenRouter(
   const DEADLINE = Date.now() + 26_000; // 전체 예산 — 재시도 다 합쳐도 이 안에서 끝낸다
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+  const post = (signal: AbortSignal) =>
+    fetch(opts?.endpoint ?? ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': env.NEXT_PUBLIC_APP_URL,
+        'X-Title': env.NEXT_PUBLIC_APP_NAME,
+      },
+      body: JSON.stringify(body),
+      signal,
+    });
+
   let res: Response | null = null;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     if (Date.now() > DEADLINE) break;
@@ -97,17 +110,7 @@ export async function callOpenRouter(
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), PER_ATTEMPT_MS);
     try {
-      res = await fetch(opts?.endpoint ?? ENDPOINT, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': env.NEXT_PUBLIC_APP_URL,
-          'X-Title': env.NEXT_PUBLIC_APP_NAME,
-        },
-        body: JSON.stringify(body),
-        signal: ctrl.signal,
-      });
+      res = await post(ctrl.signal);
     } catch {
       // 타임아웃(abort)·네트워크 실패 — 예산 남았으면 재시도, 아니면 포기.
       if (attempt < MAX_ATTEMPTS && Date.now() < DEADLINE) {
@@ -126,6 +129,28 @@ export async function callOpenRouter(
     break;
   }
   if (!res) throw new AppError('AI_NETWORK', 'AI 서버에 연결하지 못했습니다.', 502);
+
+  // Since 9/21 every Google call (search plan AND judge) came back 400 "Request
+  // contains an invalid argument" — the one Google-only argument is reasoning_effort,
+  // which not every Gemini model accepts as 'none'. Log the original error, then
+  // retry once without it so judging still works on such models.
+  if (res.status === 400 && body.reasoning_effort !== undefined && Date.now() < DEADLINE) {
+    const first = await res.text().catch(() => '');
+    console.error(
+      `[ai] 400 with reasoning_effort=${String(body.reasoning_effort)} model=${String(body.model)} → retrying without it. error=${first.slice(0, 800)}`,
+    );
+    delete body.reasoning_effort;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), PER_ATTEMPT_MS);
+    try {
+      res = await post(ctrl.signal);
+    } catch {
+      throw new AppError('AI_NETWORK', 'AI 서버에 연결하지 못했습니다.', 502);
+    } finally {
+      clearTimeout(timer);
+    }
+    console.info(`[ai] retry without reasoning_effort → ${res.status}`);
+  }
 
   if (!res.ok) {
     // The response BODY never contains the key (it's only in the request header),
