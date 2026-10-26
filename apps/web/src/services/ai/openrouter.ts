@@ -19,9 +19,10 @@ export const GOOGLE_ENDPOINT =
 /**
  * Gemini models that answer 400 INVALID_ARGUMENT to reasoning_effort:'none'
  * (confirmed 10-26: gemini-flash-lite-latest — Lite doesn't think by default, so
- * omitting it costs nothing). Filled at runtime by the retry below.
+ * omitting it costs nothing). Seeded with the known one (now the primary model);
+ * others are added at runtime by the retry below.
  */
-const REJECTS_REASONING_EFFORT = new Set<string>();
+const REJECTS_REASONING_EFFORT = new Set<string>(['gemini-flash-lite-latest']);
 
 type GenArgs = {
   system?: string;

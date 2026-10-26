@@ -53,8 +53,11 @@ export async function runAi(userId: string, args: RunAiArgs): Promise<string> {
     // 이미 짧은 백오프로 4회 재시도하지만, 그래도 안 되면 대체 모델로 폴백한다 — 두 모델이
     // 동시에 과부하일 확률은 매우 낮아 사실상 100% 성공(노란 경고 근본 차단). 기본 성공 시엔
     // 추가 호출/지연 없음(첫 모델에서 바로 반환).
-    const FALLBACK_MODEL = 'gemini-flash-lite-latest';
-    const models = [env.GOOGLE_AI_MODEL, FALLBACK_MODEL].filter(
+    //
+    // Lite가 기본(10-26 결정): gemini-flash-latest는 무료 등급 하루 20회 한도라 실사용에서
+    // 금방 429가 난다. Lite로 판정 품질이 충분함을 실검색으로 확인. env 모델은 Lite 실패 시 대체.
+    const PRIMARY_MODEL = 'gemini-flash-lite-latest';
+    const models = [PRIMARY_MODEL, env.GOOGLE_AI_MODEL].filter(
       (m, i, a) => m && a.indexOf(m) === i,
     );
     let lastErr: unknown;
