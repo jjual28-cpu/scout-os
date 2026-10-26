@@ -131,14 +131,23 @@ export async function callOpenRouter(
     // The response BODY never contains the key (it's only in the request header),
     // so surfacing OpenRouter's own message is safe and helps diagnose bad model
     // slugs or empty balance.
-    const detail = await res
-      .json()
+    const raw = await res.text().catch(() => '');
+    let detail = '';
+    try {
+      const j = JSON.parse(raw);
       // Google's OpenAI-compatible endpoint wraps errors in an array: [{ error: {...} }].
-      .then((j: any) => {
-        const e = Array.isArray(j) ? j[0]?.error : j?.error;
-        return typeof e?.message === 'string' ? e.message.slice(0, 200) : '';
-      })
-      .catch(() => '');
+      const e = Array.isArray(j) ? j[0]?.error : j?.error;
+      detail = typeof e?.message === 'string' ? e.message.slice(0, 200) : '';
+    } catch {
+      /* non-JSON body */
+    }
+    // "invalid argument" doesn't say WHICH one — log the request's shape (never the
+    // key or prompt text) next to the full error body so the culprit is visible.
+    console.error(
+      `[ai] ${res.status} model=${String(body.model)} reasoning_effort=${String(body.reasoning_effort ?? '-')} ` +
+        `max_tokens=${String(body.max_tokens)} json=${sendJsonFormat} images=${messages.some((m) => Array.isArray(m.content))} ` +
+        `body_chars=${JSON.stringify(body).length} error=${raw.slice(0, 800)}`,
+    );
     const msg =
       res.status === 401 || res.status === 403
         ? 'AI 키가 올바르지 않습니다. 관리자에게 문의하세요.'
