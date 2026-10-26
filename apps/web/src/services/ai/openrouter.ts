@@ -16,6 +16,13 @@ const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 export const GOOGLE_ENDPOINT =
   'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 
+/**
+ * Gemini models that answer 400 INVALID_ARGUMENT to reasoning_effort:'none'
+ * (confirmed 10-26: gemini-flash-lite-latest — Lite doesn't think by default, so
+ * omitting it costs nothing). Filled at runtime by the retry below.
+ */
+const REJECTS_REASONING_EFFORT = new Set<string>();
+
 type GenArgs = {
   system?: string;
   prompt: string;
@@ -78,7 +85,7 @@ export async function callOpenRouter(
   // 실제 JSON 출력이 잘리거나 비어버리고(→파싱 실패→판정 전무→원본 무필터 노출), 이게
   // "여자 검색에 남자가 뜨는" 근본 원인이었다. 분류·판정에는 추론이 불필요하니 끈다.
   // (Google OpenAI 호환 파라미터. 미지원 모델은 무시하거나 재시도/폴백이 흡수.)
-  if (opts?.endpoint === GOOGLE_ENDPOINT) {
+  if (opts?.endpoint === GOOGLE_ENDPOINT && !REJECTS_REASONING_EFFORT.has(String(body.model))) {
     body.reasoning_effort = 'none';
   }
 
@@ -150,6 +157,8 @@ export async function callOpenRouter(
       clearTimeout(timer);
     }
     console.info(`[ai] retry without reasoning_effort → ${res.status}`);
+    // Remember it so later calls in this instance skip the wasted 400 round-trip.
+    if (res.ok) REJECTS_REASONING_EFFORT.add(String(body.model));
   }
 
   if (!res.ok) {
