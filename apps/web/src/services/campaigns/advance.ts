@@ -670,7 +670,7 @@ async function claimStage(
   fromRunId: string,
   toStage: number,
 ): Promise<boolean> {
-  const { data } = await sb
+  const { data, error } = await sb
     .from('campaigns')
     .update({ apify_stage: toStage, apify_run_id: null, apify_dataset_id: null })
     .eq('id', campaignId)
@@ -678,6 +678,17 @@ async function claimStage(
     .eq('apify_stage', fromStage)
     .eq('apify_run_id', fromRunId)
     .select('id');
+  // A lost claim is normal under concurrent polls, but a stuck stage needs the
+  // reason: a DB error vs. zero matching rows (stage/run already moved on).
+  if (error) {
+    console.error(
+      `[advance] claimStage error campaign=${campaignId} ${fromStage}→${toStage}: ${error.code ?? ''} ${error.message}`,
+    );
+  } else if (!data || data.length === 0) {
+    console.warn(
+      `[advance] claimStage no-match campaign=${campaignId} ${fromStage}→${toStage} run=${fromRunId}`,
+    );
+  }
   return Boolean(data && data.length > 0);
 }
 
