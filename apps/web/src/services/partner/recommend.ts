@@ -7,7 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { aiErrorMessage } from '@/services/ai/errors';
 import { type MatchExtras, type SearchTarget } from '@/services/ai/match';
 import { planSearch, type SearchPlan } from '@/services/ai/query';
-import { stage1Input, stage2Input, startActorRun } from '@/services/apify/instagram';
+import { getRunStatus, stage1Input, stage2Input, startActorRun } from '@/services/apify/instagram';
 import { advanceCampaign, progressFor, rejectForTarget } from '@/services/campaigns/advance';
 
 import { brandContextFor, cacheKeyFor, mergeHashtags, partnerContextBlock } from './context';
@@ -427,7 +427,7 @@ export async function getRecommend(
   const loadCampaign = async () => {
     const { data } = await admin
       .from('campaigns')
-      .select('id,status,error,ai_error,apify_stage,started_at,search_plan')
+      .select('id,status,error,ai_error,apify_stage,apify_run_id,started_at,search_plan')
       .eq('id', r.campaign_id)
       .eq('user_id', userId)
       .maybeSingle();
@@ -443,7 +443,17 @@ export async function getRecommend(
 
   if (camp.status === 'running' && (await claimAdvance(admin, camp.id))) {
     try {
-      await advanceCampaign(admin, userId, camp.id, { ai: extrasFromPlan(camp.search_plan) });
+      // Apify run state before advancing (READY = queued on Apify's side, RUNNING = scraping)
+      // — logged so a slow search can be told apart from a stuck poller.
+      const run = camp.apify_run_id ? await getRunStatus(camp.apify_run_id) : null;
+      const body = await advanceCampaign(admin, userId, camp.id, {
+        ai: extrasFromPlan(camp.search_plan),
+      });
+      console.info(
+        `[partner] advance campaign=${camp.id} stage=${camp.apify_stage} apify=${run?.status ?? '-'} → ${
+          'notFound' in body ? 'not_found' : body.status
+        }`,
+      );
     } catch (err) {
       // A transient Apify/AI hiccup must not fail the request — the next poll retries.
       console.error(`[partner] advance failed (campaign ${camp.id}): ${String(err)}`);

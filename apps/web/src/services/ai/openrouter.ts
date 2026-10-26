@@ -133,7 +133,11 @@ export async function callOpenRouter(
     // slugs or empty balance.
     const detail = await res
       .json()
-      .then((j: any) => (typeof j?.error?.message === 'string' ? j.error.message : ''))
+      // Google's OpenAI-compatible endpoint wraps errors in an array: [{ error: {...} }].
+      .then((j: any) => {
+        const e = Array.isArray(j) ? j[0]?.error : j?.error;
+        return typeof e?.message === 'string' ? e.message.slice(0, 200) : '';
+      })
       .catch(() => '');
     const msg =
       res.status === 401 || res.status === 403
