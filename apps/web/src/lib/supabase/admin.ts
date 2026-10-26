@@ -17,5 +17,10 @@ export function createAdminClient() {
   }
   return createSupabaseClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
+    // Next.js 14 patches fetch and keeps responses in its Data Cache unless the
+    // request reads cookies/headers. Routes that only use this client (partner
+    // API, cron) then got the FIRST read back forever — a running search looked
+    // stuck at stage 1 while the DB had moved on. DB state must always be live.
+    global: { fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }) },
   });
 }

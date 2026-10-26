@@ -4,6 +4,9 @@ import { isPartnerAuthorized } from '@/services/partner/auth';
 import { getRecommend } from '@/services/partner/recommend';
 
 export const dynamic = 'force-dynamic';
+// Every fetch here (Supabase, Apify, AI) must hit the network — Next 14's Data
+// Cache otherwise replays the first response and the search never advances.
+export const fetchCache = 'force-no-store';
 // May collect a finished Apify dataset + run the AI judge in this request.
 export const maxDuration = 60;
 

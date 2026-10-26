@@ -6,6 +6,9 @@ import { recommendRequestSchema } from '@/services/partner/schema';
 
 // Env is read and Supabase/Apify clients are created only per request.
 export const dynamic = 'force-dynamic';
+// Every fetch here (Supabase, Apify, AI) must hit the network — Next 14's Data
+// Cache otherwise replays the first response and the search never advances.
+export const fetchCache = 'force-no-store';
 // Starts the Apify runs and returns — never waits for the scrape.
 export const maxDuration = 60;
 

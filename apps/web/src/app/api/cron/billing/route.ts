@@ -4,6 +4,9 @@ import { env } from '@/lib/env';
 import { runRecurringBilling } from '@/services/billing/subscription-service';
 
 export const dynamic = 'force-dynamic';
+// No cookies are read here, so Next 14 would keep fetch responses in its Data
+// Cache — a replayed Toss charge or subscription read must never happen.
+export const fetchCache = 'force-no-store';
 export const maxDuration = 60;
 
 /**
