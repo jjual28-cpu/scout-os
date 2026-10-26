@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { type InstagramCreator } from '@/features/search/instagram';
+import { type InstagramCreator, type RecentPost } from '@/features/search/instagram';
 import { AppError } from '@/lib/api/response';
 import { env } from '@/lib/env';
 
@@ -109,6 +109,45 @@ function recentActivity(raw: Record<string, any>): {
   };
 }
 
+/** How many recent posts to keep per profile (evidence candidates). */
+const RECENT_POSTS_KEEP = 6;
+const CAPTION_KEEP = 200;
+
+/**
+ * The profile's newest posts as small evidence records (url · caption head ·
+ * date · reels/feed). Only real https Instagram post links survive — a post
+ * without a usable link can't be shown as evidence.
+ */
+function recentPostsFrom(raw: Record<string, any>): RecentPost[] | null {
+  const posts = Array.isArray(raw?.latestPosts) ? raw.latestPosts : [];
+  const out: RecentPost[] = [];
+  for (const p of posts) {
+    const short = typeof p?.shortCode === 'string' ? p.shortCode : null;
+    const rawUrl = typeof p?.url === 'string' ? p.url : null;
+    const url =
+      rawUrl && /^https:\/\/(www\.)?instagram\.com\/(p|reel|tv)\//.test(rawUrl)
+        ? rawUrl
+        : short && /^[A-Za-z0-9_-]+$/.test(short)
+          ? `https://www.instagram.com/p/${short}/`
+          : null;
+    if (!url) continue;
+    const t = Date.parse(String(p?.timestamp ?? ''));
+    const isReel =
+      p?.productType === 'clips' || p?.type === 'Video' || /instagram\.com\/reel\//.test(url);
+    out.push({
+      url,
+      caption: (typeof p?.caption === 'string' ? p.caption : '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, CAPTION_KEEP),
+      takenAt: Number.isFinite(t) ? new Date(t).toISOString() : null,
+      format: isReel ? 'reels' : 'feed',
+    });
+  }
+  out.sort((a, b) => (b.takenAt ?? '').localeCompare(a.takenAt ?? ''));
+  return out.length ? out.slice(0, RECENT_POSTS_KEEP) : null;
+}
+
 /** Map a raw Apify PROFILE item to our normalized creator. */
 function normalize(raw: any): InstagramCreator | null {
   const o = (raw ?? {}) as Record<string, any>;
@@ -149,6 +188,7 @@ function normalize(raw: any): InstagramCreator | null {
       ]),
     isBusinessAccount: Boolean(o.isBusinessAccount ?? o.isBusiness ?? o.is_business_account),
     ...recentActivity(o),
+    recentPosts: recentPostsFrom(o),
     rawData: raw,
   };
 }

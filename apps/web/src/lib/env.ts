@@ -92,6 +92,16 @@ export const env = {
 
   CRON_SECRET: optional(nonEmpty, process.env.CRON_SECRET),
 
+  // 셀링크 파트너 API (server-only). 셀링크 서버가 Bearer로 보내는 비밀키, 셀링크 검색을
+  // 소유할 서비스 사용자(auth.users id), 셀링크 전체 월 Apify 실행 상한(기본 40).
+  // 키나 서비스 사용자가 없으면 /api/partner/* 는 401/503으로 닫혀 있다.
+  CELLINK_PARTNER_KEY: optional(nonEmpty, process.env.CELLINK_PARTNER_KEY),
+  CELLINK_SERVICE_USER_ID: optional(z.string().uuid(), process.env.CELLINK_SERVICE_USER_ID),
+  CELLINK_MONTHLY_LIMIT: ((): number => {
+    const n = Number.parseInt(process.env.CELLINK_MONTHLY_LIMIT ?? '', 10);
+    return Number.isFinite(n) && n >= 0 ? n : 40;
+  })(),
+
   // Toss Payments (정기결제/빌링). Secret key is SERVER-ONLY (charges cards);
   // client key is public (frontend card-registration SDK). Undefined ⇒ 결제 비활성.
   TOSS_SECRET_KEY: optional(nonEmpty, process.env.TOSS_SECRET_KEY),

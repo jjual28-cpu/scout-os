@@ -37,6 +37,21 @@ export type CreatorMatch = {
   reason: string;
   /** 주 시청자층 AI 추정 (예: "20~30대 여성·뷰티"). 측정값 아님. 없으면 ''. */
   audience?: string;
+  /** 근거 게시물 번호(P1…). 게시물을 함께 보여준 판정(withPosts)에서만 채워진다. */
+  evidence?: string[];
+};
+
+/**
+ * Optional extras for a stricter judgement (the Cellink partner API). Omitted →
+ * the prompt is byte-for-byte what Scout OS has always sent.
+ */
+export type MatchExtras = {
+  /** Overrides the product looked up from productId. */
+  brand?: BrandContext | null;
+  /** Free-form block appended to the prompt: who the brand sells to, filters, notes. */
+  context?: string;
+  /** Show each candidate's recent posts and require post evidence for every fit. */
+  withPosts?: boolean;
 };
 
 /**
@@ -288,7 +303,11 @@ function activityLine(c: InstagramCreator, now: number): string | null {
   return `   최근 활동: ${parts.join(' · ')}`;
 }
 
-function candidateBlock(creators: InstagramCreator[], target: SearchTarget): string {
+function candidateBlock(
+  creators: InstagramCreator[],
+  target: SearchTarget,
+  withPosts = false,
+): string {
   const now = Date.now();
   return creators
     .map((c, i) => {
@@ -308,11 +327,36 @@ function candidateBlock(creators: InstagramCreator[], target: SearchTarget): str
           ? `   공구 신호: ${looksLikeGonggu(c.biography) ? '있음' : '없음'}`
           : null,
         activityLine(c, now),
+        ...(withPosts ? postLines(c, now) : []),
       ]
         .filter(Boolean)
         .join('\n');
     })
     .join('\n');
+}
+
+/** Evidence rules appended to the system prompt when posts are shown. */
+const EVIDENCE_TAIL = `
+
+**근거 게시물 (이번 판정에서 필수):**
+각 후보 아래 '게시물 P1, P2 …'로 그 사람의 실제 최근 게시물(날짜·형태·글 앞부분)을 보여 줍니다.
+- fit 이면 evidence에 판정 근거가 된 게시물 번호 1~3개를 반드시 넣으세요 (예: ["P1","P3"]).
+  근거 게시물은 이 브랜드·상품과 결이 맞는 내용을 실제로 다룬 게시물이어야 합니다.
+- 보여 준 게시물 중 근거로 댈 만한 것이 하나도 없으면 fit 금지 → maybe 또는 reject.
+- 게시물이 없거나 최근 30일 안 게시물이 없는 후보는 fit 금지.
+- evidence에는 보여 준 번호만 쓰세요. 없는 번호를 지어내지 마세요. fit 이 아니면 [] 로 두세요.
+형식: [{"username":"...","score":85,"verdict":"fit","reason":"...","audience":"...","evidence":["P1","P2"]}]`;
+
+/** 'P1. 3일 전 · 릴스 · 글 앞부분' lines for a candidate's recent posts. */
+function postLines(c: InstagramCreator, now: number): string[] {
+  const posts = c.recentPosts ?? [];
+  if (posts.length === 0) return ['   게시물: (없음)'];
+  return posts.map((p, i) => {
+    const t = p.takenAt ? Date.parse(p.takenAt) : NaN;
+    const when = Number.isFinite(t) ? `${Math.floor((now - t) / 86_400_000)}일 전` : '날짜 미상';
+    const cap = p.caption.replace(/\s+/g, ' ').trim().slice(0, 100) || '(글 없음)';
+    return `   게시물 P${i + 1} (${when} · ${p.format === 'reels' ? '릴스' : '피드'}): ${cap}`;
+  });
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- model output is untyped JSON */
@@ -347,7 +391,16 @@ function parseMatches(text: string): CreatorMatch[] {
             : 'reject';
     const reason = typeof r?.reason === 'string' ? r.reason.trim().slice(0, 80) : '';
     const audience = typeof r?.audience === 'string' ? r.audience.trim().slice(0, 40) : '';
-    out.push({ username, score, verdict, reason, audience });
+    const evidence = Array.isArray(r?.evidence)
+      ? [
+          ...new Set(
+            r.evidence
+              .map((e: unknown) => String(e).trim().toUpperCase())
+              .filter((e: string) => /^P\d{1,2}$/.test(e)),
+          ),
+        ].slice(0, 3)
+      : [];
+    out.push({ username, score, verdict, reason, audience, evidence: evidence as string[] });
   }
   return out;
 }
@@ -365,27 +418,31 @@ export async function matchCreators(
   creators: InstagramCreator[],
   brand: BrandContext | null,
   target: SearchTarget = 'creator',
+  extras?: MatchExtras,
 ): Promise<Map<string, CreatorMatch>> {
   if (creators.length === 0) return new Map();
+  const withPosts = Boolean(extras?.withPosts);
 
   const prompt = `${brandBlock(brand, query, target)}
-
+${extras?.context ? `\n${extras.context}\n` : ''}
 [후보 ${creators.length}개]
-${candidateBlock(creators, target)}`;
+${candidateBlock(creators, target, withPosts)}`;
 
+  const system =
+    target === 'brand'
+      ? SYSTEM_BRAND
+      : target === 'gonggu'
+        ? SYSTEM_GONGGU
+        : target === 'both'
+          ? SYSTEM_BOTH
+          : SYSTEM_CREATOR;
   const text = await runAi(userId, {
-    system:
-      target === 'brand'
-        ? SYSTEM_BRAND
-        : target === 'gonggu'
-          ? SYSTEM_GONGGU
-          : target === 'both'
-            ? SYSTEM_BOTH
-            : SYSTEM_CREATOR,
+    system: withPosts ? system + EVIDENCE_TAIL : system,
     prompt,
     json: true,
     // 후보 전원 verdict를 빠짐없이 담아야 한다(빠지면 미검토로 숨겨짐). 여유있게.
-    maxTokens: 3200,
+    // 근거 번호까지 받을 땐 출력이 길어지므로 더 넉넉히.
+    maxTokens: withPosts ? 4800 : 3200,
     temperature: 0.2,
   });
 

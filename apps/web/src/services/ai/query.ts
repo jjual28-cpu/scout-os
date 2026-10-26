@@ -145,6 +145,8 @@ export async function planSearch(
   request: string,
   brand: BrandContext | null,
   target: SearchTarget = 'creator',
+  /** Extra context (partner API: brand profile · product · filters · notes). */
+  extra?: string,
 ): Promise<SearchPlan | null> {
   const brandLine =
     brand && (brand.productName || brand.category)
@@ -156,7 +158,7 @@ export async function planSearch(
   // runAi throws on real AI failure — let it propagate to the caller.
   const text = await runAi(userId, {
     system: target === 'brand' ? SYSTEM_BRAND : SYSTEM_CREATOR,
-    prompt: `사용자 요청: "${request}"${brandLine}`,
+    prompt: `사용자 요청: "${request}"${brandLine}${extra ? `\n\n${extra}` : ''}`,
     json: true,
     maxTokens: 400,
     temperature: 0.3,

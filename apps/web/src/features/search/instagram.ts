@@ -35,7 +35,17 @@ export type InstagramCreator = {
   lastPostAt?: string | null; // ISO timestamp of the newest recent post
   recentAvgLikes?: number | null; // avg likes across the fetched recent posts
   recentAvgComments?: number | null; // avg comments across the fetched recent posts
+  /** 최근 게시물 몇 개(링크·글 앞부분·날짜·형태) — 추천 근거(evidence)로 쓴다. */
+  recentPosts?: RecentPost[] | null;
   rawData: unknown;
+};
+
+/** A creator's own recent post, kept small enough to live in jsonb snapshots. */
+export type RecentPost = {
+  url: string;
+  caption: string;
+  takenAt: string | null;
+  format: 'reels' | 'feed';
 };
 
 /** A rough 0–99 opportunity score from follower reach + verification. */

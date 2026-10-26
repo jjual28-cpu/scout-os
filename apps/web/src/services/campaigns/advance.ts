@@ -1,0 +1,1080 @@
+import 'server-only';
+
+import { type SupabaseClient } from '@supabase/supabase-js';
+
+import { type InstagramCreator } from '@/features/search/instagram';
+import { aiErrorMessage } from '@/services/ai/errors';
+import {
+  matchCreators,
+  type BrandContext,
+  type MatchExtras,
+  type SearchTarget,
+} from '@/services/ai/match';
+import { getPooled, upsertPool } from '@/services/apify/creator-pool';
+import {
+  authorsFromPosts,
+  getRunStatus,
+  profilesFromItems,
+  readDataset,
+  SEARCH_MIN_SUFFICIENT,
+  stage2Input,
+  stage3Cap,
+  stage3Input,
+  startActorRun,
+} from '@/services/apify/instagram';
+import { creatorsFromTiktok } from '@/services/apify/tiktok';
+import { creatorsFromYoutube } from '@/services/apify/youtube';
+
+/** Trending searches must not reuse cached profiles — recency has to be live. */
+const TREND_RE = /요즘|뜨는|트렌드|대세|핫한|떠오르|라이징/;
+
+/**
+ * 크리에이터 검색에서 Stage 1(계정 이름 검색)이 데려오는 "판매자/브랜드" 계정을
+ * 걸러낸다. 셀럽은 아이디에 제품명을 안 넣지만, 그 제품을 파는 브랜드/샵은 넣는다
+ * (예: 검색어 '샴푸' → @ts_shampoo_official, 샴푸의 제이팝). 이런 계정은 협찬받을
+ * 셀럽이 아니므로 제외하고, 그러면 자연히 해시태그→작성자 단계로 넘어가 진짜
+ * 크리에이터를 찾는다. `target === 'brand'` 검색에는 적용하지 않는다.
+ */
+const SELLER_SIGNALS = [
+  '공식',
+  'official',
+  '스토어',
+  'store',
+  '브랜드',
+  '유통',
+  '도매',
+  '쇼핑몰',
+  'mall',
+  '구매대행',
+];
+export function looksLikeSeller(c: InstagramCreator, seed: string): boolean {
+  const hay = `${c.username} ${c.displayName}`.toLowerCase();
+  // 계정 이름에 검색어(제품명)가 그대로 들어감 → 그 제품 파는 계정일 확률이 매우 높다.
+  if (seed && seed.length >= 2 && seed.length <= 12 && hay.includes(seed)) return true;
+  return SELLER_SIGNALS.some((w) => hay.includes(w));
+}
+
+/**
+ * 지역 시술·방문 서비스 매장 신호 (예: 세종피부관리, 대구눈썹문신, 부천 탈모관리).
+ * 이런 곳은 협업할 콘텐츠 셀럽도, 내 상품을 팔아줄 공구 셀러도 아니다 — 자기 시술을
+ * 파는 '가게'다. 그래서 creator·gonggu 검색 모두에서 걸러낸다.
+ */
+const LOCAL_BIZ_SIGNALS = [
+  // 뷰티·의료 시술 로컬샵
+  '눈썹문신',
+  '반영구',
+  '속눈썹',
+  '왁싱',
+  '네일샵',
+  '네일아트',
+  '피부관리',
+  '피부과',
+  '에스테틱',
+  '태닝',
+  '두피',
+  '탈모',
+  '미용실',
+  '헤어샵',
+  '헤어살롱',
+  '헤어디자이너',
+  '헤어모델',
+  '미용사',
+  '바버샵',
+  '왁싱샵',
+  '태닝샵',
+  '마사지샵',
+  '마사지본점',
+  '스웨디시',
+  '타이마사지',
+  '태국마사지',
+  '아로마마사지',
+  '감성마사지',
+  '커플마사지',
+  '로미로미',
+  '경락',
+  '지압',
+  '1인샵',
+  '슈가링',
+  '피부관리실',
+  '성형외과',
+  '클리닉',
+  '한의원',
+  '치과',
+  '의원',
+  '병원',
+  '약국',
+  '의료원',
+  '요양원',
+  '필라테스',
+  '요가원',
+  '공방',
+  // 예약·방문 안내(= 매장 계정의 결정적 신호)
+  '예약문의',
+  '예약제',
+  '예약필수',
+  '전화예약',
+  '당일예약',
+  '시술문의',
+  '오시는길',
+  '영업시간',
+  '네이버예약',
+  '카톡예약',
+  '방문예약',
+  '상담문의',
+];
+
+/**
+ * 리테일·유통 판매 신호. creator 검색에선 "협업할 사람이 아니라 판매자"라 제외하지만,
+ * gonggu(공구셀러) 검색에선 오히려 찾는 대상이므로 제외하지 않는다.
+ */
+const RETAIL_SIGNALS = [
+  '셀렉트샵',
+  '편집샵',
+  '소품샵',
+  '스마트스토어',
+  '도매',
+  '유통',
+  '쇼핑몰',
+  '위탁판매',
+  '공장직영',
+  '구매대행',
+];
+
+function hay(c: InstagramCreator): string {
+  return `${c.username} ${c.displayName} ${c.biography ?? ''}`.toLowerCase();
+}
+/** 지역 시술·방문 매장 판별 — 셀럽 검색·공구 검색 모두에서 제외 대상. */
+function looksLikeLocalBiz(c: InstagramCreator): boolean {
+  const h = hay(c);
+  return LOCAL_BIZ_SIGNALS.some((w) => h.includes(w));
+}
+/** 리테일/유통 판매 계정 판별 — creator 검색에서만 제외. */
+function looksLikeRetail(c: InstagramCreator): boolean {
+  const h = hay(c);
+  return RETAIL_SIGNALS.some((w) => h.includes(w));
+}
+
+/**
+ * 브랜드 본사·공식채널·정보성/웹사이트 계정 판별. 협업할 콘텐츠 셀럽도, 내 상품을
+ * 팔아줄 공구 셀러도 아니라 '회사/채널'이다 → creator·gonggu·both 모두에서 제외.
+ *  - 이름/아이디에 공식·official·브랜드
+ *  - 인스타 카테고리가 Product/service·Website·Brand·News 등(개인 크리에이터는 이런 분류가 아님)
+ */
+const BRAND_ORG_NAME = ['공식채널', '공식계정', '공식', 'official', '브랜드'];
+// 비영리·복지·공공 '단체/기관' 이름 신호 — 협업할 크리에이터도 공구 셀러도 아니다
+// (예: 독거노인종합지원센터, ○○복지관, ○○협회). 카테고리가 비어도 이름으로 잡는다.
+const ORG_NAME_SIGNALS = [
+  '협회',
+  '재단',
+  '복지관',
+  '복지센터',
+  '지원센터',
+  '진흥원',
+  '진흥공단',
+  '공단',
+  '시민단체',
+  '자원봉사',
+  '주식회사',
+  '유한회사',
+  '협동조합',
+];
+const ORG_CATEGORY = [
+  'product/service',
+  'website',
+  'e-commerce',
+  'brand',
+  'company',
+  'news',
+  'magazine',
+  // 비영리·정부·지역·종교·정치 '단체' 카테고리 (Nonprofit/Community/Government/
+  // Religious/Political organization) — 'organization' 하나로 대부분 걸린다.
+  'organization',
+  'nonprofit',
+  'charity',
+  'government',
+];
+// 아이디·이름에 '의류/샵/스토어' 단어가 박힌 자사몰·판매 계정. 인스타 카테고리를
+// 'Reel creator'처럼 위장해도(실제 사례: b.g_sportswear) 아이디가 정체를 드러낸다.
+//  - SUBSTR: 길고 명확해 부분일치해도 오탐이 없는 단어
+//  - TOKEN : 짧아서 부분일치하면 오탐 위험(small·workshop·restore) → 구분자로 쪼갠
+//            토큰과 정확히 같을 때만 매칭
+const SHOP_WORDS_SUBSTR = [
+  'sportswear',
+  'activewear',
+  'swimwear',
+  'underwear',
+  '스포츠웨어',
+  '언더웨어',
+  '쇼핑몰',
+  '편집샵',
+  '셀렉트샵',
+  '스마트스토어',
+  '패션몰',
+  '아울렛',
+  '의류매장',
+];
+const SHOP_WORDS_TOKEN = ['shop', 'store', 'mall', 'wear', '스토어'];
+function looksLikeShop(nh: string): boolean {
+  if (SHOP_WORDS_SUBSTR.some((w) => nh.includes(w))) return true;
+  const tokens = nh.split(/[^a-z0-9가-힣]+/).filter(Boolean);
+  return tokens.some((t) => SHOP_WORDS_TOKEN.includes(t));
+}
+function looksLikeBrandOrOrg(c: InstagramCreator): boolean {
+  const nh = `${c.username} ${c.displayName}`.toLowerCase();
+  if (BRAND_ORG_NAME.some((w) => nh.includes(w))) return true;
+  if (ORG_NAME_SIGNALS.some((w) => nh.includes(w))) return true;
+  if (looksLikeShop(nh)) return true;
+  const cat = (c.category ?? '').toLowerCase();
+  return cat.length > 0 && ORG_CATEGORY.some((w) => cat.includes(w));
+}
+
+/** 제품 브랜드 카테고리(개인 크리에이터·지역서비스가 아닌 '제품/쇼핑/브랜드'). */
+const BRAND_CATEGORY = [
+  'product/service',
+  'brand',
+  'e-commerce',
+  'shopping',
+  'retail',
+  'cosmetics',
+  'health/beauty',
+];
+/** 개인 크리에이터 카테고리(브랜드가 아님). */
+const CREATOR_CATEGORY = [
+  'digital creator',
+  'content creator',
+  'creator',
+  'public figure',
+  'blogger',
+  'video creator',
+  'personal blog',
+  'artist',
+];
+/** 재판매/입점 열림 신호 — 공구 셀러가 팔 수 있는 브랜드의 강한 신호. */
+const RESELLER_WORDS = [
+  '도매',
+  '총판',
+  '위탁판매',
+  '위탁',
+  '입점문의',
+  '입점',
+  '셀러모집',
+  '공구문의',
+  '공구환영',
+  '벤더',
+  'b2b',
+];
+function hasResellerSignal(c: InstagramCreator): boolean {
+  const h = hay(c);
+  return RESELLER_WORDS.some((w) => h.includes(w));
+}
+/** 제품 파는 브랜드로 보이는가 — 쇼핑링크·브랜드 카테고리·비즈니스+브랜드신호 중 하나. */
+function looksLikeBrand(c: InstagramCreator): boolean {
+  const cat = (c.category ?? '').toLowerCase();
+  if (c.externalUrl) return true; // 쇼핑몰/자사몰 링크 = 가장 강한 브랜드 신호
+  if (BRAND_CATEGORY.some((w) => cat.includes(w))) return true;
+  if (hasResellerSignal(c)) return true;
+  const nameHay = `${c.username} ${c.displayName}`.toLowerCase();
+  if (BRAND_ORG_NAME.some((w) => nameHay.includes(w))) return true; // 공식/official/브랜드
+  return false;
+}
+
+/**
+/** 협업/공구 가치가 없는 초소형·빈 계정 최소 기준. 팔로워 37·게시물 1 같은
+ *  방금 만든/버려진 계정을 걸러낸다. 값을 '아는' 경우에만 적용(모르면 통과). */
+const MIN_FOLLOWERS = 500;
+const MIN_POSTS = 3;
+function tooSmall(c: InstagramCreator): boolean {
+  if (c.followersCount != null && c.followersCount < MIN_FOLLOWERS) return true;
+  if (c.postsCount != null && c.postsCount < MIN_POSTS) return true;
+  return false;
+}
+
+/**
+ * 아이디/이름에 박힌 '제품 브랜드' 마커 — 개인 크리에이터는 이런 단어를 이름에 안 쓴다
+ * (예: 제니하우스 코스메틱, (주)에스겔 코스메틱, 레시피 코스메틱). 크리에이터 검색에서
+ * 이런 업체가 섞이던 문제(사용자 피드백)를 잡는다. 오탐 적은 확실한 단어만.
+ */
+const PRODUCT_BRAND_NAME = [
+  '코스메틱',
+  'cosmetic', // cosmetics 포함
+  '화장품',
+  '(주)',
+  '㈜',
+  '주식회사',
+  '컴퍼니',
+  ' inc',
+  ' co.',
+];
+function looksLikeProductBrandName(c: InstagramCreator): boolean {
+  const nh = `${c.username} ${c.displayName}`.toLowerCase();
+  return PRODUCT_BRAND_NAME.some((w) => nh.includes(w));
+}
+
+/**
+ * 목적별 결과 제외 판정 — 수집된 후보를 저장 전에 거른다.
+ *  - creator: 초소형·빈 계정 + 로컬 시술매장 + 브랜드본사/공식채널/정보성 + 리테일/판매 +
+ *    이름에 제품브랜드 단어 박힌 업체 제외 (2타겟 통합: 셀럽+공구 → 크리에이터).
+ *  - brand : 신생 브랜드는 팔로워가 적을 수 있어 크기·업체 필터를 적용하지 않음.
+ */
+export function rejectForTarget(c: InstagramCreator, target: SearchTarget): boolean {
+  if (target === 'brand') {
+    // 신생 브랜드는 팔로워가 적을 수 있어 규모 필터는 안 건다. '확실한 쓰레기'만 제외하고
+    // 나머지는 살린다(브랜드 신호가 있는 계정은 AI/looksLikeBrand로 위에 정렬). 하드하게
+    // '브랜드 신호 없으면 무조건 제외'는 데이터에 따라 결과를 0으로 만들어서 안 건다.
+    //   - 죽은/빈 계정, 지역 시술샵 제외.
+    //   - 개인 크리에이터 카테고리 + 브랜드 신호 전무 → 제외(명백한 크리에이터만).
+    if (c.postsCount != null && c.postsCount < MIN_POSTS) return true;
+    if (looksLikeLocalBiz(c)) return true;
+    // 브랜드 신호(쇼핑링크·브랜드카테고리·공식이름 등)가 전혀 없는 초소형·잡계정 제외.
+    // 신생 브랜드라도 최소 링크·게시물은 있다 — 팔로워 17·게시물 2짜리 잡계정(블로그
+    // 홍보 등)이 '신생 브랜드'라는 배려를 타고 통과하던 문제. 신호 있으면 크기 무관 통과.
+    if (tooSmall(c) && !looksLikeBrand(c)) return true;
+    const cat = (c.category ?? '').toLowerCase();
+    if (CREATOR_CATEGORY.some((w) => cat.includes(w)) && !looksLikeBrand(c)) return true;
+    return false;
+  }
+  if (tooSmall(c)) return true;
+  if (looksLikeLocalBiz(c)) return true;
+  if (looksLikeBrandOrOrg(c)) return true;
+  if (looksLikeProductBrandName(c)) return true; // 이름에 코스메틱·(주) 등 = 업체
+  if (looksLikeRetail(c)) return true; // 도매·유통·쇼핑몰·위탁판매 등 판매 계정 제외
+  return false;
+}
+
+/** 팔로워 규모 티어 — 나노/마이크로/미들/매크로. */
+function followerTier(c: InstagramCreator): number {
+  const f = c.followersCount ?? 0;
+  if (f < 10_000) return 0;
+  if (f < 100_000) return 1;
+  if (f < 500_000) return 2;
+  return 3;
+}
+
+/**
+ * 규모별 라운드로빈으로 n명을 고른다. 해시태그 수집은 최근 글을 올린 작은 계정으로
+ * 쏠리기 쉬운데(= 결과가 전부 마이크로), 티어를 번갈아 뽑으면 있는 만큼은 골고루 섞인다.
+ * 특정 티어가 비어 있으면 남은 티어가 자연히 채우므로 결과 수는 줄지 않는다.
+ */
+function spreadByFollowers(list: InstagramCreator[], n: number): InstagramCreator[] {
+  if (n <= 0) return [];
+  if (list.length <= n) return list;
+  const tiers: InstagramCreator[][] = [[], [], [], []];
+  for (const c of list) tiers[followerTier(c)]!.push(c);
+  // 티어 안에서는 큰 계정 우선(같은 티어라면 영향력 큰 쪽을 먼저 담는다).
+  for (const t of tiers) t.sort((a, b) => (b.followersCount ?? 0) - (a.followersCount ?? 0));
+  const out: InstagramCreator[] = [];
+  for (let i = 0; out.length < n; i++) {
+    let took = false;
+    for (const t of tiers) {
+      if (t.length > i) {
+        out.push(t[i]!);
+        took = true;
+        if (out.length >= n) break;
+      }
+    }
+    if (!took) break; // 모든 티어 소진
+  }
+  return out;
+}
+
+/** 저장·확장 상한. apify 서비스 TARGET(20)과 통일. 조기종료 기준은 min(TARGET,
+ *  SEARCH_MIN_SUFFICIENT)=10 → "최소 10명" 확보 즉시 완료(불필요한 확장 런 방지). */
+const TARGET = 20;
+/** A running campaign with no progress for this long is considered stale. */
+const STALE_MS = 10 * 60 * 1000;
+
+/** Stage → coarse progress %, derived (never stored in the DB). */
+export function progressFor(stage: number): number {
+  if (stage <= 1) return 30;
+  if (stage === 2) return 55;
+  return 80;
+}
+function messageFor(stage: number): string {
+  if (stage <= 1) return '프로필 수집 중';
+  if (stage === 2) return '게시물 분석 중';
+  return '상세 분석 중';
+}
+/** Running payload the client renders the stage tracker from. */
+function runningBody(stage: number) {
+  return {
+    status: 'running' as const,
+    stage,
+    progress: progressFor(stage),
+    message: messageFor(stage),
+  };
+}
+
+/** Cookie-bound (RLS) client from the status route, or the service-role client
+ *  from the partner API. Every query below also filters by user_id. */
+type Sb = SupabaseClient;
+
+/* eslint-disable @typescript-eslint/no-explicit-any -- DB rows / Apify items are loosely typed */
+
+function creatorToRow(c: InstagramCreator, userId: string) {
+  return {
+    user_id: userId,
+    platform: c.platform,
+    external_id: c.id,
+    username: c.username,
+    display_name: c.displayName,
+    profile_url: c.profileUrl,
+    profile_image_url: c.profileImageUrl,
+    biography: c.biography,
+    followers_count: c.followersCount,
+    following_count: c.followingCount,
+    posts_count: c.postsCount,
+    is_verified: c.isVerified,
+    category: c.category,
+    raw_data: c.rawData,
+  };
+}
+
+/** Persist creators for a campaign. Idempotent: the unique (user, campaign, creator)
+ *  constraint + ignoreDuplicates make repeated/concurrent polls safe. */
+async function saveCreators(
+  sb: Sb,
+  userId: string,
+  campaignId: string,
+  query: string,
+  creators: InstagramCreator[],
+  startRank: number,
+): Promise<void> {
+  if (creators.length === 0) return;
+
+  const { error: dcError } = await sb.from('discovered_creators').upsert(
+    creators.map((c) => creatorToRow(c, userId)),
+    {
+      onConflict: 'user_id,platform,external_id',
+    },
+  );
+  if (dcError) console.error(`[status] discovered_creators upsert failed: ${dcError.message}`);
+
+  const rows = creators.map((c, i) => ({
+    user_id: userId,
+    campaign_id: campaignId,
+    creator_id: c.id,
+    platform: 'instagram',
+    rank: startRank + i + 1,
+    search_keyword: query,
+    creator_snapshot: {
+      externalId: c.id,
+      username: c.username,
+      displayName: c.displayName,
+      profileUrl: c.profileUrl,
+      profileImageUrl: c.profileImageUrl,
+      biography: c.biography,
+      followersCount: c.followersCount,
+      followingCount: c.followingCount,
+      postsCount: c.postsCount,
+      isVerified: c.isVerified,
+      category: c.category,
+      externalUrl: c.externalUrl ?? null,
+      isBusinessAccount: c.isBusinessAccount ?? false,
+      lastPostAt: c.lastPostAt ?? null,
+      recentAvgLikes: c.recentAvgLikes ?? null,
+      recentAvgComments: c.recentAvgComments ?? null,
+      recentPosts: c.recentPosts ?? null,
+    },
+  }));
+  const { error } = await sb
+    .from('campaign_results')
+    .upsert(rows, { onConflict: 'user_id,campaign_id,creator_id', ignoreDuplicates: true });
+  if (error) {
+    // Never mark succeeded when the snapshot didn't persist.
+    throw new Error(`campaign_results 저장 실패: ${error.message}`);
+  }
+}
+
+async function existingResults(
+  sb: Sb,
+  userId: string,
+  campaignId: string,
+): Promise<{ count: number; usernames: string[] }> {
+  const { data } = await sb
+    .from('campaign_results')
+    .select('creator_id')
+    .eq('user_id', userId)
+    .eq('campaign_id', campaignId);
+  const ids = (data ?? []).map((r: any) => r.creator_id as string);
+  return { count: ids.length, usernames: ids.map((id) => id.split(':')[1] ?? id) };
+}
+
+async function markFailed(sb: Sb, campaignId: string, message: string): Promise<void> {
+  await sb
+    .from('campaigns')
+    .update({
+      status: 'failed',
+      error: message,
+      completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      apify_run_id: null, // releases the running-unique lock
+    })
+    .eq('id', campaignId)
+    .eq('status', 'running');
+}
+
+/**
+ * AI matching pass — runs ONCE, right before a campaign is marked succeeded.
+ *
+ * Apify only casts a wide net; this is where the results actually get judged
+ * against the brand so info/irrelevant accounts drop out and real fits rank up.
+ *
+ * Deliberately best-effort: ANY failure (no AI key, daily cap reached, bad model
+ * output) leaves the raw results untouched and the search still succeeds. The
+ * search must never break because AI was unavailable.
+ */
+async function applyAiMatch(
+  sb: Sb,
+  userId: string,
+  campaignId: string,
+  query: string,
+  productId: string | null,
+  target: SearchTarget,
+  extras?: MatchExtras,
+): Promise<void> {
+  try {
+    const { data: rows } = await sb
+      .from('campaign_results')
+      .select('creator_id,creator_snapshot')
+      .eq('user_id', userId)
+      .eq('campaign_id', campaignId);
+    if (!rows || rows.length === 0) return;
+
+    /* eslint-disable @typescript-eslint/no-explicit-any -- stored snapshots are jsonb */
+    const creators = (rows as any[])
+      .map((r) => r.creator_snapshot as any)
+      .filter((s) => s && typeof s.username === 'string')
+      .map((s): InstagramCreator => ({
+        id: s.externalId,
+        platform: 'instagram',
+        username: s.username,
+        displayName: s.displayName ?? s.username,
+        profileUrl: s.profileUrl ?? '',
+        profileImageUrl: s.profileImageUrl ?? null,
+        biography: s.biography ?? null,
+        followersCount: s.followersCount ?? null,
+        followingCount: s.followingCount ?? null,
+        postsCount: s.postsCount ?? null,
+        isVerified: Boolean(s.isVerified),
+        category: s.category ?? null,
+        externalUrl: s.externalUrl ?? null,
+        isBusinessAccount: Boolean(s.isBusinessAccount),
+        lastPostAt: s.lastPostAt ?? null,
+        recentAvgLikes: s.recentAvgLikes ?? null,
+        recentAvgComments: s.recentAvgComments ?? null,
+        recentPosts: Array.isArray(s.recentPosts) ? s.recentPosts : null,
+        rawData: null,
+      }));
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+    if (creators.length === 0) return;
+
+    // Brand context makes the verdict "fit for THIS product" instead of just
+    // "on topic". Absent product → judge against the search intent only.
+    let brand: BrandContext | null = extras?.brand ?? null;
+    if (!brand && productId) {
+      const { data: p } = await sb
+        .from('products')
+        .select('name,brand,category,usp,selling_points,target')
+        .eq('id', productId)
+        .maybeSingle();
+      if (p) {
+        const row = p as Record<string, string | null>;
+        brand = {
+          productName: row.name,
+          brand: row.brand,
+          category: row.category,
+          usp: row.usp,
+          sellingPoints: row.selling_points,
+          target: row.target,
+        };
+      }
+    }
+
+    const verdicts = await matchCreators(userId, query, creators, brand, target, extras);
+    // 판정이 0개 = AI 응답이 비었거나 파싱 실패(예: thinking이 토큰을 다 써 JSON이 잘림).
+    // 예전엔 조용히 return해 '원본이 필터 없이 그대로 노출'됐다(가장 큰 오답 원인). 이제
+    // 던져서 catch가 ai_error를 남기게 한다(검색은 성공, 사용자에겐 '판정 생략' 경고 표시).
+    if (verdicts.size === 0) {
+      throw new Error('AI 판정 결과가 비어 있습니다(응답 파싱 실패).');
+    }
+
+    // Persist per creator. Sequential updates keep it simple and are cheap at
+    // ~24 rows; a failure on one row must not abort the rest.
+    //
+    // AI가 verdict를 안 준 후보(응답에서 빠짐)는 예전엔 그냥 통과(null)돼 화면에 떴다 —
+    // 헤어디자이너·힙합댄서가 '여행' 검색에 뜬 원인. AI가 배치를 심사하고도 안 뽑았다면
+    // 주제와 안 맞을 확률이 높으니 reject로 숨긴다(제외는 '제외 포함'으로 다시 볼 수 있음).
+    // → AI가 보증한 계정만 기본 노출 = 정확도 우선.
+    for (const c of creators) {
+      const m = verdicts.get(c.username.toLowerCase());
+      const patch = m
+        ? {
+            ai_score: m.score,
+            ai_verdict: m.verdict,
+            ai_reason: m.reason,
+            ai_audience: m.audience || null,
+            // 근거 게시물 번호(P1…) — 게시물을 함께 보여준 판정(파트너 API)에서만 저장.
+            ...(extras?.withPosts ? { ai_evidence: m.evidence ?? [] } : {}),
+          }
+        : {
+            ai_score: 0,
+            ai_verdict: 'reject' as const,
+            ai_reason: '검색 주제와 맞지 않아 제외',
+            ai_audience: null,
+            ...(extras?.withPosts ? { ai_evidence: [] } : {}),
+          };
+      const { error } = await sb
+        .from('campaign_results')
+        .update(patch)
+        .eq('user_id', userId)
+        .eq('campaign_id', campaignId)
+        .eq('creator_id', c.id);
+      if (error) console.error(`[status] ai verdict save failed (${c.username}): ${error.message}`);
+    }
+    // Judging succeeded — clear any earlier AI warning (e.g. a transient plan slip).
+    await sb.from('campaigns').update({ ai_error: null }).eq('id', campaignId);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[status] AI matching skipped for campaign ${campaignId}: ${msg}`);
+    // Surface it: the search still succeeds, but the user learns judging was skipped.
+    await sb
+      .from('campaigns')
+      .update({ ai_error: aiErrorMessage(err) })
+      .eq('id', campaignId);
+  }
+}
+
+async function markSucceeded(sb: Sb, campaignId: string, count: number): Promise<void> {
+  await sb
+    .from('campaigns')
+    .update({
+      status: 'succeeded',
+      result_count: count,
+      completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      apify_run_id: null,
+    })
+    .eq('id', campaignId)
+    .eq('status', 'running');
+}
+
+/**
+ * Conditional claim — only ONE concurrent poll may advance a stage, so the next
+ * Actor is started exactly once even if the Discover poller and the global
+ * poller both call this at the same moment.
+ */
+async function claimStage(
+  sb: Sb,
+  campaignId: string,
+  fromStage: number,
+  fromRunId: string,
+  toStage: number,
+): Promise<boolean> {
+  const { data } = await sb
+    .from('campaigns')
+    .update({ apify_stage: toStage, apify_run_id: null, apify_dataset_id: null })
+    .eq('id', campaignId)
+    .eq('status', 'running')
+    .eq('apify_stage', fromStage)
+    .eq('apify_run_id', fromRunId)
+    .select('id');
+  return Boolean(data && data.length > 0);
+}
+
+async function attachRun(
+  sb: Sb,
+  campaignId: string,
+  run: { runId: string; datasetId: string },
+): Promise<void> {
+  await sb
+    .from('campaigns')
+    .update({ apify_run_id: run.runId, apify_dataset_id: run.datasetId })
+    .eq('id', campaignId)
+    .eq('status', 'running');
+}
+
+/** What advanceCampaign returns — exactly the status route's JSON body. */
+export type AdvanceBody = Record<string, unknown> & { status: string };
+
+export type AdvanceOptions = {
+  /** Extra AI-judging context (partner API). Omitted → identical to before. */
+  ai?: MatchExtras;
+};
+
+/**
+ * Advance one async search by a single step: collect a finished Apify dataset,
+ * persist results and start the next stage (or judge + finish).
+ *
+ * Shared by POST /api/campaigns/:id/status (the signed-in user's cookie client)
+ * and the partner API (service-role client acting for the Cellink service user).
+ * Safe under concurrent/duplicate polling via the conditional stage claim + the
+ * campaign_results unique constraint.
+ */
+export async function advanceCampaign(
+  sb: Sb,
+  userId: string,
+  campaignId: string,
+  opts: AdvanceOptions = {},
+): Promise<AdvanceBody | { notFound: true }> {
+  const { data: row } = await sb
+    .from('campaigns')
+    .select(
+      'id,query,status,error,result_count,apify_run_id,apify_dataset_id,apify_stage,started_at,product_id,search_mode,search_target,search_plan,platform',
+    )
+    .eq('id', campaignId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (!row) return { notFound: true as const };
+
+  const c = row as any;
+  if (c.status !== 'running') {
+    return {
+      status: c.status,
+      resultCount: c.result_count ?? 0,
+      error: c.error ?? null,
+      progress: c.status === 'succeeded' ? 100 : 0,
+    };
+  }
+
+  const curStage: number = c.apify_stage ?? 1;
+  const startedMs = c.started_at ? new Date(c.started_at).getTime() : 0;
+  const stale = startedMs > 0 && Date.now() - startedMs > STALE_MS;
+
+  // A run isn't attached yet (POST or a stage claim is starting it right now).
+  if (!c.apify_run_id) {
+    if (stale) {
+      const msg = '검색을 시작하지 못했습니다. 다시 검색해 주세요.';
+      await markFailed(sb, campaignId, msg);
+      return { status: 'failed' as const, error: msg };
+    }
+    return runningBody(curStage);
+  }
+
+  const run = await getRunStatus(c.apify_run_id);
+  if (!run) {
+    const msg = 'Apify 실행 정보를 조회할 수 없습니다. 다시 검색해 주세요.';
+    await markFailed(sb, campaignId, msg);
+    return { status: 'failed' as const, error: msg };
+  }
+  if (run.status === 'READY' || run.status === 'RUNNING' || run.status === 'ABORTING') {
+    // Still running — but if it's been stuck well past the expected time, give
+    // up so the campaign never sits on "검색 중" forever (the browser poller may
+    // have been paused for hours). A SUCCEEDED run is handled below and always
+    // collected, so this only fails runs that genuinely never finished.
+    if (stale) {
+      const msg = '검색이 시간 내에 완료되지 않았습니다. 다시 검색해 주세요.';
+      await markFailed(sb, campaignId, msg);
+      return { status: 'failed' as const, error: msg };
+    }
+    return runningBody(curStage);
+  }
+  if (run.status !== 'SUCCEEDED') {
+    const msg = `검색이 실패했습니다. (${run.status})`;
+    await markFailed(sb, campaignId, msg);
+    return { status: 'failed' as const, error: msg };
+  }
+
+  // ── Run SUCCEEDED → collect this stage's dataset and advance ──────────────
+  const datasetId: string | null = c.apify_dataset_id ?? run.datasetId;
+  if (!datasetId) {
+    const msg = '검색 결과 데이터셋을 찾을 수 없습니다. 다시 검색해 주세요.';
+    await markFailed(sb, campaignId, msg);
+    return { status: 'failed' as const, error: msg };
+  }
+
+  const stage: number = c.apify_stage ?? 1;
+  const query: string = c.query;
+  const mode: 'keyword' | 'tagged' = c.search_mode === 'tagged' ? 'tagged' : 'keyword';
+  /** Chosen when the search started — decides which way the AI judges. */
+  // gonggu(공구셀러)는 판매자처럼 보이므로 creator용 업체/판매자 필터를 타면 안 된다
+  // (그 필터는 target==='creator'에서만 돌아, gonggu/brand는 자연히 제외됨).
+  const target: SearchTarget =
+    c.search_target === 'brand'
+      ? 'brand'
+      : c.search_target === 'gonggu'
+        ? 'gonggu'
+        : c.search_target === 'both'
+          ? 'both'
+          : 'creator';
+  // AI's translation of a natural-language request (null for plain keywords).
+  const plan = (c.search_plan ?? null) as {
+    searchTerm?: string;
+    hashtags?: string[];
+    intent?: string;
+    /** 'overlap'이면 상세 스크랩 2개를 병렬로 돌리는 겹침 검색(속도). */
+    flow?: string;
+    /** 겹침 검색에서 이름검색 상세를 백그라운드로 돌린 런. 끝에서 합쳐 마무리한다. */
+    nameRun?: { runId: string; datasetId: string };
+  } | null;
+  /** What the AI should judge fit against — the intent, not "…찾아줘". */
+  const matchContext = plan?.intent || query;
+  /** 겹침 검색 — 상세 스크랩 2개(해시태그 보강 + 이름검색)를 병렬로 돌린다. */
+  const overlap = plan?.flow === 'overlap';
+
+  const platform: string = c.platform ?? 'instagram';
+
+  try {
+    const items = await readDataset(datasetId);
+
+    // ── TikTok·YouTube — 단일 스테이지: 데이터셋 → 작성자/채널 정규화 → 저장 → 판정 → 완료 ──
+    //    인스타 3단계 머신을 타지 않는다(별 분기). 플랫폼별 정규화 함수만 다르다.
+    if (platform !== 'instagram') {
+      let creators =
+        platform === 'youtube' ? creatorsFromYoutube(items) : creatorsFromTiktok(items);
+      // 목적별 제외(로컬 매장·빈 계정 등) — 틱톡·유튜브도 동일.
+      creators = creators.filter((cr) => !rejectForTarget(cr, target));
+      creators = spreadByFollowers(creators, TARGET);
+      await saveCreators(sb, userId, campaignId, query, creators, 0);
+      const { count } = await existingResults(sb, userId, campaignId);
+      await applyAiMatch(
+        sb,
+        userId,
+        campaignId,
+        matchContext,
+        c.product_id ?? null,
+        target,
+        opts.ai,
+      );
+      await markSucceeded(sb, campaignId, count);
+      return { status: 'succeeded' as const, resultCount: count, progress: 100 };
+    }
+
+    // ── Tagged mode — the same 3-stage machine, two stages long ─────────────
+    //    1 = posts tagging the brand → author usernames
+    //    2 = enrich those authors → profiles → done
+    if (mode === 'tagged') {
+      if (stage === 1) {
+        // The tagged actor returns POSTS; the value is who wrote them.
+        const authors = authorsFromPosts(items, []).slice(0, stage3Cap(TARGET));
+        if (authors.length === 0) {
+          await markSucceeded(sb, campaignId, 0);
+          return { status: 'succeeded' as const, resultCount: 0, progress: 100 };
+        }
+        if (!(await claimStage(sb, campaignId, 1, c.apify_run_id, 2))) {
+          return runningBody(2);
+        }
+        const started = await startActorRun(stage3Input(authors));
+        await attachRun(sb, campaignId, started);
+        return runningBody(2);
+      }
+
+      // Stage 2 — enriched profiles → save → judge → finish.
+      // 태그 검색도 동일하게: 로컬 매장·빈 계정 제외 + 규모 골고루.
+      const enrichedTagged = profilesFromItems(items);
+      const creators = spreadByFollowers(
+        enrichedTagged.filter((cr) => !rejectForTarget(cr, target)),
+        TARGET,
+      );
+      await saveCreators(sb, userId, campaignId, query, creators, 0);
+      await upsertPool('instagram', enrichedTagged);
+      const { count } = await existingResults(sb, userId, campaignId);
+      // Tell the AI these came from tagging a brand — that's the signal.
+      await applyAiMatch(
+        sb,
+        userId,
+        campaignId,
+        `@${query} 브랜드를 태그한 계정 (브랜드 협업 경험 있음)`,
+        c.product_id ?? null,
+        target,
+        opts.ai,
+      );
+      await markSucceeded(sb, campaignId, count);
+      return { status: 'succeeded' as const, resultCount: count, progress: 100 };
+    }
+
+    // ── 겹침(overlap) 키워드 검색 — 상세 스크랩 2개를 병렬로 ────────────────
+    //   primary는 해시태그 글(stage1) → 작성자 상세보강(stage3). 이름검색 상세는
+    //   discover가 백그라운드(plan.nameRun)로 이미 병렬 시작했다. stage3에서 둘을 합친다.
+    if (overlap) {
+      // Stage 1 — 해시태그 글 → 작성자 → 상세보강(stage3) 시작.
+      if (stage === 1) {
+        const authors = authorsFromPosts(items, []);
+        const toEnrich = authors.slice(0, stage3Cap(TARGET));
+        if (!(await claimStage(sb, campaignId, 1, c.apify_run_id, 3))) {
+          return runningBody(3); // another poll won the claim
+        }
+        // 작성자가 있으면 상세보강 런을, 없으면 이름검색 런을 primary로 붙인다(그거라도
+        // 완료를 기다렸다 합치도록). 어느 쪽이든 stage3가 nameRun까지 마저 수집해 마무리.
+        const next =
+          toEnrich.length > 0
+            ? await startActorRun(stage3Input(toEnrich))
+            : plan?.nameRun
+              ? { runId: plan.nameRun.runId, datasetId: plan.nameRun.datasetId }
+              : null;
+        if (next) await attachRun(sb, campaignId, next);
+        return runningBody(3);
+      }
+
+      // Stage 3 — 상세보강(primary) 완료 → 보강결과 + 백그라운드 이름검색결과 합쳐 마무리.
+      const enriched = profilesFromItems(items);
+      let nameProfiles: InstagramCreator[] = [];
+      if (plan?.nameRun?.datasetId) {
+        const nameStatus = await getRunStatus(plan.nameRun.runId);
+        const stillRunning =
+          nameStatus &&
+          (nameStatus.status === 'READY' ||
+            nameStatus.status === 'RUNNING' ||
+            nameStatus.status === 'ABORTING');
+        if (stillRunning) {
+          // 이름검색이 아직 진행 중 — 잠깐 더 기다렸다 합친다(대개 보강보다 먼저 끝난다).
+          if (!stale) return runningBody(3);
+          // stale이면 이름검색 없이 진행(무한 대기 방지).
+        } else if (nameStatus?.status === 'SUCCEEDED') {
+          const nameItems = await readDataset(plan.nameRun.datasetId);
+          nameProfiles = profilesFromItems(nameItems);
+        }
+        // FAILED/기타 → 이름검색 없이 보강결과만으로 진행.
+      }
+
+      // 두 소스 합치고(중복 제거) 목적별 제외 + 규모 골고루 → 저장 → 판정 → 완료.
+      const merged = [...enriched, ...nameProfiles];
+      const dedup = [...new Map(merged.map((cr) => [cr.username.toLowerCase(), cr])).values()];
+      const seed = (plan?.searchTerm || query).toLowerCase();
+      const kept = dedup.filter(
+        (cr) =>
+          !rejectForTarget(cr, target) && !(target === 'creator' && looksLikeSeller(cr, seed)),
+      );
+      await saveCreators(sb, userId, campaignId, query, spreadByFollowers(kept, TARGET), 0);
+      await upsertPool('instagram', merged); // 풀 캐시엔 원본 유지
+      const { count } = await existingResults(sb, userId, campaignId);
+      await applyAiMatch(
+        sb,
+        userId,
+        campaignId,
+        matchContext,
+        c.product_id ?? null,
+        target,
+        opts.ai,
+      );
+      await markSucceeded(sb, campaignId, count);
+      return { status: 'succeeded' as const, resultCount: count, progress: 100 };
+    }
+
+    // ── Keyword mode ───────────────────────────────────────────────────────
+    // Stage 1 — profile (account-name) search results.
+    if (stage === 1) {
+      // 자르기 전에 먼저 거른다 — 순서가 반대면 걸러질 계정이 자리를 차지해 손해다.
+      const stage1All = profilesFromItems(items);
+      // 셀럽 찾기: 이름 검색이 데려온 판매자/브랜드 계정을 걸러낸다. 걸러서 수가
+      // 줄면 아래 "충분" 조건에 안 걸려 해시태그→작성자(진짜 크리에이터)로 넘어간다.
+      const seed = (plan?.searchTerm || query).toLowerCase();
+      const creators = spreadByFollowers(
+        stage1All.filter(
+          (cr) =>
+            !rejectForTarget(cr, target) &&
+            // 계정명에 제품명이 박힌 판매 계정은 셀럽 검색에서만 제외(공구는 셀러가 목표).
+            !(target === 'creator' && looksLikeSeller(cr, seed)),
+        ),
+        TARGET,
+      );
+      await saveCreators(sb, userId, campaignId, query, creators, 0);
+      await upsertPool('instagram', stage1All);
+      const { count } = await existingResults(sb, userId, campaignId);
+      // (브랜드 검색은 위 target==='brand' 분기에서 해시태그→작성자→상세로 처리되므로
+      //  여기 keyword stage1 이름검색에는 도달하지 않는다.)
+
+      if (count >= Math.min(TARGET, SEARCH_MIN_SUFFICIENT)) {
+        await applyAiMatch(
+          sb,
+          userId,
+          campaignId,
+          matchContext,
+          c.product_id ?? null,
+          target,
+          opts.ai,
+        );
+        await markSucceeded(sb, campaignId, count);
+        return { status: 'succeeded' as const, resultCount: count, progress: 100 };
+      }
+      if (!(await claimStage(sb, campaignId, 1, c.apify_run_id, 2))) {
+        return runningBody(2); // another poll won the claim
+      }
+      // AI's real hashtags when the user wrote a sentence; rule-based otherwise.
+      const started = await startActorRun(stage2Input(query, plan?.hashtags));
+      await attachRun(sb, campaignId, started);
+      return runningBody(2);
+    }
+
+    // Stage 2 — posts → author usernames → enrich.
+    if (stage === 2) {
+      const { count, usernames } = await existingResults(sb, userId, campaignId);
+      const authors = authorsFromPosts(items, usernames);
+      const toEnrich = authors.slice(0, stage3Cap(Math.max(TARGET - count, 0)));
+
+      if (toEnrich.length === 0) {
+        await applyAiMatch(
+          sb,
+          userId,
+          campaignId,
+          matchContext,
+          c.product_id ?? null,
+          target,
+          opts.ai,
+        );
+        await markSucceeded(sb, campaignId, count);
+        return { status: 'succeeded' as const, resultCount: count, progress: 100 };
+      }
+
+      // Reuse fresh pooled profiles (no Apify); scrape only the rest.
+      // Trending searches skip the pool so 최근 활동 stays live.
+      let toScrape = toEnrich;
+      if (!TREND_RE.test(matchContext)) {
+        const { pooled, missing } = await getPooled('instagram', toEnrich);
+        // 풀에서 온 계정도 목적별 제외를 똑같이 적용.
+        const cleanPooled = pooled.filter((cr) => !rejectForTarget(cr, target));
+        if (cleanPooled.length > 0) {
+          await saveCreators(
+            sb,
+            userId,
+            campaignId,
+            query,
+            spreadByFollowers(cleanPooled, Math.max(TARGET - count, 0)),
+            count,
+          );
+        }
+        toScrape = missing;
+      }
+
+      // Everything came from the pool → judge + finish, no Apify run.
+      if (toScrape.length === 0) {
+        const { count: pooledCount } = await existingResults(sb, userId, campaignId);
+        await applyAiMatch(
+          sb,
+          userId,
+          campaignId,
+          matchContext,
+          c.product_id ?? null,
+          target,
+          opts.ai,
+        );
+        await markSucceeded(sb, campaignId, pooledCount);
+        return { status: 'succeeded' as const, resultCount: pooledCount, progress: 100 };
+      }
+
+      if (!(await claimStage(sb, campaignId, 2, c.apify_run_id, 3))) {
+        return runningBody(3);
+      }
+      const started = await startActorRun(stage3Input(toScrape));
+      await attachRun(sb, campaignId, started);
+      return runningBody(3);
+    }
+
+    // Stage 3 — enriched profile details → finish.
+    const { count: before } = await existingResults(sb, userId, campaignId);
+    const room = Math.max(TARGET - before, 0);
+    const enriched = profilesFromItems(items);
+    // 목적별 제외 후, 규모가 한쪽으로 쏠리지 않게 골고루 뽑아 저장(풀 캐시엔 원본 유지).
+    const toSave = enriched.filter((cr) => !rejectForTarget(cr, target));
+    await saveCreators(sb, userId, campaignId, query, spreadByFollowers(toSave, room), before);
+    await upsertPool('instagram', enriched); // feed the shared cache
+    const { count } = await existingResults(sb, userId, campaignId);
+    await applyAiMatch(sb, userId, campaignId, matchContext, c.product_id ?? null, target, opts.ai);
+    await markSucceeded(sb, campaignId, count);
+    return { status: 'succeeded' as const, resultCount: count, progress: 100 };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '검색 처리 중 오류가 발생했습니다.';
+    console.error(`[status] campaign ${campaignId} stage ${stage} failed: ${msg}`);
+    await markFailed(sb, campaignId, msg);
+    return { status: 'failed' as const, error: msg };
+  }
+}
