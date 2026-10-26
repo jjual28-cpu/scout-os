@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { type InstagramCreator } from '@/features/search/instagram';
+import { clipText } from '@/lib/utils';
 
 import { runAi } from './run';
 
@@ -311,7 +312,7 @@ function candidateBlock(
   const now = Date.now();
   return creators
     .map((c, i) => {
-      const bio = (c.biography ?? '').replace(/\s+/g, ' ').trim().slice(0, 160);
+      const bio = clipText((c.biography ?? '').replace(/\s+/g, ' ').trim(), 160);
       return [
         `${i + 1}. @${c.username}`,
         `   이름: ${c.displayName || c.username}`,
@@ -354,7 +355,7 @@ function postLines(c: InstagramCreator, now: number): string[] {
   return posts.map((p, i) => {
     const t = p.takenAt ? Date.parse(p.takenAt) : NaN;
     const when = Number.isFinite(t) ? `${Math.floor((now - t) / 86_400_000)}일 전` : '날짜 미상';
-    const cap = p.caption.replace(/\s+/g, ' ').trim().slice(0, 100) || '(글 없음)';
+    const cap = clipText(p.caption.replace(/\s+/g, ' ').trim(), 100) || '(글 없음)';
     return `   게시물 P${i + 1} (${when} · ${p.format === 'reels' ? '릴스' : '피드'}): ${cap}`;
   });
 }
@@ -389,8 +390,8 @@ function parseMatches(text: string): CreatorMatch[] {
           : score >= 40
             ? 'maybe'
             : 'reject';
-    const reason = typeof r?.reason === 'string' ? r.reason.trim().slice(0, 80) : '';
-    const audience = typeof r?.audience === 'string' ? r.audience.trim().slice(0, 40) : '';
+    const reason = typeof r?.reason === 'string' ? clipText(r.reason.trim(), 80) : '';
+    const audience = typeof r?.audience === 'string' ? clipText(r.audience.trim(), 40) : '';
     const evidence = Array.isArray(r?.evidence)
       ? [
           ...new Set(

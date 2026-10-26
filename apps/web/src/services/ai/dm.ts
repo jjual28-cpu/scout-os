@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { clipText } from '@/lib/utils';
+
 import { type BrandContext } from './match';
 import { runAi } from './run';
 
@@ -51,7 +53,7 @@ export async function draftDm(
           .join('\n')
       : '(브랜드 정보 없음 — 일반적인 협업 제안 톤으로)';
 
-  const bio = (creator.biography ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  const bio = clipText((creator.biography ?? '').replace(/\s+/g, ' ').trim(), 200);
   const prompt = `[받는 크리에이터]
 이름: ${creator.displayName} (@${creator.username})
 소개: ${bio || '(없음)'}
@@ -64,10 +66,7 @@ ${brandBlock}
 위 크리에이터에게 보낼 협업 제안 DM 초안을 써주세요.`;
 
   const text = await runAi(userId, { system: SYSTEM, prompt, maxTokens: 400, temperature: 0.7 });
-  return text
-    .trim()
-    .replace(/^["']+|["']+$/g, '')
-    .slice(0, 400);
+  return clipText(text.trim().replace(/^["']+|["']+$/g, ''), 400);
 }
 
 const REPLY_SYSTEM = `당신은 브랜드 담당자입니다. 셀럽이 협업 제안 DM에 보낸 답장을 읽고, 브랜드 입장에서 보낼 다음 답장을 씁니다. 실제 담당자가 직접 편하게 답하듯이.
@@ -123,10 +122,7 @@ ${convo}
     maxTokens: 400,
     temperature: 0.7,
   });
-  return text
-    .trim()
-    .replace(/^["']+|["']+$/g, '')
-    .slice(0, 400);
+  return clipText(text.trim().replace(/^["']+|["']+$/g, ''), 400);
 }
 
 const SLOT_SYSTEM = `당신은 인플루언서 마케팅 담당자입니다. 사용자가 만든 DM 템플릿의 "AI 구간"들을 그 크리에이터에 맞게 자연스럽게 채웁니다.
@@ -169,7 +165,7 @@ export async function fillTemplateSlots(
           .join('\n')
       : '(브랜드 정보 없음)';
 
-  const bio = (creator.biography ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  const bio = clipText((creator.biography ?? '').replace(/\s+/g, ' ').trim(), 200);
   const slotList = slots.map((s, i) => `${i + 1}. ${s}`).join('\n');
   const prompt = `[받는 크리에이터]
 이름: ${creator.displayName} (@${creator.username})

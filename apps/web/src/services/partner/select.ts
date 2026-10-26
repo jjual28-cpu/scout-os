@@ -5,6 +5,7 @@ import {
   type RecentPost,
 } from '@/features/search/instagram';
 import { recommendReasons } from '@/features/search/recommend';
+import { clipText } from '@/lib/utils';
 import { type SearchTarget } from '@/services/ai/match';
 
 import { BASELINE_MIN_ER, BASELINE_RECENT_DAYS } from './context';
@@ -155,7 +156,7 @@ export function selectRecommended(rows: JudgedRow[], opts: SelectOptions): Recom
       reasons: recommendReasons(c),
       evidence: evidence.map((p) => ({
         postUrl: p.url,
-        caption: p.caption.slice(0, 80),
+        caption: clipText(p.caption, 80),
         takenAt: p.takenAt,
       })),
     });

@@ -103,11 +103,15 @@ async function findReusable(
 
   const { data: camps } = await admin
     .from('campaigns')
-    .select('id,status,started_at,completed_at,ai_error,result_count')
+    .select('id,status,started_at,completed_at,ai_error,result_count,apify_run_id')
     .eq('user_id', userId)
     .in('id', ids);
   const byId = new Map(((camps as any[] | null) ?? []).map((c) => [c.id as string, c]));
   const freshRunning = Date.now() - TIMEOUT_MS;
+  // A search only advances while someone polls. If the caller gave up (10-26: a
+  // 15s client timeout), its Apify run still finished and was paid for — resume
+  // it instead of failing it and paying for the same search again.
+  const resumable = new Set(['READY', 'RUNNING', 'SUCCEEDED']);
   for (const id of ids) {
     const c = byId.get(id);
     if (!c) continue;
@@ -121,6 +125,23 @@ async function findReusable(
       return { campaignId: id, status: 'succeeded' };
     }
     if (c.status === 'running' && c.started_at && Date.parse(c.started_at) >= freshRunning) {
+      return { campaignId: id, status: 'running' };
+    }
+    if (c.status === 'running' && c.apify_run_id) {
+      const run = await getRunStatus(c.apify_run_id);
+      if (!run || !resumable.has(run.status)) continue;
+      // Restart the clock (the stale checks count from started_at). Conditional
+      // on the old value so two callers can't both claim it.
+      const { data: revived } = await admin
+        .from('campaigns')
+        .update({ started_at: new Date().toISOString() })
+        .eq('id', id)
+        .eq('status', 'running')
+        .eq('started_at', c.started_at)
+        .select('id');
+      if (revived && revived.length > 0) {
+        console.info(`[partner] resumed idle campaign=${id} apify=${run.status}`);
+      }
       return { campaignId: id, status: 'running' };
     }
   }

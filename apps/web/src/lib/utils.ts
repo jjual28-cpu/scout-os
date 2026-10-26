@@ -43,6 +43,17 @@ export function proxiedImg(url: string | null | undefined): string | null {
   return url;
 }
 
+/**
+ * `s.slice(0, max)` that never cuts an emoji (surrogate pair) in half. A lone
+ * half is invalid in JSON — Postgres rejects the whole jsonb write ("Unicode low
+ * surrogate must follow a high surrogate"), which failed a partner search on 10-26.
+ */
+export function clipText(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const code = s.charCodeAt(max - 1);
+  return s.slice(0, code >= 0xd800 && code <= 0xdbff ? max - 1 : max);
+}
+
 /** Build a URL-friendly slug from an arbitrary string. */
 export function slugify(input: string): string {
   return input

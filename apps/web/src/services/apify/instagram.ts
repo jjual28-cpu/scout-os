@@ -3,6 +3,7 @@ import 'server-only';
 import { type InstagramCreator, type RecentPost } from '@/features/search/instagram';
 import { AppError } from '@/lib/api/response';
 import { env } from '@/lib/env';
+import { clipText } from '@/lib/utils';
 
 /**
  * Topic-based Instagram creator discovery via the Apify `instagram-scraper` actor.
@@ -136,10 +137,10 @@ function recentPostsFrom(raw: Record<string, any>): RecentPost[] | null {
       p?.productType === 'clips' || p?.type === 'Video' || /instagram\.com\/reel\//.test(url);
     out.push({
       url,
-      caption: (typeof p?.caption === 'string' ? p.caption : '')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, CAPTION_KEEP),
+      caption: clipText(
+        (typeof p?.caption === 'string' ? p.caption : '').replace(/\s+/g, ' ').trim(),
+        CAPTION_KEEP,
+      ),
       takenAt: Number.isFinite(t) ? new Date(t).toISOString() : null,
       format: isReel ? 'reels' : 'feed',
     });
