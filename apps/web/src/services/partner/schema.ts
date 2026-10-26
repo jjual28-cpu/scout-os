@@ -66,3 +66,12 @@ export type RecommendedCreator = {
   reasons: string[];
   evidence: { postUrl: string; caption: string; takenAt: string | null }[];
 };
+
+/** Which baseline a near miss fell short of (contract v2.1). */
+export type BelowBaseline = 'engagement' | 'recent_activity' | 'followers';
+
+/**
+ * AI-fit creator that missed only a numeric baseline — shown by Cellink when
+ * `creators` is empty instead of a bare "못 찾았어요" (contract v2.1, additive).
+ */
+export type NearMissCreator = RecommendedCreator & { belowBaseline: BelowBaseline[] };

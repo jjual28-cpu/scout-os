@@ -9,7 +9,12 @@ import { clipText } from '@/lib/utils';
 import { type SearchTarget } from '@/services/ai/match';
 
 import { BASELINE_MIN_ER, BASELINE_RECENT_DAYS } from './context';
-import { type RecommendFilters, type RecommendedCreator } from './schema';
+import {
+  type BelowBaseline,
+  type NearMissCreator,
+  type RecommendFilters,
+  type RecommendedCreator,
+} from './schema';
 
 /**
  * Final, deterministic pick of what Cellink gets to see. The AI already judged
@@ -96,6 +101,22 @@ function haystack(c: InstagramCreator): string {
 }
 
 export function selectRecommended(rows: JudgedRow[], opts: SelectOptions): RecommendedCreator[] {
+  return selectWithNearMisses(rows, opts).creators;
+}
+
+/** At most this many near misses, and only when nobody passed (contract v2.1). */
+const NEAR_MISS_LIMIT = 3;
+
+/**
+ * Same pick as selectRecommended, plus near misses: AI-fit, not fake, with
+ * evidence, passing every hard rule (shop/brand, exclusions, keywords, formats)
+ * but short of one or more numeric baselines — engagement, recent activity,
+ * follower range. Filled only when `creators` is empty.
+ */
+export function selectWithNearMisses(
+  rows: JudgedRow[],
+  opts: SelectOptions,
+): { creators: RecommendedCreator[]; nearMisses: NearMissCreator[] } {
   const now = opts.now ?? Date.now();
   const f = opts.filters ?? {};
   const minEr = Math.max(BASELINE_MIN_ER, f.minEngagementRate ?? 0);
@@ -109,6 +130,7 @@ export function selectRecommended(rows: JudgedRow[], opts: SelectOptions): Recom
   const formats = new Set(f.contentFormats ?? []);
 
   const picked: RecommendedCreator[] = [];
+  const near: NearMissCreator[] = [];
   const seen = new Set<string>();
   for (const r of rows) {
     if (r.ai_verdict !== 'fit') continue;
@@ -119,16 +141,23 @@ export function selectRecommended(rows: JudgedRow[], opts: SelectOptions): Recom
 
     if (opts.reject(c, opts.target)) continue;
 
+    // Numeric baselines don't drop the creator outright — a miss here can still
+    // be a near miss. Everything below them stays a hard rule.
+    const below: BelowBaseline[] = [];
     const erPct = engagementRate(c); // % (소수 첫째자리) — 화면과 같은 계산
-    if (erPct == null || erPct / 100 < minEr) continue;
+    if (erPct == null || erPct / 100 < minEr) below.push('engagement');
     if (isFakeSuspect(c, erPct)) continue;
 
     const last = c.lastPostAt ? Date.parse(c.lastPostAt) : NaN;
-    if (!Number.isFinite(last) || last < since) continue;
+    if (!Number.isFinite(last) || last < since) below.push('recent_activity');
 
     const followers = c.followersCount;
-    if (f.followerMin != null && (followers == null || followers < f.followerMin)) continue;
-    if (f.followerMax != null && (followers == null || followers > f.followerMax)) continue;
+    if (
+      (f.followerMin != null && (followers == null || followers < f.followerMin)) ||
+      (f.followerMax != null && (followers == null || followers > f.followerMax))
+    ) {
+      below.push('followers');
+    }
 
     if (formats.size > 0 && !(c.recentPosts ?? []).some((p) => formats.has(p.format))) continue;
 
@@ -142,13 +171,14 @@ export function selectRecommended(rows: JudgedRow[], opts: SelectOptions): Recom
     if (evidence.length === 0) continue; // 근거를 못 대면 탈락
 
     seen.add(key);
-    picked.push({
+    const out: RecommendedCreator = {
       username: c.username,
       displayName: c.displayName || c.username,
       profileUrl: c.profileUrl || `https://www.instagram.com/${c.username}/`,
       profileImageUrl: c.profileImageUrl,
       followersCount: c.followersCount,
-      engagementRate: Math.round(erPct * 10) / 1000, // % → 0~1 (예: 3.4 → 0.034)
+      // % → 0~1 (예: 3.4 → 0.034); unknown only on near misses
+      engagementRate: erPct == null ? null : Math.round(erPct * 10) / 1000,
       isFakeSuspect: false,
       aiScore: r.ai_score ?? 0,
       aiVerdict: 'fit',
@@ -159,9 +189,15 @@ export function selectRecommended(rows: JudgedRow[], opts: SelectOptions): Recom
         caption: clipText(p.caption, 80),
         takenAt: p.takenAt,
       })),
-    });
+    };
+    if (below.length === 0) picked.push(out);
+    else near.push({ ...out, belowBaseline: below });
   }
 
   picked.sort((a, b) => b.aiScore - a.aiScore);
-  return picked.slice(0, opts.limit);
+  near.sort((a, b) => b.aiScore - a.aiScore);
+  return {
+    creators: picked.slice(0, opts.limit),
+    nearMisses: picked.length === 0 ? near.slice(0, NEAR_MISS_LIMIT) : [],
+  };
 }

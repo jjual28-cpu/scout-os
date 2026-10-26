@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { cacheKeyFor, mergeHashtags, partnerContextBlock } from './context';
 import { recommendRequestSchema, type RecommendRequest } from './schema';
-import { resolveEvidence, selectRecommended, snapshotToCreator, type JudgedRow } from './select';
+import {
+  resolveEvidence,
+  selectRecommended,
+  selectWithNearMisses,
+  snapshotToCreator,
+  type JudgedRow,
+} from './select';
 
 const NOW = Date.parse('2026-10-26T00:00:00Z');
 const daysAgo = (d: number) => new Date(NOW - d * 86_400_000).toISOString();
@@ -159,6 +165,47 @@ describe('selectRecommended — filters', () => {
     );
     const out = selectRecommended(rows, { ...base, limit: 2 });
     expect(out.map((c) => c.aiScore)).toEqual([95, 60]);
+  });
+});
+
+describe('nearMisses (v2.1)', () => {
+  const u = (name: string, over: Record<string, unknown>, snap: Record<string, unknown>) =>
+    row(over, { username: name, externalId: `instagram:${name}`, ...snap });
+
+  it('fills only when nobody passed, tags the missed baselines, sorts by score, max 3', () => {
+    const lowEr = { recentAvgLikes: 180, recentAvgComments: 10 }; // 190/12000 = 1.6%
+    const rows = [
+      u('a', { ai_score: 70 }, lowEr),
+      u('b', { ai_score: 90 }, { lastPostAt: daysAgo(40) }),
+      u('c', { ai_score: 80 }, { ...lowEr, lastPostAt: daysAgo(40) }),
+      u('d', { ai_score: 60 }, lowEr),
+      u('e', { ai_score: 99, ai_verdict: 'reject' }, lowEr), // not fit → never
+      u('f', { ai_score: 98, ai_evidence: [] }, lowEr), // no evidence → never
+    ];
+    const { creators, nearMisses } = selectWithNearMisses(rows, base);
+    expect(creators).toHaveLength(0);
+    expect(nearMisses.map((c) => [c.username, c.belowBaseline])).toEqual([
+      ['b', ['recent_activity']],
+      ['c', ['engagement', 'recent_activity']],
+      ['a', ['engagement']],
+    ]);
+    expect(nearMisses[2]!.engagementRate).toBeCloseTo(0.016);
+  });
+
+  it('is empty when at least one creator passed', () => {
+    const rows = [row(), u('x', {}, { recentAvgLikes: 10, recentAvgComments: 0 })];
+    const out = selectWithNearMisses(rows, base);
+    expect(out.creators).toHaveLength(1);
+    expect(out.nearMisses).toEqual([]);
+  });
+
+  it('follower range is a near miss, hard rules are not', () => {
+    const f = selectWithNearMisses([row()], { ...base, filters: { followerMin: 20_000 } });
+    expect(f.nearMisses[0]!.belowBaseline).toEqual(['followers']);
+    expect(selectWithNearMisses([row()], { ...base, reject: () => true }).nearMisses).toEqual([]);
+    expect(
+      selectWithNearMisses([row()], { ...base, filters: { mustKeywords: ['골프'] } }).nearMisses,
+    ).toEqual([]);
   });
 });
 

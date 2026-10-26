@@ -15,7 +15,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 /**
  * GET /api/partner/recommend/:requestId — Cellink polls every 10~15s. Each poll
  * advances the search server-side, so it progresses even with no browser open.
- *   200 { requestId, status, progress (0~1), error, creators }
+ *   200 { requestId, status, progress (0~1), error, creators, nearMisses? }
  */
 export async function GET(request: NextRequest, { params }: { params: { requestId: string } }) {
   if (!isPartnerAuthorized(request.headers.get('authorization'))) {

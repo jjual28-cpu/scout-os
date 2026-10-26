@@ -11,8 +11,8 @@ import { getRunStatus, stage1Input, stage2Input, startActorRun } from '@/service
 import { advanceCampaign, progressFor, rejectForTarget } from '@/services/campaigns/advance';
 
 import { brandContextFor, cacheKeyFor, mergeHashtags, partnerContextBlock } from './context';
-import { type RecommendedCreator, type RecommendRequest } from './schema';
-import { selectRecommended, type JudgedRow } from './select';
+import { type NearMissCreator, type RecommendedCreator, type RecommendRequest } from './schema';
+import { selectWithNearMisses, type JudgedRow } from './select';
 
 /**
  * Cellink partner API — the server-to-server twin of the Discover search.
@@ -49,6 +49,8 @@ export type RecommendStatus = {
   progress: number;
   error: string | null;
   creators: RecommendedCreator[];
+  /** v2.1: AI-fit creators short of a baseline — only when `creators` is empty. */
+  nearMisses?: NearMissCreator[];
 };
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- DB rows are loosely typed here */
@@ -430,13 +432,14 @@ export async function getRecommend(
   const r = req as any;
 
   if (r.status === 'succeeded') {
-    return {
-      requestId,
-      status: 'succeeded',
-      progress: 1,
-      error: null,
-      creators: (r.result as RecommendedCreator[] | null) ?? [],
-    };
+    const creators = (r.result as RecommendedCreator[] | null) ?? [];
+    // Near misses aren't stored — recomputed from the judged rows, so requests
+    // finished before v2.1 get them too (no Apify, just a DB read).
+    const nearMisses =
+      creators.length === 0 && r.campaign_id
+        ? (await pickFromCampaign(admin, userId, r.campaign_id, r.input)).nearMisses
+        : [];
+    return { requestId, status: 'succeeded', progress: 1, error: null, creators, nearMisses };
   }
   if (r.status === 'failed') return failedBody(requestId, r.error ?? '검색에 실패했어요.');
   if (!r.campaign_id) {
@@ -512,22 +515,30 @@ export async function getRecommend(
     return failedBody(requestId, msg);
   }
 
+  const { creators, nearMisses } = await pickFromCampaign(admin, userId, camp.id, r.input);
+  await finishRequest(admin, requestId, { status: 'succeeded', result: creators });
+  return { requestId, status: 'succeeded', progress: 1, error: null, creators, nearMisses };
+}
+
+/** The judged rows of a finished campaign → what this request gets to see. */
+async function pickFromCampaign(
+  admin: Admin,
+  userId: string,
+  campaignId: string,
+  input: RecommendRequest,
+) {
   const { data: rows, error: rowsErr } = await admin
     .from('campaign_results')
     .select('creator_snapshot,ai_score,ai_verdict,ai_reason,ai_evidence')
     .eq('user_id', userId)
-    .eq('campaign_id', camp.id);
+    .eq('campaign_id', campaignId);
   if (rowsErr) throw new Error(`campaign_results 조회 실패: ${rowsErr.message}`);
-
-  const input = r.input as RecommendRequest;
-  const creators = selectRecommended((rows as JudgedRow[] | null) ?? [], {
+  return selectWithNearMisses((rows as JudgedRow[] | null) ?? [], {
     target: input.target === 'gonggu' ? 'gonggu' : 'creator',
     filters: input.filters,
     limit: input.limit ?? 10,
     reject: rejectForTarget,
   });
-  await finishRequest(admin, requestId, { status: 'succeeded', result: creators });
-  return { requestId, status: 'succeeded', progress: 1, error: null, creators };
 }
 
 /* eslint-enable @typescript-eslint/no-explicit-any */
