@@ -71,7 +71,11 @@ export type RecommendedCreator = {
 export type BelowBaseline = 'engagement' | 'recent_activity' | 'followers';
 
 /**
- * AI-fit creator that missed only a numeric baseline — shown by Cellink when
- * `creators` is empty instead of a bare "못 찾았어요" (contract v2.1, additive).
+ * "조금 아쉬운 분" — AI-fit but short of a numeric baseline, or AI-'maybe' with a
+ * decent score (belowBaseline may then be empty). Sent while `creators` has
+ * fewer than 5 (contract v2.2, additive).
  */
-export type NearMissCreator = RecommendedCreator & { belowBaseline: BelowBaseline[] };
+export type NearMissCreator = Omit<RecommendedCreator, 'aiVerdict'> & {
+  aiVerdict: 'fit' | 'maybe';
+  belowBaseline: BelowBaseline[];
+};

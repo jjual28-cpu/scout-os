@@ -104,14 +104,22 @@ export function selectRecommended(rows: JudgedRow[], opts: SelectOptions): Recom
   return selectWithNearMisses(rows, opts).creators;
 }
 
-/** At most this many near misses, and only when nobody passed (contract v2.1). */
-const NEAR_MISS_LIMIT = 3;
+/**
+ * Near misses (contract v2.2): filled while fewer than NEAR_MISS_WHEN_BELOW
+ * creators passed, at most NEAR_MISS_LIMIT, never repeating a creator.
+ */
+const NEAR_MISS_LIMIT = 5;
+const NEAR_MISS_WHEN_BELOW = 5;
+/** A near miss still needs this much engagement — below it the account barely reacts. */
+const NEAR_MISS_MIN_ER = 0.01;
+/** 'maybe' (AI unsure) only counts as a near miss from this score up. */
+const NEAR_MISS_MAYBE_SCORE = 60;
 
 /**
- * Same pick as selectRecommended, plus near misses: AI-fit, not fake, with
- * evidence, passing every hard rule (shop/brand, exclusions, keywords, formats)
- * but short of one or more numeric baselines — engagement, recent activity,
- * follower range. Filled only when `creators` is empty.
+ * Same pick as selectRecommended, plus near misses: not fake, with evidence,
+ * passing every hard rule (shop/brand, exclusions, keywords, formats), engagement
+ * ≥ 1%, and either AI-fit but short of a numeric baseline (engagement, recent
+ * activity, follower range) or AI-'maybe' with score ≥ 60.
  */
 export function selectWithNearMisses(
   rows: JudgedRow[],
@@ -133,7 +141,9 @@ export function selectWithNearMisses(
   const near: NearMissCreator[] = [];
   const seen = new Set<string>();
   for (const r of rows) {
-    if (r.ai_verdict !== 'fit') continue;
+    const fit = r.ai_verdict === 'fit';
+    const maybe = r.ai_verdict === 'maybe' && (r.ai_score ?? 0) >= NEAR_MISS_MAYBE_SCORE;
+    if (!fit && !maybe) continue;
     const c = snapshotToCreator(r.creator_snapshot);
     if (!c) continue;
     const key = c.username.toLowerCase();
@@ -190,14 +200,17 @@ export function selectWithNearMisses(
         takenAt: p.takenAt,
       })),
     };
-    if (below.length === 0) picked.push(out);
-    else near.push({ ...out, belowBaseline: below });
+    if (fit && below.length === 0) {
+      picked.push(out);
+    } else if (erPct != null && erPct / 100 >= NEAR_MISS_MIN_ER) {
+      near.push({ ...out, aiVerdict: fit ? 'fit' : 'maybe', belowBaseline: below });
+    }
   }
 
   picked.sort((a, b) => b.aiScore - a.aiScore);
   near.sort((a, b) => b.aiScore - a.aiScore);
   return {
     creators: picked.slice(0, opts.limit),
-    nearMisses: picked.length === 0 ? near.slice(0, NEAR_MISS_LIMIT) : [],
+    nearMisses: picked.length < NEAR_MISS_WHEN_BELOW ? near.slice(0, NEAR_MISS_LIMIT) : [],
   };
 }

@@ -49,7 +49,7 @@ export type RecommendStatus = {
   progress: number;
   error: string | null;
   creators: RecommendedCreator[];
-  /** v2.1: AI-fit creators short of a baseline — only when `creators` is empty. */
+  /** v2.2: "조금 아쉬운 분" (max 5) — while `creators` has fewer than 5. */
   nearMisses?: NearMissCreator[];
 };
 
@@ -436,7 +436,7 @@ export async function getRecommend(
     // Near misses aren't stored — recomputed from the judged rows, so requests
     // finished before v2.1 get them too (no Apify, just a DB read).
     const nearMisses =
-      creators.length === 0 && r.campaign_id
+      creators.length < 5 && r.campaign_id
         ? (await pickFromCampaign(admin, userId, r.campaign_id, r.input)).nearMisses
         : [];
     return { requestId, status: 'succeeded', progress: 1, error: null, creators, nearMisses };

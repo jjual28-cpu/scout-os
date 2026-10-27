@@ -168,11 +168,11 @@ describe('selectRecommended — filters', () => {
   });
 });
 
-describe('nearMisses (v2.1)', () => {
+describe('nearMisses (v2.2)', () => {
   const u = (name: string, over: Record<string, unknown>, snap: Record<string, unknown>) =>
     row(over, { username: name, externalId: `instagram:${name}`, ...snap });
 
-  it('fills only when nobody passed, tags the missed baselines, sorts by score, max 3', () => {
+  it('tags the missed baselines, sorts by score', () => {
     const lowEr = { recentAvgLikes: 180, recentAvgComments: 10 }; // 190/12000 = 1.6%
     const rows = [
       u('a', { ai_score: 70 }, lowEr),
@@ -188,15 +188,45 @@ describe('nearMisses (v2.1)', () => {
       ['b', ['recent_activity']],
       ['c', ['engagement', 'recent_activity']],
       ['a', ['engagement']],
+      ['d', ['engagement']],
     ]);
     expect(nearMisses[2]!.engagementRate).toBeCloseTo(0.016);
+    expect(nearMisses.every((c) => c.aiVerdict === 'fit')).toBe(true);
   });
 
-  it('is empty when at least one creator passed', () => {
-    const rows = [row(), u('x', {}, { recentAvgLikes: 10, recentAvgComments: 0 })];
-    const out = selectWithNearMisses(rows, base);
-    expect(out.creators).toHaveLength(1);
+  it('max 5, and also sent while 1~4 creators passed — never repeating one', () => {
+    const lowEr = { recentAvgLikes: 180, recentAvgComments: 10 };
+    const misses = [1, 2, 3, 4, 5, 6].map((i) => u(`m${i}`, { ai_score: 50 + i }, lowEr));
+    const out = selectWithNearMisses([row(), ...misses], base);
+    expect(out.creators.map((c) => c.username)).toEqual(['camper']);
+    expect(out.nearMisses.map((c) => c.username)).toEqual(['m6', 'm5', 'm4', 'm3', 'm2']);
+  });
+
+  it('is empty once 5 creators passed', () => {
+    const passed = [1, 2, 3, 4, 5].map((i) => u(`p${i}`, {}, {}));
+    const out = selectWithNearMisses([...passed, u('x', {}, { lastPostAt: daysAgo(40) })], base);
+    expect(out.creators).toHaveLength(5);
     expect(out.nearMisses).toEqual([]);
+  });
+
+  it("'maybe' ≥ 60 is a near miss (even meeting every baseline), never a creator", () => {
+    const rows = [
+      u('may', { ai_verdict: 'maybe', ai_score: 70 }, {}),
+      u('low', { ai_verdict: 'maybe', ai_score: 59 }, {}),
+    ];
+    const out = selectWithNearMisses(rows, base);
+    expect(out.creators).toEqual([]);
+    expect(out.nearMisses.map((c) => [c.username, c.aiVerdict, c.belowBaseline])).toEqual([
+      ['may', 'maybe', []],
+    ]);
+  });
+
+  it('engagement under 1% (or unknown) is not even a near miss', () => {
+    const rows = [
+      u('weak', {}, { recentAvgLikes: 100, recentAvgComments: 0 }), // 100/12000 = 0.8%
+      u('unknown', {}, { recentAvgLikes: null, recentAvgComments: null }),
+    ];
+    expect(selectWithNearMisses(rows, base).nearMisses).toEqual([]);
   });
 
   it('follower range is a near miss, hard rules are not', () => {
