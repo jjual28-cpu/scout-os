@@ -34,6 +34,9 @@ const TIMEOUT_MS = 10 * 60 * 1000;
 const ADVANCE_CLAIM_MS = 30 * 1000;
 /** Stage-1 name search size (stage1Input caps it at 16 anyway). */
 const STAGE1_LIMIT = 30;
+/** Hashtag posts for a partner search — wider than Discover's 30 so the
+ *  enrichment pass (PARTNER_ENRICH_CAP in advance.ts) has enough authors (A안). */
+const PARTNER_POSTS_LIMIT = 45;
 
 type Admin = SupabaseClient;
 
@@ -322,7 +325,7 @@ export async function startRecommend(input: RecommendRequest): Promise<StartResu
   try {
     const [tagStarted, nameStarted] = await Promise.all([
       // Fallback expansion (empty hashtags) must see the raw keyword, not the key suffix.
-      startActorRun(stage2Input(kw[0]!, plan.hashtags)),
+      startActorRun(stage2Input(kw[0]!, plan.hashtags, PARTNER_POSTS_LIMIT)),
       startActorRun(stage1Input(plan.searchTerm, STAGE1_LIMIT)),
     ]);
     await admin

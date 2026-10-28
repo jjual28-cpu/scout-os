@@ -394,6 +394,12 @@ function spreadByFollowers(list: InstagramCreator[], n: number): InstagramCreato
 /** 저장·확장 상한. apify 서비스 TARGET(20)과 통일. 조기종료 기준은 min(TARGET,
  *  SEARCH_MIN_SUFFICIENT)=10 → "최소 10명" 확보 즉시 완료(불필요한 확장 런 방지). */
 const TARGET = 20;
+/**
+ * 셀링크 파트너 검색(A안, 약 2배 수집): 해시태그 작성자 상세보강 상한·저장 상한.
+ * 상세 스크랩은 프로필당 ~8초라 32명 ≈ 4~5분 — 10분 제한 안에 끝나는 선.
+ */
+const PARTNER_ENRICH_CAP = 32;
+const PARTNER_SAVE_CAP = 40;
 /** A running campaign with no progress for this long is considered stale. */
 const STALE_MS = 10 * 60 * 1000;
 
@@ -830,6 +836,8 @@ export async function advanceCampaign(
     flow?: string;
     /** 겹침 검색에서 이름검색 상세를 백그라운드로 돌린 런. 끝에서 합쳐 마무리한다. */
     nameRun?: { runId: string; datasetId: string };
+    /** 셀링크 파트너 API가 시작한 검색이면 있다(services/partner/recommend.ts). */
+    partner?: unknown;
   } | null;
   /** What the AI should judge fit against — the intent, not "…찾아줘". */
   const matchContext = plan?.intent || query;
@@ -911,10 +919,12 @@ export async function advanceCampaign(
     //   primary는 해시태그 글(stage1) → 작성자 상세보강(stage3). 이름검색 상세는
     //   discover가 백그라운드(plan.nameRun)로 이미 병렬 시작했다. stage3에서 둘을 합친다.
     if (overlap) {
+      // 셀링크 파트너 검색은 그물을 넓게(A안, 10-28 사용자 결정) — Discover는 그대로.
+      const wide = Boolean(plan?.partner);
       // Stage 1 — 해시태그 글 → 작성자 → 상세보강(stage3) 시작.
       if (stage === 1) {
         const authors = authorsFromPosts(items, []);
-        const toEnrich = authors.slice(0, stage3Cap(TARGET));
+        const toEnrich = authors.slice(0, wide ? PARTNER_ENRICH_CAP : stage3Cap(TARGET));
         if (!(await claimStage(sb, campaignId, 1, c.apify_run_id, 3))) {
           return runningBody(3); // another poll won the claim
         }
@@ -959,7 +969,8 @@ export async function advanceCampaign(
         (cr) =>
           !rejectForTarget(cr, target) && !(target === 'creator' && looksLikeSeller(cr, seed)),
       );
-      await saveCreators(sb, userId, campaignId, query, spreadByFollowers(kept, TARGET), 0);
+      const saveCap = wide ? PARTNER_SAVE_CAP : TARGET;
+      await saveCreators(sb, userId, campaignId, query, spreadByFollowers(kept, saveCap), 0);
       await upsertPool('instagram', merged); // 풀 캐시엔 원본 유지
       const { count } = await existingResults(sb, userId, campaignId);
       await applyAiMatch(

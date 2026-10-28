@@ -361,16 +361,16 @@ export function stage1Input(query: string, limit?: number) {
  * rule-based expansion is only a fallback (it produces junk for phrases, e.g.
  * "신생 바디케어 브랜드 찾아줘" → #신생바디케어브랜드찾아줘스타그램).
  */
-export function stage2Input(query: string, tags?: string[]) {
+export function stage2Input(query: string, tags?: string[], postsLimit = POSTS_LIMIT) {
   const tags_ = tags?.length ? tags.slice(0, 6) : expandKeyword(query);
-  return buildStage2(tags_);
+  return buildStage2(tags_, postsLimit);
 }
 
-function buildStage2(tags: string[]) {
+function buildStage2(tags: string[], postsLimit = POSTS_LIMIT) {
   return {
     directUrls: tags.map((t) => `https://www.instagram.com/explore/tags/${encodeURIComponent(t)}/`),
     resultsType: 'posts',
-    resultsLimit: POSTS_LIMIT,
+    resultsLimit: postsLimit,
   };
 }
 

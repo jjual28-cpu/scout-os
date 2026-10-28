@@ -442,8 +442,9 @@ ${candidateBlock(creators, target, withPosts)}`;
     prompt,
     json: true,
     // 후보 전원 verdict를 빠짐없이 담아야 한다(빠지면 미검토로 숨겨짐). 여유있게.
-    // 근거 번호까지 받을 땐 출력이 길어지므로 더 넉넉히.
-    maxTokens: withPosts ? 4800 : 3200,
+    // 근거 번호까지 받을 땐 출력이 길어지므로 더 넉넉히. 후보가 20명을 넘으면(셀링크 A안 최대 40)
+    // 1명당 약 160토큰으로 늘린다.
+    maxTokens: Math.max(withPosts ? 4800 : 3200, creators.length * 160),
     temperature: 0.2,
   });
 
