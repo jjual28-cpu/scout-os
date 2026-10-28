@@ -49,8 +49,12 @@ const SELLER_SIGNALS = [
 ];
 export function looksLikeSeller(c: InstagramCreator, seed: string): boolean {
   const hay = `${c.username} ${c.displayName}`.toLowerCase();
-  // 계정 이름에 검색어(제품명)가 그대로 들어감 → 그 제품 파는 계정일 확률이 매우 높다.
-  if (seed && seed.length >= 2 && seed.length <= 12 && hay.includes(seed)) return true;
+  // 계정 이름에 검색어(제품명)가 그대로 들어감 → 그 제품 파는 계정일 확률이 높다.
+  // 단 비즈니스 계정일 때만 — 검색어가 '데일리룩'·'홈트' 같은 주제어면 개인 크리에이터도
+  // 이름에 넣는다(10-28 품질 테스트: '프롬코의 데일리룩'·'데일리룩 지운'이 판정 전에 빠짐).
+  if (c.isBusinessAccount && seed && seed.length >= 2 && seed.length <= 12 && hay.includes(seed)) {
+    return true;
+  }
   return SELLER_SIGNALS.some((w) => hay.includes(w));
 }
 
@@ -105,7 +109,7 @@ const LOCAL_BIZ_SIGNALS = [
   '약국',
   '의료원',
   '요양원',
-  '필라테스',
+  // '필라테스'는 강사·운동 크리에이터도 소개글에 쓴다 → STUDIO_WORDS와 함께일 때만(looksLikeStudio)
   '요가원',
   '공방',
   // 예약·방문 안내(= 매장 계정의 결정적 신호)
@@ -143,10 +147,20 @@ const RETAIL_SIGNALS = [
 function hay(c: InstagramCreator): string {
   return `${c.username} ${c.displayName} ${c.biography ?? ''}`.toLowerCase();
 }
+/** 운동 센터 판별용 — 종목 단어 + 센터 단어가 함께 있어야 매장이다. */
+const STUDIO_SPORTS = ['필라테스', 'pilates'];
+// '체험(단)'·'수강생'은 크리에이터 소개글에도 흔해서 넣지 않는다.
+const STUDIO_WORDS = ['원장', '센터', '스튜디오', 'studio', '본점', '지점'];
+const STUDIO_CATEGORY = ['pilates studio', 'yoga studio', 'gym', 'fitness center'];
+function looksLikeStudio(c: InstagramCreator, h: string): boolean {
+  const cat = (c.category ?? '').toLowerCase();
+  if (STUDIO_CATEGORY.some((w) => cat.includes(w))) return true;
+  return STUDIO_SPORTS.some((w) => h.includes(w)) && STUDIO_WORDS.some((w) => h.includes(w));
+}
 /** 지역 시술·방문 매장 판별 — 셀럽 검색·공구 검색 모두에서 제외 대상. */
-function looksLikeLocalBiz(c: InstagramCreator): boolean {
+export function looksLikeLocalBiz(c: InstagramCreator): boolean {
   const h = hay(c);
-  return LOCAL_BIZ_SIGNALS.some((w) => h.includes(w));
+  return LOCAL_BIZ_SIGNALS.some((w) => h.includes(w)) || looksLikeStudio(c, h);
 }
 /** 리테일/유통 판매 계정 판별 — creator 검색에서만 제외. */
 function looksLikeRetail(c: InstagramCreator): boolean {
